@@ -12,6 +12,7 @@ datasource db {
 
 enum Role {
   PLAYER
+  CASHIER
   TRADER
   FINANCE
   ADMIN
@@ -57,6 +58,7 @@ enum PaymentProvider {
   AIRTEL_MONEY
   ORANGE_MONEY
   MOOV_MONEY
+  CASH
 }
 
 enum EventStatus {

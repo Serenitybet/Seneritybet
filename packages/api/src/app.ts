@@ -11,6 +11,7 @@ import { bettingRouter } from "./routes/betting.routes";
 import { walletRouter } from "./routes/wallet.routes";
 import { webhookRouter } from "./routes/webhook.routes";
 import { adminRouter } from "./routes/admin/index.routes";
+import { cashierRouter } from "./routes/cashier.routes";
 import { errorHandler } from "./middleware/error.middleware";
 
 export const app = express();
@@ -21,6 +22,7 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   : [
       "http://localhost:3000",
       "http://localhost:3001",
+      "http://localhost:3002",
     ];
 
 app.use(cors({
@@ -77,6 +79,9 @@ app.use("/api/wallet", walletRouter);
 
 // ─── Routes admin ────────────────────────────────────────────────────────────
 app.use("/api/admin", adminRouter);
+
+// ─── Routes caisse (POS) ─────────────────────────────────────────────────────
+app.use("/api/cashier", cashierRouter);
 
 // ─── Gestion des erreurs (doit être en dernier) ───────────────────────────────
 app.use(errorHandler);
