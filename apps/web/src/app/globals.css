@@ -1,0 +1,90 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { @apply bg-bg-primary text-txt-primary font-sans antialiased; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { @apply bg-bg-secondary; }
+  ::-webkit-scrollbar-thumb { @apply bg-bg-border rounded-full; }
+}
+
+@layer components {
+  /* Boutons */
+  .btn-green {
+    @apply bg-green-600 hover:bg-green-700 active:bg-green-800
+           text-white font-semibold rounded-lg transition-all duration-150
+           disabled:opacity-40 disabled:cursor-not-allowed select-none;
+  }
+  .btn-outline {
+    @apply border border-bg-border hover:border-green-600 hover:text-green-400
+           text-txt-secondary font-medium rounded-lg transition-all duration-150;
+  }
+  .btn-ghost {
+    @apply bg-bg-hover hover:bg-bg-border text-txt-primary
+           font-medium rounded-lg transition-all duration-150;
+  }
+
+  /* Cards */
+  .card { @apply bg-bg-card border border-bg-border rounded-xl; }
+  .card-hover { @apply card hover:border-green-600/40 hover:bg-bg-hover transition-all duration-150 cursor-pointer; }
+
+  /* Input */
+  .field {
+    @apply bg-bg-input border border-bg-border text-txt-primary rounded-lg
+           px-3 py-2.5 w-full text-sm
+           focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/20
+           placeholder:text-txt-muted transition-all;
+  }
+
+  /* Cotes */
+  .odd-btn {
+    @apply flex flex-col items-center justify-center
+           bg-bg-input border border-bg-border rounded-lg
+           px-2 py-1.5 cursor-pointer transition-all duration-150
+           hover:border-green-500/60 hover:bg-green-600/10 select-none
+           min-w-[56px];
+  }
+  .odd-btn.active {
+    @apply border-green-500 bg-green-600/20 text-green-400;
+  }
+  .odd-btn .odd-label { @apply text-[10px] text-txt-muted leading-none mb-0.5; }
+  .odd-btn .odd-value { @apply text-sm font-bold text-txt-primary leading-none; }
+  .odd-btn.active .odd-value { @apply text-green-400; }
+
+  /* Badges */
+  .badge-live {
+    @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold
+           bg-live/20 text-live uppercase tracking-wide;
+  }
+  .badge-upcoming {
+    @apply inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium
+           bg-bg-hover text-txt-secondary;
+  }
+
+  /* Navigation sport */
+  .sport-tab {
+    @apply flex flex-col items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium
+           text-txt-secondary hover:text-txt-primary hover:bg-bg-hover
+           transition-all duration-150 cursor-pointer whitespace-nowrap;
+  }
+  .sport-tab.active {
+    @apply text-green-400 bg-green-600/10 border border-green-600/30;
+  }
+
+  /* Sidebar sport item */
+  .sidebar-item {
+    @apply flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm
+           text-txt-secondary hover:text-txt-primary hover:bg-bg-hover
+           transition-all duration-150 cursor-pointer;
+  }
+  .sidebar-item.active {
+    @apply text-green-400 bg-green-600/10 font-medium;
+  }
+
+  /* Divider */
+  .divider { @apply border-t border-bg-border; }
+}

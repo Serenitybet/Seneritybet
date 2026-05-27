@@ -1,0 +1,9 @@
+{
+  "framework": "nextjs",
+  "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
+  "buildCommand": "cd ../.. && pnpm build --filter=backoffice",
+  "outputDirectory": ".next",
+  "env": {
+    "NEXT_PUBLIC_BACKOFFICE_API_URL": "@serenitybet_api_url"
+  }
+}

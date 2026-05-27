@@ -1,0 +1,306 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum Role {
+  PLAYER
+  TRADER
+  FINANCE
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+enum KycStatus {
+  PENDING
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+enum IdType {
+  NATIONAL_ID
+  PASSPORT
+  DRIVING_LICENSE
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  BET_PLACED
+  BET_WON
+  BET_REFUND
+  BONUS
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum PaymentProvider {
+  AIRTEL_MONEY
+  ORANGE_MONEY
+  MOOV_MONEY
+}
+
+enum EventStatus {
+  UPCOMING
+  LIVE
+  FINISHED
+  CANCELLED
+  POSTPONED
+}
+
+enum MarketType {
+  MATCH_WINNER
+  DOUBLE_CHANCE
+  OVER_UNDER
+  BOTH_TEAMS_SCORE
+  HANDICAP
+  CORRECT_SCORE
+  FIRST_GOAL_SCORER
+  HALF_TIME_RESULT
+}
+
+enum BetType {
+  SINGLE
+  ACCUMULATOR
+}
+
+enum BetStatus {
+  PENDING
+  WON
+  LOST
+  CANCELLED
+  REFUNDED
+  MANUAL_REVIEW
+}
+
+enum BetItemResult {
+  WON
+  LOST
+  VOID
+}
+
+// ─── Models ─────────────────────────────────────────────────────────────────
+
+model User {
+  id          String     @id @default(cuid())
+  email       String     @unique
+  phone       String     @unique
+  password    String
+  firstName   String
+  lastName    String
+  dateOfBirth DateTime
+  role        Role       @default(PLAYER)
+  status      UserStatus @default(ACTIVE)
+  kycStatus   KycStatus  @default(PENDING)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  wallet       Wallet?
+  bets         Bet[]
+  transactions Transaction[]
+  sessions     Session[]
+  kyc          Kyc?
+
+  @@index([email])
+  @@index([phone])
+  @@index([role])
+  @@index([status])
+}
+
+model Kyc {
+  id         String    @id @default(cuid())
+  userId     String    @unique
+  user       User      @relation(fields: [userId], references: [id])
+  idType     IdType
+  idNumber   String
+  frontImage String
+  backImage  String
+  selfie     String?
+  status     KycStatus @default(PENDING)
+  reviewedBy String?
+  reviewedAt DateTime?
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  token     String   @unique
+  userAgent String?
+  ip        String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
+
+model Wallet {
+  id           String        @id @default(cuid())
+  userId       String        @unique
+  user         User          @relation(fields: [userId], references: [id])
+  balance      BigInt        @default(0) // centimes XAF
+  bonusBalance BigInt        @default(0)
+  updatedAt    DateTime      @updatedAt
+  transactions Transaction[]
+}
+
+model Transaction {
+  id            String            @id @default(cuid())
+  walletId      String
+  wallet        Wallet            @relation(fields: [walletId], references: [id])
+  userId        String
+  user          User              @relation(fields: [userId], references: [id])
+  type          TransactionType
+  amount        BigInt            // centimes XAF (positif = crédit, négatif = débit)
+  balanceBefore BigInt
+  balanceAfter  BigInt
+  status        TransactionStatus @default(PENDING)
+  provider      PaymentProvider?
+  providerRef   String?           // référence de la transaction Mobile Money
+  phoneNumber   String?           // numéro Mobile Money
+  betId         String?
+  metadata      Json?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([userId])
+  @@index([walletId])
+  @@index([status])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model Sport {
+  id           String        @id @default(cuid())
+  name         String
+  slug         String        @unique
+  icon         String?
+  isActive     Boolean       @default(true)
+  sortOrder    Int           @default(0)
+  competitions Competition[]
+}
+
+model Competition {
+  id       String  @id @default(cuid())
+  sportId  String
+  sport    Sport   @relation(fields: [sportId], references: [id])
+  name     String
+  slug     String  @unique
+  country  String?
+  logo     String?
+  isActive Boolean @default(true)
+  events   Event[]
+
+  @@index([sportId])
+}
+
+model Event {
+  id            String      @id @default(cuid())
+  competitionId String
+  competition   Competition @relation(fields: [competitionId], references: [id])
+  externalId    String?     @unique // ID from odds API
+  homeTeam      String
+  awayTeam      String
+  homeTeamLogo  String?
+  awayTeamLogo  String?
+  startTime     DateTime
+  status        EventStatus @default(UPCOMING)
+  homeScore     Int?
+  awayScore     Int?
+  minute        Int?        // minute de jeu (live)
+  result        String?
+  markets       Market[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([competitionId])
+  @@index([status])
+  @@index([startTime])
+}
+
+model Market {
+  id          String     @id @default(cuid())
+  eventId     String
+  event       Event      @relation(fields: [eventId], references: [id])
+  name        String
+  type        MarketType
+  isActive    Boolean    @default(true)
+  isSuspended Boolean    @default(false)
+  odds        Odd[]
+  betItems    BetItem[]
+
+  @@index([eventId])
+  @@index([type])
+}
+
+model Odd {
+  id        String   @id @default(cuid())
+  marketId  String
+  market    Market   @relation(fields: [marketId], references: [id])
+  label     String   // "1", "X", "2", "Over", "Under", "Yes", "No"
+  value     Decimal  @db.Decimal(8, 3) // cote décimale ex: 2.500
+  isActive  Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+  betItems  BetItem[]
+
+  @@index([marketId])
+}
+
+model Bet {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  type          BetType
+  stake         BigInt    // centimes XAF
+  totalOdds     Decimal   @db.Decimal(10, 3)
+  potentialWin  BigInt    // centimes XAF
+  status        BetStatus @default(PENDING)
+  isManualCheck Boolean   @default(false) // flaggé pour revue risque
+  settledAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  items         BetItem[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([isManualCheck])
+}
+
+model BetItem {
+  id       String         @id @default(cuid())
+  betId    String
+  bet      Bet            @relation(fields: [betId], references: [id])
+  marketId String
+  market   Market         @relation(fields: [marketId], references: [id])
+  oddId    String
+  odd      Odd            @relation(fields: [oddId], references: [id])
+  oddValue Decimal        @db.Decimal(8, 3) // snapshot de la cote au moment du pari
+  result   BetItemResult?
+
+  @@index([betId])
+  @@index([marketId])
+}

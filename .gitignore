@@ -1,0 +1,18 @@
+node_modules/
+.next/
+dist/
+.turbo/
+coverage/
+*.log
+.env
+.env.local
+.env.production
+.claude/
+
+# Prisma
+packages/db/node_modules/
+packages/db/generated/
+
+# OS
+.DS_Store
+Thumbs.db

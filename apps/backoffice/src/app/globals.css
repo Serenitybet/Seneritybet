@@ -1,0 +1,127 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { @apply bg-bo-base text-t-primary font-sans antialiased text-[13px]; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { @apply bg-bo-base; }
+  ::-webkit-scrollbar-thumb { @apply bg-bo-border2 rounded-full; }
+}
+
+@layer components {
+  /* Cartes */
+  .bo-card {
+    @apply bg-bo-card border border-bo-border rounded-xl overflow-hidden;
+  }
+  .bo-card-header {
+    @apply flex items-center justify-between px-4 py-3 border-b border-bo-border;
+  }
+  .bo-card-title {
+    @apply font-bold text-sm text-t-primary flex items-center gap-2;
+  }
+  .bo-card-body {
+    @apply px-4 py-4;
+  }
+
+  /* Boutons */
+  .bo-btn {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border
+           font-medium text-xs transition-all duration-150 cursor-pointer select-none
+           disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .bo-btn-primary {
+    @apply bo-btn bg-green-500 border-green-500 text-white hover:bg-green-600 hover:border-green-600 font-bold;
+  }
+  .bo-btn-secondary {
+    @apply bo-btn bg-bo-surface border-bo-border2 text-t-muted hover:border-green-500/50 hover:text-t-primary;
+  }
+  .bo-btn-danger {
+    @apply bo-btn bg-red-500/10 border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white;
+  }
+  .bo-btn-sm {
+    @apply px-2 py-1 text-[11px];
+  }
+
+  /* Inputs */
+  .bo-input {
+    @apply bg-bo-input border border-bo-border2 text-t-primary rounded-lg
+           px-3 py-2 text-xs font-sans
+           focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/20
+           placeholder:text-t-faint transition-all;
+  }
+  .bo-select {
+    @apply bo-input cursor-pointer;
+  }
+
+  /* Badges */
+  .bo-badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold;
+  }
+  .bo-badge-green  { @apply bo-badge bg-green-500/10 text-green-400; }
+  .bo-badge-red    { @apply bo-badge bg-red-500/10 text-red-400; }
+  .bo-badge-blue   { @apply bo-badge bg-blue-500/10 text-blue-400; }
+  .bo-badge-orange { @apply bo-badge bg-orange-500/10 text-orange-400; }
+  .bo-badge-yellow { @apply bo-badge bg-yellow-500/10 text-yellow-400; }
+  .bo-badge-gray   { @apply bo-badge bg-bo-surface text-t-faint; }
+
+  /* Table */
+  .bo-table { @apply w-full border-collapse; }
+  .bo-table th {
+    @apply px-3 py-2.5 text-left text-[10px] uppercase tracking-widest text-t-faint
+           border-b border-bo-border font-medium;
+  }
+  .bo-table td {
+    @apply px-3 py-2.5 border-b border-bo-border/50 text-t-muted text-xs align-middle;
+  }
+  .bo-table tr:last-child td { @apply border-b-0; }
+  .bo-table tbody tr:hover td { @apply bg-bo-surface/60; }
+  .bo-table td:first-child { @apply text-t-primary; }
+
+  /* Filter bar */
+  .bo-filter-bar { @apply flex items-center gap-2 mb-4; }
+
+  /* KPI card */
+  .kpi-card {
+    @apply bg-bo-card border border-bo-border rounded-xl p-4;
+  }
+  .kpi-label {
+    @apply flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-t-faint mb-2;
+  }
+  .kpi-value {
+    @apply font-bold text-[26px] text-t-primary leading-none mb-1;
+  }
+  .kpi-delta {
+    @apply flex items-center gap-1 text-[11px];
+  }
+
+  /* Nav sidebar */
+  .nav-link {
+    @apply flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium
+           text-t-muted hover:text-t-primary hover:bg-bo-surface
+           transition-all duration-150 cursor-pointer mx-2;
+  }
+  .nav-link.active {
+    @apply bg-green-500/10 text-green-400 border-l-2 border-green-500 pl-[10px] ml-[6px];
+  }
+
+  /* Toggle */
+  .bo-toggle {
+    @apply relative w-9 h-5 rounded-full cursor-pointer border border-bo-border2
+           transition-colors duration-200 shrink-0;
+  }
+  .bo-toggle::after {
+    content: '';
+    @apply absolute w-3.5 h-3.5 bg-white rounded-full top-[2px] left-[2px] transition-all duration-200;
+  }
+  .bo-toggle.on { @apply bg-green-500 border-green-500; }
+  .bo-toggle.on::after { left: calc(100% - 16px); }
+
+  /* Section label */
+  .nav-section {
+    @apply px-4 py-1.5 text-[9px] uppercase tracking-[1.5px] text-t-faint font-semibold;
+  }
+}
