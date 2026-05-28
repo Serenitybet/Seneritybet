@@ -17,7 +17,7 @@ COPY apps/backoffice/package.json ./apps/backoffice/
 
 # Install ALL deps (including devDeps — needed for tsx, prisma CLI, etc.)
 # Do NOT set NODE_ENV=production here or pnpm will skip devDependencies
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Copy all source files
 COPY packages/ ./packages/
