@@ -1,6 +1,6 @@
 {
   "framework": "nextjs",
   "installCommand": "cd ../.. && pnpm install --no-frozen-lockfile",
-  "buildCommand": "cd ../.. && pnpm build --filter=@serenitybet/web",
+  "buildCommand": "cd ../.. && TURBO_FORCE=1 pnpm build --filter=@serenitybet/web",
   "outputDirectory": ".next"
 }
