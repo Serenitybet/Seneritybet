@@ -71,14 +71,14 @@ export default function ProfilePage() {
           <p className="text-sm text-txt-muted">{user.email}</p>
           <span
             className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded text-[10px] font-semibold ${
-              user.kycStatus === "VERIFIED"
+              user.kycStatus === "APPROVED"
                 ? "bg-green-600/20 text-green-400"
                 : user.kycStatus === "PENDING"
                 ? "bg-gold/20 text-gold"
                 : "bg-bg-hover text-txt-muted"
             }`}
           >
-            {user.kycStatus === "VERIFIED" ? "✓ KYC Vérifié" : user.kycStatus === "PENDING" ? "⏳ KYC en attente" : "KYC non vérifié"}
+            {user.kycStatus === "APPROVED" ? "✓ KYC Vérifié" : user.kycStatus === "PENDING" ? "⏳ KYC en attente" : "KYC non vérifié"}
           </span>
         </div>
       </div>
@@ -166,7 +166,7 @@ export default function ProfilePage() {
       </form>
 
       {/* KYC info */}
-      {user.kycStatus !== "VERIFIED" && (
+      {user.kycStatus !== "APPROVED" && (
         <div className="bg-gold/5 border border-gold/20 rounded-xl p-4 flex gap-3">
           <span className="text-xl shrink-0">📋</span>
           <div>
