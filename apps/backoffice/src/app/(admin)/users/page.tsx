@@ -28,14 +28,27 @@ function statusBadge(s: string) {
   return <span className="bo-badge-gray">{s}</span>;
 }
 
-export default function UsersPage() {
-  const [apiUsers, setApiUsers] = useState<any[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [apiLoaded, setApiLoaded] = useState(false);
+const ROLE_LABELS: Record<string, string> = {
+  CASHIER: "💰 Caissier",
+  TRADER:  "📊 Trader",
+  FINANCE: "💳 Finance",
+  ADMIN:   "🛡️ Admin",
+};
 
-  useEffect(() => {
+export default function UsersPage() {
+  const [apiUsers, setApiUsers]   = useState<any[]>([]);
+  const [total, setTotal]         = useState(0);
+  const [page, setPage]           = useState(1);
+  const [search, setSearch]       = useState("");
+  const [apiLoaded, setApiLoaded] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [creating, setCreating]   = useState(false);
+  const [form, setForm] = useState({
+    firstName: "", lastName: "", email: "", phone: "",
+    password: "", role: "CASHIER", dateOfBirth: "1990-01-01",
+  });
+
+  function loadUsers() {
     const token = localStorage.getItem("bo_token");
     const params = new URLSearchParams({ page: String(page), limit: "25" });
     if (search) params.set("search", search);
@@ -45,7 +58,9 @@ export default function UsersPage() {
       .then((r) => r.json())
       .then((d) => { if (d.data?.users?.length) { setApiUsers(d.data.users); setTotal(d.data.total); setApiLoaded(true); } })
       .catch(() => {});
-  }, [page, search]);
+  }
+
+  useEffect(() => { loadUsers(); }, [page, search]);
 
   async function updateStatus(userId: string, status: string) {
     const token = localStorage.getItem("bo_token");
@@ -54,8 +69,31 @@ export default function UsersPage() {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ status }),
     });
-    if (res.ok) toast.success("Statut mis à jour ✓");
+    if (res.ok) { toast.success("Statut mis à jour ✓"); loadUsers(); }
     else toast.error("Erreur");
+  }
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setCreating(true);
+    try {
+      const token = localStorage.getItem("bo_token");
+      const res = await fetch(`${API}/admin/users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(form),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error ?? "Erreur création"); return; }
+      toast.success(`✓ ${ROLE_LABELS[form.role]} créé : ${form.email}`);
+      setShowModal(false);
+      setForm({ firstName: "", lastName: "", email: "", phone: "", password: "", role: "CASHIER", dateOfBirth: "1990-01-01" });
+      loadUsers();
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setCreating(false);
+    }
   }
 
   const displayUsers = apiLoaded ? apiUsers : DEMO_USERS;
@@ -74,6 +112,13 @@ export default function UsersPage() {
           {["Tous","Vérifié (KYC)","Non vérifié","Suspendu"].map(s => <option key={s}>{s}</option>)}
         </select>
         <button className="bo-btn-secondary">↓ Export</button>
+        <button
+          className="bo-btn-primary flex items-center gap-1.5"
+          onClick={() => setShowModal(true)}
+        >
+          <span className="text-base leading-none">+</span>
+          Créer utilisateur
+        </button>
       </div>
 
       {/* Tableau */}
@@ -133,8 +178,8 @@ export default function UsersPage() {
                     <div className="flex gap-1.5">
                       <button className="bo-btn-secondary bo-btn-sm" onClick={() => toast(`Profil de ${name}`)}>👁</button>
                       {status === "ACTIVE"
-                        ? <button className="bo-btn-danger bo-btn-sm" onClick={() => { updateStatus(u.id, "SUSPENDED"); toast.error("Compte suspendu"); }}>🔒</button>
-                        : <button className="bo-btn-primary bo-btn-sm" onClick={() => { updateStatus(u.id, "ACTIVE"); toast.success("Compte activé"); }}>✓</button>
+                        ? <button className="bo-btn-danger bo-btn-sm" onClick={() => updateStatus(u.id, "SUSPENDED")}>🔒</button>
+                        : <button className="bo-btn-primary bo-btn-sm" onClick={() => updateStatus(u.id, "ACTIVE")}>✓</button>
                       }
                     </div>
                   </td>
@@ -154,6 +199,79 @@ export default function UsersPage() {
           </div>
         )}
       </div>
+
+      {/* ── Modal Créer utilisateur ── */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-bo-card border border-bo-border rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-base font-bold text-t-primary">➕ Créer un utilisateur</h2>
+              <button onClick={() => setShowModal(false)} className="text-t-faint hover:text-t-primary text-lg">✕</button>
+            </div>
+
+            <form onSubmit={handleCreate} className="space-y-3">
+              {/* Rôle */}
+              <div>
+                <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1.5">Rôle</label>
+                <select
+                  className="bo-select w-full"
+                  value={form.role}
+                  onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
+                >
+                  {Object.entries(ROLE_LABELS).map(([val, label]) => (
+                    <option key={val} value={val}>{label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Nom / Prénom */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1.5">Prénom</label>
+                  <input className="bo-input w-full" required value={form.firstName}
+                    onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1.5">Nom</label>
+                  <input className="bo-input w-full" required value={form.lastName}
+                    onChange={e => setForm(f => ({ ...f, lastName: e.target.value }))} />
+                </div>
+              </div>
+
+              {/* Email */}
+              <div>
+                <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1.5">Email</label>
+                <input type="email" className="bo-input w-full" required value={form.email}
+                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+              </div>
+
+              {/* Téléphone */}
+              <div>
+                <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1.5">Téléphone (+235...)</label>
+                <input type="tel" className="bo-input w-full" required value={form.phone}
+                  placeholder="+23560000000"
+                  onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+              </div>
+
+              {/* Mot de passe */}
+              <div>
+                <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1.5">Mot de passe</label>
+                <input type="password" className="bo-input w-full" required minLength={8} value={form.password}
+                  onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setShowModal(false)}
+                  className="bo-btn-secondary flex-1">Annuler</button>
+                <button type="submit" disabled={creating}
+                  className="bo-btn-primary flex-1">
+                  {creating ? "Création…" : "Créer le compte"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

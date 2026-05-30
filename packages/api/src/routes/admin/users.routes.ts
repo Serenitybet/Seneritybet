@@ -2,8 +2,38 @@ import { Router, Request, Response } from "express";
 import { requireRole } from "../../middleware/auth.middleware";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../lib/asyncHandler";
+import bcrypt from "bcrypt";
 
 export const adminUsersRouter = Router();
+
+// POST /api/admin/users — créer un caissier ou admin
+adminUsersRouter.post("/", requireRole("ADMIN", "SUPER_ADMIN"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { email, phone, firstName, lastName, password, role, dateOfBirth } = req.body;
+
+    if (!email || !phone || !firstName || !lastName || !password || !role) {
+      res.status(400).json({ success: false, error: "Tous les champs sont requis" }); return;
+    }
+    const allowedRoles = ["CASHIER", "TRADER", "FINANCE", "ADMIN"];
+    if (!allowedRoles.includes(role)) {
+      res.status(400).json({ success: false, error: "Rôle non autorisé" }); return;
+    }
+    const exists = await prisma.user.findFirst({ where: { OR: [{ email }, { phone }] } });
+    if (exists) {
+      res.status(409).json({ success: false, error: "Email ou téléphone déjà utilisé" }); return;
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await prisma.user.create({
+      data: {
+        email, phone, firstName, lastName, passwordHash, role,
+        status: "ACTIVE",
+        kycStatus: "APPROVED",
+        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : new Date("1990-01-01"),
+      },
+    });
+    res.status(201).json({ success: true, data: { id: user.id, email: user.email, role: user.role } });
+  }),
+);
 
 adminUsersRouter.get("/", asyncHandler(async (req: Request, res: Response) => {
   const page   = parseInt((req.query.page   as string) ?? "1",  10);
