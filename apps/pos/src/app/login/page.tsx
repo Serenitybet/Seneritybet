@@ -21,7 +21,7 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await api.post("/api/auth/login", { email, password });
+      const res = await api.post("/auth/login", { email, password });
       const { accessToken, user } = res.data.data;
 
       const allowedRoles = ["CASHIER", "ADMIN", "SUPER_ADMIN"];

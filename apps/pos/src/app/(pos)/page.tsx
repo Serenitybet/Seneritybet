@@ -49,7 +49,7 @@ export default function CaissePage() {
     setAmount("");
     setReceipt(null);
     try {
-      const res = await api.get(`/api/cashier/customer/${phone.trim()}`);
+      const res = await api.get(`/cashier/customer/${phone.trim()}`);
       setCustomer(res.data.data);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
@@ -66,7 +66,7 @@ export default function CaissePage() {
 
     setProcessing(true);
     try {
-      const endpoint = mode === "DEPOT" ? "/api/cashier/deposit" : "/api/cashier/withdraw";
+      const endpoint = mode === "DEPOT" ? "/cashier/deposit" : "/cashier/withdraw";
       const res = await api.post(endpoint, {
         playerId: customer.id,
         amount: xafToCentimes(xaf),

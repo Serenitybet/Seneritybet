@@ -31,7 +31,7 @@ export default function HistoryPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await api.get("/api/cashier/transactions");
+        const res = await api.get("/cashier/transactions");
         setTransactions(res.data.data.transactions);
         setStats(res.data.data.stats);
       } catch {
