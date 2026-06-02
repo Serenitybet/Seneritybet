@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { requireRole } from "../../middleware/auth.middleware";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../lib/asyncHandler";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 
 export const adminUsersRouter = Router();
 
