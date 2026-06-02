@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { formatXAF } from "@serenitybet/shared";
 import toast from "react-hot-toast";
 
-const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL;
+const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL ?? "https://seneritybet.onrender.com/api";
 
 const DEMO_USERS = [
   { id: "1", initials: "MD", color: "text-blue-400   bg-blue-500/10",  username: "@mbaye_d",  name: "Mbaye Diop",    email: "mbaye.diop@email.com",   balance: 124000, total: 482000, bets: 47, status: "ACTIVE",    kyc: "APPROVED",  date: "12 jan 2026" },

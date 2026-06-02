@@ -7,7 +7,7 @@ import {
   Tooltip, Cell,
 } from "recharts";
 
-const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL;
+const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL ?? "https://seneritybet.onrender.com/api";
 
 /* Données simulées pour le graphique (en attendant l'API) */
 const CHART_DATA = [

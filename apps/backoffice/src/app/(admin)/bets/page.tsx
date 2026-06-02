@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { formatXAF } from "@serenitybet/shared";
 import toast from "react-hot-toast";
 
-const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL;
+const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL ?? "https://seneritybet.onrender.com/api";
 
 const DEMO_BETS = [
   { id: "#BT-4821", user: "@mbaye_d",  name: "Mbaye Diop",    type: "Simple",  match: "Real Madrid vs Bayern",   sel: "Bayern",   mise: 5000,   cote: 2.80, gain: 14000,  status: "PENDING",       manual: false },

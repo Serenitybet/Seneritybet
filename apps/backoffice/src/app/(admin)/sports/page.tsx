@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 
-const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL;
+const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL ?? "https://seneritybet.onrender.com/api";
 
 const DEMO_MATCHES = [
   { id: "1", t1: "Real Madrid",  t2: "Bayern Munich", comp: "Ligue des Champions", date: "27/05 · 20:45", o1: "2.15", oX: "3.35", o2: "2.80", status: "live", margin: "10.2" },
