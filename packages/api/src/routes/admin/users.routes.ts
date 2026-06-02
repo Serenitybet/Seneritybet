@@ -25,7 +25,7 @@ adminUsersRouter.post("/", requireRole("ADMIN", "SUPER_ADMIN"),
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
       data: {
-        email, phone, firstName, lastName, passwordHash, role,
+        email, phone, firstName, lastName, password: passwordHash, role,
         status: "ACTIVE",
         kycStatus: "APPROVED",
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : new Date("1990-01-01"),
