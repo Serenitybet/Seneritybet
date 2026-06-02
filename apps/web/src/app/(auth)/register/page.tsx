@@ -14,6 +14,8 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(0);
   const [showPwd, setShowPwd] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [form, setForm] = useState({
     email: "", phone: "", password: "",
     firstName: "", lastName: "", dateOfBirth: "",
@@ -29,6 +31,10 @@ export default function RegisterPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (form.password !== confirmPassword) {
+      toast.error("Les mots de passe ne correspondent pas !");
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
@@ -258,6 +264,36 @@ export default function RegisterPage() {
                     ? "Moyen"
                     : "Fort ✓"}
                 </p>
+              </div>
+
+              {/* Confirmation mot de passe */}
+              <div>
+                <label className="block text-sm font-medium text-txt-secondary mb-1.5">Confirmer le mot de passe</label>
+                <div className="relative">
+                  <input
+                    type={showConfirm ? "text" : "password"}
+                    className={`field pr-10 ${confirmPassword && confirmPassword !== form.password ? "border-red-500" : confirmPassword && confirmPassword === form.password ? "border-green-500" : ""}`}
+                    placeholder="Répétez votre mot de passe"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    minLength={8}
+                    required
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm(!showConfirm)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-txt-muted hover:text-txt-primary transition-colors text-sm"
+                  >
+                    {showConfirm ? "👁️" : "🔒"}
+                  </button>
+                </div>
+                {confirmPassword && confirmPassword !== form.password && (
+                  <p className="text-[11px] text-red-400 mt-1">❌ Les mots de passe ne correspondent pas</p>
+                )}
+                {confirmPassword && confirmPassword === form.password && (
+                  <p className="text-[11px] text-green-400 mt-1">✓ Mots de passe identiques</p>
+                )}
               </div>
 
               <p className="text-xs text-txt-muted bg-bg-card border border-bg-border rounded-lg p-3 leading-relaxed">
