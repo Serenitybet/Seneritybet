@@ -12,6 +12,7 @@ import { walletRouter } from "./routes/wallet.routes";
 import { webhookRouter } from "./routes/webhook.routes";
 import { adminRouter } from "./routes/admin/index.routes";
 import { cashierRouter } from "./routes/cashier.routes";
+import seedRouter from "./routes/seed.routes";
 import { errorHandler } from "./middleware/error.middleware";
 
 export const app = express();
@@ -82,6 +83,9 @@ app.use("/api/admin", adminRouter);
 
 // ─── Routes caisse (POS) ─────────────────────────────────────────────────────
 app.use("/api/cashier", cashierRouter);
+
+// ─── Route seed temporaire (init admin) ──────────────────────────────────────
+app.use("/api/seed", seedRouter);
 
 // ─── Gestion des erreurs (doit être en dernier) ───────────────────────────────
 app.use(errorHandler);

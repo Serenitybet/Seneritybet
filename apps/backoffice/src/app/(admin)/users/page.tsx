@@ -41,6 +41,7 @@ export default function UsersPage() {
   const [page, setPage]           = useState(1);
   const [search, setSearch]       = useState("");
   const [apiLoaded, setApiLoaded] = useState(false);
+  const [tab, setTab]             = useState<"players" | "staff">("players");
   const [showModal, setShowModal] = useState(false);
   const [creating, setCreating]   = useState(false);
   const [form, setForm] = useState({
@@ -52,15 +53,26 @@ export default function UsersPage() {
     const token = localStorage.getItem("bo_token");
     const params = new URLSearchParams({ page: String(page), limit: "25" });
     if (search) params.set("search", search);
-    fetch(`${API}/admin/users?${params}`, {
+    if (tab === "players") {
+      params.set("role", "PLAYER");
+    } else {
+      // Staff : tous sauf PLAYER
+    }
+    fetch(`${tab === "staff" ? `${API}/admin/users/staff` : `${API}/admin/users?${params}`}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.json())
-      .then((d) => { if (d.data?.users?.length) { setApiUsers(d.data.users); setTotal(d.data.total); setApiLoaded(true); } })
+      .then((d) => {
+        if (d.data?.users) {
+          setApiUsers(d.data.users);
+          setTotal(d.data.total ?? d.data.users.length);
+          setApiLoaded(true);
+        }
+      })
       .catch(() => {});
   }
 
-  useEffect(() => { loadUsers(); }, [page, search]);
+  useEffect(() => { setApiUsers([]); setApiLoaded(false); loadUsers(); }, [page, search, tab]);
 
   async function updateStatus(userId: string, status: string) {
     const token = localStorage.getItem("bo_token");
@@ -100,6 +112,26 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-4">
+      {/* Onglets */}
+      <div className="flex gap-2 border-b border-bo-border pb-0">
+        {[
+          { key: "players", label: "👥 Joueurs" },
+          { key: "staff",   label: "🛡️ Staff & Caissiers" },
+        ].map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => { setTab(key as "players" | "staff"); setPage(1); }}
+            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-all -mb-px ${
+              tab === key
+                ? "border-green-500 text-green-400"
+                : "border-transparent text-t-faint hover:text-t-primary"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* Filtres */}
       <div className="bo-filter-bar">
         <input
