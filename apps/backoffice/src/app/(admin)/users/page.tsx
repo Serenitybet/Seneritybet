@@ -44,6 +44,10 @@ export default function UsersPage() {
   const [tab, setTab]             = useState<"players" | "staff">("players");
   const [showModal, setShowModal] = useState(false);
   const [creating, setCreating]   = useState(false);
+  const [selectedUser, setSelectedUser] = useState<any | null>(null);
+  const [loadingUser, setLoadingUser]   = useState(false);
+  const [newPassword, setNewPassword]   = useState("");
+  const [resetting, setResetting]       = useState(false);
   const [form, setForm] = useState({
     firstName: "", lastName: "", email: "", phone: "",
     password: "", role: "CASHIER", dateOfBirth: "1990-01-01",
@@ -78,6 +82,40 @@ export default function UsersPage() {
     });
     if (res.ok) { toast.success("Statut mis à jour ✓"); loadUsers(); }
     else toast.error("Erreur");
+  }
+
+  async function openUser(userId: string) {
+    if (userId.length < 10) return; // demo user
+    setLoadingUser(true);
+    setSelectedUser(null);
+    setNewPassword("");
+    const token = localStorage.getItem("bo_token");
+    try {
+      const res = await fetch(`${API}/admin/users/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await res.json();
+      if (d.data) setSelectedUser(d.data);
+    } catch { toast.error("Impossible de charger le profil"); }
+    finally { setLoadingUser(false); }
+  }
+
+  async function resetPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedUser || !newPassword) return;
+    setResetting(true);
+    const token = localStorage.getItem("bo_token");
+    try {
+      const res = await fetch(`${API}/admin/users/${selectedUser.id}/password`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ newPassword }),
+      });
+      const d = await res.json();
+      if (res.ok) { toast.success("Mot de passe réinitialisé ✓"); setNewPassword(""); }
+      else toast.error(d.error ?? "Erreur");
+    } catch { toast.error("Erreur réseau"); }
+    finally { setResetting(false); }
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -203,7 +241,7 @@ export default function UsersPage() {
                   <td className="text-t-faint">{date}</td>
                   <td>
                     <div className="flex gap-1.5">
-                      <button className="bo-btn-secondary bo-btn-sm" onClick={() => toast(`Profil de ${name}`)}>👁</button>
+                      <button className="bo-btn-secondary bo-btn-sm" onClick={() => openUser(u.id)}>👁</button>
                       {status === "ACTIVE"
                         ? <button className="bo-btn-danger bo-btn-sm" onClick={() => updateStatus(u.id, "SUSPENDED")}>🔒</button>
                         : <button className="bo-btn-primary bo-btn-sm" onClick={() => updateStatus(u.id, "ACTIVE")}>✓</button>
@@ -226,6 +264,97 @@ export default function UsersPage() {
           </div>
         )}
       </div>
+
+      {/* ── Modal Fiche joueur ── */}
+      {(loadingUser || selectedUser) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-bo-card border border-bo-border rounded-2xl p-6 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-base font-bold text-t-primary">👤 Fiche utilisateur</h2>
+              <button onClick={() => setSelectedUser(null)} className="text-t-faint hover:text-t-primary text-lg">✕</button>
+            </div>
+
+            {loadingUser ? (
+              <div className="text-center py-8 text-t-faint">Chargement...</div>
+            ) : selectedUser && (
+              <div className="space-y-4">
+                {/* Identité */}
+                <div className="bg-bo-surface border border-bo-border rounded-xl p-4 grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-t-faint mb-0.5">ID</p>
+                    <p className="font-mono text-xs text-t-muted break-all">{selectedUser.id}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-t-faint mb-0.5">Inscription</p>
+                    <p className="text-t-primary">{new Date(selectedUser.createdAt).toLocaleDateString("fr-FR", { day:"2-digit", month:"long", year:"numeric" })}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-t-faint mb-0.5">Nom complet</p>
+                    <p className="text-t-primary font-semibold">{selectedUser.firstName} {selectedUser.lastName}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-t-faint mb-0.5">Email</p>
+                    <p className="text-t-primary">{selectedUser.email}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-t-faint mb-0.5">Téléphone</p>
+                    <p className="text-t-primary font-mono">{selectedUser.phone}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-t-faint mb-0.5">Rôle</p>
+                    <p className="text-t-primary">{selectedUser.role}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-t-faint mb-0.5">Statut</p>
+                    {statusBadge(selectedUser.status)}
+                  </div>
+                  <div>
+                    <p className="text-[10px] uppercase tracking-widest text-t-faint mb-0.5">KYC</p>
+                    {kycBadge(selectedUser.kycStatus)}
+                  </div>
+                </div>
+
+                {/* Solde */}
+                {selectedUser.wallet && (
+                  <div className="bg-green-600/10 border border-green-600/20 rounded-xl p-4">
+                    <p className="text-[10px] uppercase tracking-widest text-t-faint mb-1">Solde disponible</p>
+                    <p className="text-2xl font-black text-green-400">
+                      {formatXAF(Number(selectedUser.wallet.balance))}
+                    </p>
+                    {selectedUser._count && (
+                      <p className="text-xs text-t-faint mt-1">{selectedUser._count.bets} paris placés</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Réinitialisation mot de passe */}
+                <div className="border-t border-bo-border pt-4">
+                  <p className="text-sm font-semibold text-t-primary mb-3">🔑 Réinitialiser le mot de passe</p>
+                  <form onSubmit={resetPassword} className="flex gap-2">
+                    <input
+                      type="password"
+                      className="bo-input flex-1"
+                      placeholder="Nouveau mot de passe (6 car. min.)"
+                      value={newPassword}
+                      minLength={6}
+                      required
+                      onChange={e => setNewPassword(e.target.value)}
+                    />
+                    <button
+                      type="submit"
+                      disabled={resetting}
+                      className="bo-btn-primary shrink-0"
+                    >
+                      {resetting ? "..." : "Modifier"}
+                    </button>
+                  </form>
+                  <p className="text-[11px] text-t-faint mt-1">Le mot de passe actuel ne sera pas affiché pour des raisons de sécurité.</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Modal Créer utilisateur ── */}
       {showModal && (

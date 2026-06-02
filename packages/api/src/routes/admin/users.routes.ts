@@ -111,6 +111,18 @@ adminUsersRouter.patch("/:id/status", requireRole("ADMIN", "SUPER_ADMIN"),
   }),
 );
 
+adminUsersRouter.patch("/:id/password", requireRole("ADMIN", "SUPER_ADMIN"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { newPassword } = req.body;
+    if (!newPassword || newPassword.length < 6) {
+      res.status(400).json({ success: false, error: "Mot de passe trop court (6 caractères minimum)" }); return;
+    }
+    const hash = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({ where: { id: req.params.id }, data: { password: hash } });
+    res.json({ success: true, message: "Mot de passe réinitialisé avec succès" });
+  }),
+);
+
 adminUsersRouter.patch("/:id/kyc", requireRole("ADMIN", "SUPER_ADMIN"),
   asyncHandler(async (req: Request, res: Response) => {
     const { status, notes } = req.body;
