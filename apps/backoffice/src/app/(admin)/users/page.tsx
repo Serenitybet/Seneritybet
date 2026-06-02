@@ -51,19 +51,14 @@ export default function UsersPage() {
 
   function loadUsers() {
     const token = localStorage.getItem("bo_token");
-    const params = new URLSearchParams({ page: String(page), limit: "25" });
-    if (search) params.set("search", search);
-    if (tab === "players") {
-      params.set("role", "PLAYER");
-    } else {
-      // Staff : tous sauf PLAYER
-    }
-    fetch(`${tab === "staff" ? `${API}/admin/users/staff` : `${API}/admin/users?${params}`}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const url = tab === "staff"
+      ? `${API}/admin/users/staff`
+      : `${API}/admin/users?page=${page}&limit=25${search ? `&search=${encodeURIComponent(search)}` : ""}`;
+
+    fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
       .then((d) => {
-        if (d.data?.users) {
+        if (d.data?.users !== undefined) {
           setApiUsers(d.data.users);
           setTotal(d.data.total ?? d.data.users.length);
           setApiLoaded(true);

@@ -54,9 +54,8 @@ adminUsersRouter.get("/", asyncHandler(async (req: Request, res: Response) => {
   const search = req.query.search as string | undefined;
   const status = req.query.status as string | undefined;
 
-  const roleFilter = req.query.role as string | undefined;
   const where = {
-    ...(roleFilter ? { role: roleFilter as any } : {}),
+    role: "PLAYER" as const,
     ...(status ? { status: status as any } : {}),
     ...(search ? {
       OR: [
