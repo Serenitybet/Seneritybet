@@ -4,6 +4,17 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://seneritybet.onrender
 
 export const api = axios.create({ baseURL: API_URL });
 
+// Auto-initialise le token depuis le localStorage dès le chargement du module
+if (typeof window !== "undefined") {
+  try {
+    const stored = JSON.parse(localStorage.getItem("pos-auth") ?? "{}");
+    const token = stored?.state?.token;
+    if (token) {
+      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    }
+  } catch { /* ignore */ }
+}
+
 export function setAuthToken(token: string | null) {
   if (token) {
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;

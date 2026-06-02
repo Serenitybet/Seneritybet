@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { api, formatXAF } from "@/lib/api";
+import { api, formatXAF, setAuthToken } from "@/lib/api";
+import { useAuthStore } from "@/store/auth.store";
 import clsx from "clsx";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
@@ -24,11 +25,15 @@ interface Stats {
 }
 
 export default function HistoryPage() {
+  const { token } = useAuthStore();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // S'assurer que le token est bien défini avant l'appel
+    if (token) setAuthToken(token);
+
     async function load() {
       try {
         const res = await api.get("/cashier/transactions");
@@ -41,7 +46,7 @@ export default function HistoryPage() {
       }
     }
     load();
-  }, []);
+  }, [token]);
 
   const today = format(new Date(), "EEEE d MMMM yyyy", { locale: fr });
 
