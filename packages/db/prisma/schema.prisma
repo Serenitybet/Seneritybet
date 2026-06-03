@@ -100,6 +100,13 @@ enum BetItemResult {
   VOID
 }
 
+enum WithdrawalRequestStatus {
+  PENDING
+  VALIDATED
+  CANCELLED
+  EXPIRED
+}
+
 // ─── Models ─────────────────────────────────────────────────────────────────
 
 model User {
@@ -117,11 +124,12 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
-  wallet       Wallet?
-  bets         Bet[]
-  transactions Transaction[]
-  sessions     Session[]
-  kyc          Kyc?
+  wallet              Wallet?
+  bets                Bet[]
+  transactions        Transaction[]
+  sessions            Session[]
+  kyc                 Kyc?
+  withdrawalRequests  WithdrawalRequest[]
 
   @@index([email])
   @@index([phone])
@@ -302,9 +310,51 @@ model BetItem {
   market   Market         @relation(fields: [marketId], references: [id])
   oddId    String
   odd      Odd            @relation(fields: [oddId], references: [id])
-  oddValue Decimal        @db.Decimal(8, 3) // snapshot de la cote au moment du pari
+  oddValue Decimal        @db.Decimal(8, 3)
   result   BetItemResult?
 
   @@index([betId])
   @@index([marketId])
+}
+
+// ─── Boutiques (salles de jeux physiques) ─────────────────────────────────────
+
+model Shop {
+  id        String   @id @default(cuid())
+  name      String
+  city      String
+  address   String?
+  phone     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  withdrawalRequests WithdrawalRequest[]
+
+  @@index([city])
+  @@index([isActive])
+}
+
+// ─── Demandes de retrait espèces ─────────────────────────────────────────────
+
+model WithdrawalRequest {
+  id          String                  @id @default(cuid())
+  userId      String
+  user        User                    @relation(fields: [userId], references: [id])
+  shopId      String
+  shop        Shop                    @relation(fields: [shopId], references: [id])
+  amount      BigInt
+  status      WithdrawalRequestStatus @default(PENDING)
+  requestCode String                  @unique
+  cashierId   String?
+  completedAt DateTime?
+  expiresAt   DateTime
+  notes       String?
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  @@index([userId])
+  @@index([shopId])
+  @@index([status])
+  @@index([requestCode])
+  @@index([expiresAt])
 }

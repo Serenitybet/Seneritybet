@@ -175,6 +175,104 @@ cashierRouter.post("/withdraw", asyncHandler(async (req: AuthRequest, res: Respo
   });
 }));
 
+// ─── Retraits en attente — recherche par ID joueur ───────────────────────────
+cashierRouter.get("/pending-withdrawals/:playerNumber", asyncHandler(async (req: AuthRequest, res: Response) => {
+  const playerNumber = parseInt(req.params.playerNumber, 10);
+  if (isNaN(playerNumber)) throw new AppError(400, "Numéro joueur invalide");
+
+  const player = await prisma.user.findUnique({
+    where: { playerNumber },
+    select: { id: true, firstName: true, lastName: true, phone: true, status: true },
+  });
+  if (!player) throw new AppError(404, "Joueur introuvable");
+  if (player.status !== "ACTIVE") throw new AppError(403, "Compte joueur suspendu");
+
+  // Expirer automatiquement les demandes expirées
+  await prisma.withdrawalRequest.updateMany({
+    where: { userId: player.id, status: "PENDING", expiresAt: { lt: new Date() } },
+    data: { status: "EXPIRED" },
+  });
+
+  const requests = await prisma.withdrawalRequest.findMany({
+    where: { userId: player.id, status: "PENDING" },
+    include: { shop: { select: { name: true, city: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  res.json({
+    success: true,
+    data: {
+      player: { id: player.id, firstName: player.firstName, lastName: player.lastName, phone: player.phone },
+      pendingWithdrawals: requests.map(r => ({
+        id: r.id,
+        requestCode: r.requestCode,
+        amountXAF: Number(r.amount) / 100,
+        shop: r.shop,
+        createdAt: r.createdAt,
+        expiresAt: r.expiresAt,
+      })),
+    },
+  });
+}));
+
+// POST /api/cashier/validate-withdrawal/:id — caissier valide un retrait
+cashierRouter.post("/validate-withdrawal/:id", asyncHandler(async (req: AuthRequest, res: Response) => {
+  const request = await prisma.withdrawalRequest.findUnique({
+    where: { id: req.params.id },
+    include: {
+      user: { include: { wallet: true } },
+      shop: true,
+    },
+  });
+
+  if (!request) throw new AppError(404, "Demande de retrait introuvable");
+  if (request.status !== "PENDING") throw new AppError(400, `Demande déjà ${request.status.toLowerCase()}`);
+  if (new Date() > request.expiresAt) {
+    await prisma.withdrawalRequest.update({ where: { id: request.id }, data: { status: "EXPIRED" } });
+    throw new AppError(400, "Cette demande a expiré — le montant sera remboursé automatiquement");
+  }
+
+  // Créer la transaction de retrait et valider la demande
+  const [updatedRequest, transaction] = await prisma.$transaction([
+    prisma.withdrawalRequest.update({
+      where: { id: request.id },
+      data: { status: "VALIDATED", cashierId: req.user!.id, completedAt: new Date() },
+    }),
+    prisma.transaction.create({
+      data: {
+        walletId: request.user.wallet!.id,
+        userId: request.userId,
+        type: "WITHDRAWAL",
+        amount: -request.amount,
+        balanceBefore: request.user.wallet!.balance + request.amount, // déjà déduit à la création
+        balanceAfter: request.user.wallet!.balance,
+        status: "COMPLETED",
+        provider: "CASH",
+        metadata: {
+          cashierId: req.user!.id,
+          cashierEmail: req.user!.email,
+          requestCode: request.requestCode,
+          shopId: request.shopId,
+          channel: "POS_WITHDRAWAL",
+        },
+      },
+    }),
+  ]);
+
+  res.json({
+    success: true,
+    data: {
+      transactionId: transaction.id,
+      playerName: `${request.user.firstName} ${request.user.lastName}`,
+      phone: request.user.phone,
+      amountXAF: Number(request.amount) / 100,
+      requestCode: request.requestCode,
+      shop: request.shop.name,
+      completedAt: updatedRequest.completedAt,
+    },
+  });
+}));
+
 // ─── Transactions du jour (pour clôture de caisse) ────────────────────────────
 cashierRouter.get("/transactions", asyncHandler(async (req: AuthRequest, res: Response) => {
   const today = new Date();

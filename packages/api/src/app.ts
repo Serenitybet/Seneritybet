@@ -13,6 +13,7 @@ import { webhookRouter } from "./routes/webhook.routes";
 import { adminRouter } from "./routes/admin/index.routes";
 import { cashierRouter } from "./routes/cashier.routes";
 import seedRouter from "./routes/seed.routes";
+import { withdrawalRequestRouter } from "./routes/withdrawal-request.routes";
 import { errorHandler } from "./middleware/error.middleware";
 
 export const app = express();
@@ -83,6 +84,9 @@ app.use("/api/admin", adminRouter);
 
 // ─── Routes caisse (POS) ─────────────────────────────────────────────────────
 app.use("/api/cashier", cashierRouter);
+
+// ─── Demandes de retrait espèces ─────────────────────────────────────────────
+app.use("/api/withdrawals", withdrawalRequestRouter);
 
 // ─── Route seed temporaire (init admin) ──────────────────────────────────────
 app.use("/api/seed", seedRouter);
