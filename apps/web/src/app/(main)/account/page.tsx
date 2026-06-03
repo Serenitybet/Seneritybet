@@ -46,23 +46,33 @@ export default function AccountPage() {
         </div>
 
         {/* Solde */}
-        <Link
-          href="/account/wallet"
-          className="flex items-center justify-between bg-bg-card border border-bg-border rounded-xl p-3.5 hover:border-green-600/40 transition-all"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-green-600/20 rounded-full flex items-center justify-center">
-              <span className="text-green-400 text-sm font-black">₣</span>
-            </div>
-            <div>
-              <p className="text-xs text-txt-muted">Solde disponible</p>
-              <p className="text-xl font-black text-green-400">{formatXAF(balance)}</p>
+        <div className="bg-bg-card border border-bg-border rounded-xl p-3.5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-green-600/20 rounded-full flex items-center justify-center">
+                <span className="text-green-400 text-sm font-black">₣</span>
+              </div>
+              <div>
+                <p className="text-xs text-txt-muted">Solde disponible</p>
+                <p className="text-xl font-black text-green-400">{formatXAF(balance)}</p>
+              </div>
             </div>
           </div>
-          <Link href="/account/wallet" className="btn-green text-xs px-3 py-1.5">
-            + Dépôt
-          </Link>
-        </Link>
+          <div className="grid grid-cols-2 gap-2">
+            <Link
+              href="/account/wallet?tab=deposit"
+              className="flex items-center justify-center gap-1.5 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition-colors"
+            >
+              ⬆️ Dépôt
+            </Link>
+            <Link
+              href="/account/wallet?tab=withdraw"
+              className="flex items-center justify-center gap-1.5 py-2 bg-bg-secondary hover:bg-bg-hover border border-bg-border text-txt-primary text-xs font-bold rounded-lg transition-colors"
+            >
+              💸 Retrait espèces
+            </Link>
+          </div>
+        </div>
       </div>
 
       {/* Menu */}

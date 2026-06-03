@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthStore } from "@/store/auth.store";
 import { useWalletStore } from "@/store/wallet.store";
 import { formatXAF, PAYMENT_PROVIDER_LABELS, type PaymentProvider } from "@serenitybet/shared";
@@ -59,10 +59,12 @@ interface WithdrawalReq {
 
 export default function WalletPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuthStore();
   const { balance, bonusBalance, fetchBalance } = useWalletStore();
 
-  const [tab, setTab] = useState<"deposit" | "withdraw" | "history">("deposit");
+  const initialTab = (searchParams.get("tab") as "deposit" | "withdraw" | "history") ?? "deposit";
+  const [tab, setTab] = useState<"deposit" | "withdraw" | "history">(initialTab);
   const [form, setForm] = useState({ amount: "", provider: "AIRTEL_MONEY" as PaymentProvider, phone: "" });
   const [loading, setLoading] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
