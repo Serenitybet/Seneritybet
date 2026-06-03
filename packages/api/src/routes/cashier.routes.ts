@@ -9,6 +9,15 @@ export const cashierRouter = Router();
 cashierRouter.use(authenticate);
 cashierRouter.use(requireRole("CASHIER", "ADMIN", "SUPER_ADMIN"));
 
+// ─── Solde du portefeuille caissier ──────────────────────────────────────────
+cashierRouter.get("/wallet", asyncHandler(async (req: AuthRequest, res: Response) => {
+  let wallet = await prisma.cashierWallet.findUnique({ where: { userId: req.user!.id } });
+  if (!wallet) {
+    wallet = await prisma.cashierWallet.create({ data: { userId: req.user!.id, balance: BigInt(0) } });
+  }
+  res.json({ success: true, data: { balanceXAF: Number(wallet.balance) / 100 } });
+}));
+
 // ─── Rechercher un client par téléphone ──────────────────────────────────────
 cashierRouter.get("/customer/:phone", asyncHandler(async (req: AuthRequest, res: Response) => {
   const { phone } = req.params;
@@ -70,7 +79,15 @@ cashierRouter.post("/deposit", asyncHandler(async (req: AuthRequest, res: Respon
   if (player.status !== "ACTIVE") throw new AppError(403, "Compte client suspendu");
   if (!player.wallet) throw new AppError(400, "Portefeuille non initialisé");
 
+  // S'assurer que le caissier a un portefeuille
+  await prisma.cashierWallet.upsert({
+    where: { userId: req.user!.id },
+    create: { userId: req.user!.id, balance: BigInt(0) },
+    update: {},
+  });
+
   const [updatedWallet, transaction] = await prisma.$transaction([
+    // Portefeuille joueur ↑
     prisma.wallet.update({
       where: { id: player.wallet.id },
       data: { balance: { increment: amountCentimes } },
@@ -93,6 +110,11 @@ cashierRouter.post("/deposit", asyncHandler(async (req: AuthRequest, res: Respon
           channel: "POS",
         },
       },
+    }),
+    // Portefeuille caissier ↓ (il a encaissé du cash → doit du crédit)
+    prisma.cashierWallet.update({
+      where: { userId: req.user!.id },
+      data: { balance: { decrement: amountCentimes } },
     }),
   ]);
 
@@ -278,7 +300,7 @@ cashierRouter.post("/validate-withdrawal/:id", asyncHandler(async (req: AuthRequ
         userId: request.userId,
         type: "WITHDRAWAL",
         amount: -request.amount,
-        balanceBefore: request.user.wallet!.balance + request.amount, // déjà déduit à la création
+        balanceBefore: request.user.wallet!.balance + request.amount,
         balanceAfter: request.user.wallet!.balance,
         status: "COMPLETED",
         provider: "CASH",
@@ -290,6 +312,11 @@ cashierRouter.post("/validate-withdrawal/:id", asyncHandler(async (req: AuthRequ
           channel: "POS_WITHDRAWAL",
         },
       },
+    }),
+    // Portefeuille caissier ↑ (il donne du cash → récupère du crédit)
+    prisma.cashierWallet.update({
+      where: { userId: req.user!.id },
+      data: { balance: { increment: request.amount } },
     }),
   ]);
 

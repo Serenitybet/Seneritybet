@@ -62,6 +62,7 @@ adminUsersRouter.get("/staff", asyncHandler(async (req: Request, res: Response) 
       id: true, playerNumber: true, email: true, phone: true, firstName: true, lastName: true,
       role: true, status: true, kycStatus: true, createdAt: true,
       shop: { select: { id: true, name: true, city: true } },
+      cashierWallet: { select: { balance: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -131,6 +132,29 @@ adminUsersRouter.patch("/:id/status", requireRole("ADMIN", "SUPER_ADMIN"),
     }
     await prisma.user.update({ where: { id: req.params.id }, data: { status } });
     res.json({ success: true, message: `Statut mis à jour : ${status}` });
+  }),
+);
+
+// PATCH /api/admin/users/:id/recharge — recharger le portefeuille d'un caissier
+adminUsersRouter.patch("/:id/recharge", requireRole("ADMIN", "SUPER_ADMIN"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { amount } = req.body;
+    if (!amount || Number(amount) <= 0) {
+      res.status(400).json({ success: false, error: "Montant invalide" }); return;
+    }
+    const amountCentimes = BigInt(Math.round(Number(amount) * 100));
+
+    const wallet = await prisma.cashierWallet.upsert({
+      where: { userId: req.params.id },
+      create: { userId: req.params.id, balance: amountCentimes },
+      update: { balance: { increment: amountCentimes } },
+    });
+
+    res.json({
+      success: true,
+      message: `Portefeuille rechargé de ${Number(amount).toLocaleString("fr-FR")} XAF`,
+      data: { newBalanceXAF: Number(wallet.balance) / 100 },
+    });
   }),
 );
 

@@ -231,7 +231,7 @@ export default function UsersPage() {
               <th>Utilisateur</th>
               <th>Email</th>
               {tab === "players" && <><th>Solde</th><th>Paris</th></>}
-              {tab === "staff"   && <th>Boutique</th>}
+              {tab === "staff"   && <><th>Boutique</th><th>Float caisse</th></>}
               <th>KYC</th>
               <th>Statut</th>
               <th>Inscription</th>
@@ -269,9 +269,20 @@ export default function UsersPage() {
                     </>
                   )}
                   {tab === "staff" && (
-                    <td className="text-xs text-t-muted">
-                      {u.shop ? `🏪 ${u.shop.name}` : <span className="text-t-faint">—</span>}
-                    </td>
+                    <>
+                      <td className="text-xs text-t-muted">
+                        {u.shop ? `🏪 ${u.shop.name}` : <span className="text-t-faint">—</span>}
+                      </td>
+                      {u.role === "CASHIER" && (
+                        <td className="font-mono font-bold text-sm">
+                          <span className={Number(u.cashierWallet?.balance ?? 0) < 0 ? "text-red-400" : "text-green-400"}>
+                            {formatXAF(Math.abs(Number(u.cashierWallet?.balance ?? 0)))}
+                            {Number(u.cashierWallet?.balance ?? 0) < 0 ? " ↓" : ""}
+                          </span>
+                        </td>
+                      )}
+                      {u.role !== "CASHIER" && <td className="text-t-faint text-xs">—</td>}
+                    </>
                   )}
                   <td>{kycBadge(u.kycStatus)}</td>
                   <td>{statusBadge(u.status)}</td>
@@ -362,6 +373,37 @@ export default function UsersPage() {
                     {selectedUser._count && (
                       <p className="text-xs text-t-faint mt-1">{selectedUser._count.bets} paris placés</p>
                     )}
+                  </div>
+                )}
+
+                {/* Recharge portefeuille caissier */}
+                {selectedUser.role === "CASHIER" && (
+                  <div className="bg-green-600/10 border border-green-600/20 rounded-xl p-4">
+                    <p className="text-sm font-semibold text-t-primary mb-1">💰 Portefeuille caissier</p>
+                    <p className="text-2xl font-black text-green-400 mb-3">
+                      {formatXAF(Math.abs(Number(selectedUser.cashierWallet?.balance ?? 0)))}
+                      {Number(selectedUser.cashierWallet?.balance ?? 0) < 0 && <span className="text-red-400 text-sm ml-2">(déficit)</span>}
+                    </p>
+                    <div className="flex gap-2">
+                      {[10000, 25000, 50000, 100000, 250000, 500000].map(amt => (
+                        <button key={amt} type="button"
+                          className="bo-btn-secondary bo-btn-sm text-xs"
+                          onClick={async () => {
+                            const token = localStorage.getItem("bo_token");
+                            const res = await fetch(`${API}/admin/users/${selectedUser.id}/recharge`, {
+                              method: "PATCH",
+                              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                              body: JSON.stringify({ amount: amt }),
+                            });
+                            const d = await res.json();
+                            if (res.ok) { toast.success(d.message); openUser(selectedUser.id); loadUsers(); }
+                            else toast.error(d.error ?? "Erreur");
+                          }}
+                        >
+                          +{(amt/1000).toFixed(0)}k
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
 
