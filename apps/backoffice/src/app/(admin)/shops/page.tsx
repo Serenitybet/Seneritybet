@@ -5,6 +5,13 @@ import toast from "react-hot-toast";
 
 const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL ?? "https://seneritybet.onrender.com/api";
 
+interface ShopStats {
+  totalWithdrawalsXAF: number;
+  countWithdrawals: number;
+  pendingAmountXAF: number;
+  countPending: number;
+}
+
 interface Shop {
   id: string;
   name: string;
@@ -12,25 +19,35 @@ interface Shop {
   address: string | null;
   phone: string | null;
   isActive: boolean;
-  _count?: { withdrawalRequests: number };
+  stats?: ShopStats;
 }
 
 const EMPTY_FORM = { name: "", city: "", address: "", phone: "" };
 
+function fmtXAF(v: number) {
+  return new Intl.NumberFormat("fr-FR").format(Math.round(v)) + " XAF";
+}
+
 export default function ShopsPage() {
-  const [shops, setShops]         = useState<Shop[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [editing, setEditing]     = useState<Shop | null>(null);
-  const [saving, setSaving]       = useState(false);
-  const [form, setForm]           = useState(EMPTY_FORM);
+  const [shops, setShops]           = useState<Shop[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [showModal, setShowModal]   = useState(false);
+  const [editing, setEditing]       = useState<Shop | null>(null);
+  const [saving, setSaving]         = useState(false);
+  const [form, setForm]             = useState(EMPTY_FORM);
   const [filterCity, setFilterCity] = useState("");
+  const [dateFrom, setDateFrom]     = useState("");
+  const [dateTo, setDateTo]         = useState("");
 
   function token() { return localStorage.getItem("bo_token"); }
 
   async function loadShops() {
+    setLoading(true);
     try {
-      const res = await fetch(`${API}/admin/shops`, { headers: { Authorization: `Bearer ${token()}` } });
+      const params = new URLSearchParams();
+      if (dateFrom) params.set("from", dateFrom);
+      if (dateTo)   params.set("to",   dateTo);
+      const res = await fetch(`${API}/admin/shops?${params}`, { headers: { Authorization: `Bearer ${token()}` } });
       const d = await res.json();
       if (d.data) setShops(d.data);
     } catch { toast.error("Erreur chargement"); }
@@ -99,12 +116,21 @@ export default function ShopsPage() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="bo-filter-bar">
+      <div className="bo-filter-bar flex-wrap">
         <div>
           <h1 className="text-lg font-bold text-t-primary">🏪 Boutiques & Salles de jeux</h1>
           <p className="text-[11px] text-t-faint mt-0.5">
             {shops.filter(s => s.isActive).length} actives · {shops.length} au total
           </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <input type="date" className="bo-input text-xs py-1.5" value={dateFrom} onChange={e => setDateFrom(e.target.value)} title="Du" />
+          <span className="text-t-faint text-xs">→</span>
+          <input type="date" className="bo-input text-xs py-1.5" value={dateTo}   onChange={e => setDateTo(e.target.value)}   title="Au" />
+          <button className="bo-btn-secondary bo-btn-sm" onClick={loadShops}>Filtrer</button>
+          {(dateFrom || dateTo) && (
+            <button className="bo-btn-secondary bo-btn-sm" onClick={() => { setDateFrom(""); setDateTo(""); setTimeout(loadShops, 0); }}>✕</button>
+          )}
         </div>
         <select className="bo-select" value={filterCity} onChange={e => setFilterCity(e.target.value)}>
           <option value="">Toutes les villes</option>
@@ -114,6 +140,22 @@ export default function ShopsPage() {
           <span>+</span> Ajouter une boutique
         </button>
       </div>
+
+      {/* Totaux globaux */}
+      {shops.length > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Total retraits validés", value: shops.reduce((s, sh) => s + (sh.stats?.totalWithdrawalsXAF ?? 0), 0), color: "text-red-400" },
+            { label: "Montant en attente",      value: shops.reduce((s, sh) => s + (sh.stats?.pendingAmountXAF    ?? 0), 0), color: "text-gold" },
+            { label: "Total engagé",             value: shops.reduce((s, sh) => s + (sh.stats?.totalWithdrawalsXAF ?? 0) + (sh.stats?.pendingAmountXAF ?? 0), 0), color: "text-t-primary" },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="bo-card p-4 text-center">
+              <p className="text-[10px] uppercase tracking-widest text-t-faint mb-1">{label}</p>
+              <p className={`text-xl font-black ${color}`}>{fmtXAF(value)}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Liste par ville */}
       {loading ? (
@@ -131,39 +173,59 @@ export default function ShopsPage() {
               <span className="text-[11px] text-t-faint">{cityShops.length} boutique(s)</span>
             </div>
             <div className="divide-y divide-bo-border">
-              {cityShops.map(shop => (
-                <div key={shop.id} className={`flex items-center gap-4 p-4 ${!shop.isActive ? "opacity-50" : ""}`}>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold text-t-primary">{shop.name}</p>
-                      {!shop.isActive && (
-                        <span className="bo-badge-red text-[10px]">Inactive</span>
-                      )}
+              {cityShops.map(shop => {
+                const s = shop.stats;
+                // Dépôts non disponibles par boutique (non lié au shopId dans les transactions)
+                // Retraits = montants validés à cette boutique
+                const totalRetraits = s?.totalWithdrawalsXAF ?? 0;
+                const enAttente    = s?.pendingAmountXAF    ?? 0;
+
+                return (
+                  <div key={shop.id} className={`p-4 ${!shop.isActive ? "opacity-50" : ""}`}>
+                    {/* Ligne 1 : nom + actions */}
+                    <div className="flex items-center justify-between gap-4 mb-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-t-primary">{shop.name}</p>
+                          {!shop.isActive && <span className="bo-badge-red text-[10px]">Inactive</span>}
+                        </div>
+                        <div className="flex items-center gap-3 mt-0.5">
+                          {shop.address && <span className="text-xs text-t-faint">📍 {shop.address}</span>}
+                          {shop.phone   && <span className="text-xs text-t-faint">📞 {shop.phone}</span>}
+                        </div>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <button className="bo-btn-secondary bo-btn-sm" onClick={() => openEdit(shop)}>✏️</button>
+                        <button
+                          className={`bo-btn-sm ${shop.isActive ? "bo-btn-danger" : "bo-btn-primary"}`}
+                          onClick={() => toggleActive(shop)}
+                        >
+                          {shop.isActive ? "🔴" : "✅"}
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 mt-0.5">
-                      {shop.address && <span className="text-xs text-t-faint">📍 {shop.address}</span>}
-                      {shop.phone   && <span className="text-xs text-t-faint">📞 {shop.phone}</span>}
-                      {shop._count && shop._count.withdrawalRequests > 0 && (
-                        <span className="text-xs text-gold">💸 {shop._count.withdrawalRequests} demande(s)</span>
-                      )}
+
+                    {/* Ligne 2 : rapport financier */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="bg-bo-surface border border-bo-border rounded-lg px-3 py-2 text-center">
+                        <p className="text-[10px] text-t-faint uppercase tracking-wide mb-0.5">Total retraits</p>
+                        <p className="text-sm font-black text-red-400">{fmtXAF(totalRetraits)}</p>
+                        <p className="text-[10px] text-t-faint">{s?.countWithdrawals ?? 0} opération(s)</p>
+                      </div>
+                      <div className="bg-bo-surface border border-bo-border rounded-lg px-3 py-2 text-center">
+                        <p className="text-[10px] text-t-faint uppercase tracking-wide mb-0.5">En attente</p>
+                        <p className="text-sm font-black text-gold">{fmtXAF(enAttente)}</p>
+                        <p className="text-[10px] text-t-faint">{s?.countPending ?? 0} demande(s)</p>
+                      </div>
+                      <div className="bg-bo-surface border border-bo-border rounded-lg px-3 py-2 text-center">
+                        <p className="text-[10px] text-t-faint uppercase tracking-wide mb-0.5">Total validé</p>
+                        <p className="text-sm font-black text-t-primary">{fmtXAF(totalRetraits + enAttente)}</p>
+                        <p className="text-[10px] text-t-faint">{(s?.countWithdrawals ?? 0) + (s?.countPending ?? 0)} total</p>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex gap-2 shrink-0">
-                    <button
-                      className="bo-btn-secondary bo-btn-sm"
-                      onClick={() => openEdit(shop)}
-                    >
-                      ✏️ Modifier
-                    </button>
-                    <button
-                      className={`bo-btn-sm ${shop.isActive ? "bo-btn-danger" : "bo-btn-primary"}`}
-                      onClick={() => toggleActive(shop)}
-                    >
-                      {shop.isActive ? "🔴 Désactiver" : "✅ Réactiver"}
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ))

@@ -6,12 +6,50 @@ import { asyncHandler } from "../../lib/asyncHandler";
 export const adminShopsRouter = Router();
 
 // GET /api/admin/shops
-adminShopsRouter.get("/", asyncHandler(async (_req: Request, res: Response) => {
+adminShopsRouter.get("/", asyncHandler(async (req: Request, res: Response) => {
+  const { from, to } = req.query;
+
+  const dateFilter = (from || to) ? {
+    completedAt: {
+      ...(from ? { gte: new Date(from as string) } : {}),
+      ...(to   ? { lte: new Date(to   as string) } : {}),
+    },
+  } : {};
+
   const shops = await prisma.shop.findMany({
     orderBy: [{ city: "asc" }, { name: "asc" }],
-    include: { _count: { select: { withdrawalRequests: true } } },
   });
-  res.json({ success: true, data: shops });
+
+  // Stats de retraits validés par boutique
+  const stats = await prisma.withdrawalRequest.groupBy({
+    by: ["shopId"],
+    where: { status: "VALIDATED", ...dateFilter },
+    _sum:   { amount: true },
+    _count: { id: true },
+  });
+
+  // Stats de retraits en attente par boutique
+  const pending = await prisma.withdrawalRequest.groupBy({
+    by: ["shopId"],
+    where: { status: "PENDING" },
+    _sum:   { amount: true },
+    _count: { id: true },
+  });
+
+  const statsMap    = Object.fromEntries(stats.map(s   => [s.shopId, s]));
+  const pendingMap  = Object.fromEntries(pending.map(p => [p.shopId, p]));
+
+  const data = shops.map(shop => ({
+    ...shop,
+    stats: {
+      totalWithdrawalsXAF: Number(statsMap[shop.id]?._sum?.amount ?? 0) / 100,
+      countWithdrawals:    statsMap[shop.id]?._count?.id ?? 0,
+      pendingAmountXAF:    Number(pendingMap[shop.id]?._sum?.amount ?? 0) / 100,
+      countPending:        pendingMap[shop.id]?._count?.id ?? 0,
+    },
+  }));
+
+  res.json({ success: true, data });
 }));
 
 // POST /api/admin/shops
