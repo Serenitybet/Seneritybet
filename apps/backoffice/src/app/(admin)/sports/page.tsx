@@ -142,7 +142,7 @@ export default function SportsPage() {
       </div>
 
       {/* Cotes en direct (API) */}
-      {apiLoaded && apiEvents.length > 0 && (
+      {!loading && apiEvents.length > 0 && (
         <div className="bo-card">
           <div className="bo-card-header">
             <span className="bo-card-title">⚡ Cotes en temps réel (API)</span>
