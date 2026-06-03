@@ -176,16 +176,49 @@ cashierRouter.post("/withdraw", asyncHandler(async (req: AuthRequest, res: Respo
   });
 }));
 
-// ─── Retraits en attente — recherche par ID joueur ───────────────────────────
-cashierRouter.get("/pending-withdrawals/:playerNumber", asyncHandler(async (req: AuthRequest, res: Response) => {
-  const playerNumber = parseInt(req.params.playerNumber, 10);
-  if (isNaN(playerNumber)) throw new AppError(400, "Numéro joueur invalide");
+// ─── Retraits en attente — recherche par ID joueur OU code de retrait ────────
+cashierRouter.get("/pending-withdrawals/:query", asyncHandler(async (req: AuthRequest, res: Response) => {
+  const query = req.params.query.trim();
+
+  // Chercher d'abord par code de retrait (requestCode exact)
+  const byCode = await prisma.withdrawalRequest.findUnique({
+    where: { requestCode: query },
+    include: {
+      user: { select: { id: true, firstName: true, lastName: true, phone: true, status: true } },
+    },
+  });
+
+  if (byCode) {
+    // Trouvé par code de retrait → retourner directement cette demande
+    if (byCode.user.status !== "ACTIVE") throw new AppError(403, "Compte joueur suspendu");
+    if (byCode.status !== "PENDING") throw new AppError(400, `Cette demande est déjà ${byCode.status.toLowerCase()}`);
+    if (new Date() > byCode.expiresAt) throw new AppError(400, "Cette demande a expiré");
+
+    return res.json({
+      success: true,
+      data: {
+        player: { id: byCode.user.id, firstName: byCode.user.firstName, lastName: byCode.user.lastName, phone: byCode.user.phone },
+        pendingWithdrawals: [{
+          id: byCode.id,
+          requestCode: byCode.requestCode,
+          amountXAF: Number(byCode.amount) / 100,
+          shop: { name: "", city: "" },
+          createdAt: byCode.createdAt,
+          expiresAt: byCode.expiresAt,
+        }],
+      },
+    });
+  }
+
+  // Sinon chercher par numéro joueur (playerNumber)
+  const playerNumber = parseInt(query, 10);
+  if (isNaN(playerNumber)) throw new AppError(400, "Entrez un numéro joueur (6 chiffres) ou un code de retrait");
 
   const player = await prisma.user.findUnique({
     where: { playerNumber },
     select: { id: true, firstName: true, lastName: true, phone: true, status: true },
   });
-  if (!player) throw new AppError(404, "Joueur introuvable");
+  if (!player) throw new AppError(404, "Joueur introuvable — vérifiez le numéro");
   if (player.status !== "ACTIVE") throw new AppError(403, "Compte joueur suspendu");
 
   // Expirer automatiquement les demandes expirées

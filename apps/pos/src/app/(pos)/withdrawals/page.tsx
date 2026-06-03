@@ -85,14 +85,15 @@ export default function WithdrawalsPage() {
       <div className="bg-white rounded-2xl shadow-sm p-6">
         <h2 className="text-lg font-bold text-gray-800 mb-1">💸 Valider un retrait</h2>
         <p className="text-sm text-gray-500 mb-4">
-          Entrez le numéro joueur (6 chiffres) pour voir ses demandes de retrait en attente.
+          Entrez le <strong>numéro joueur</strong> (ID à 6 chiffres, ex: 100001) <br/>
+          ou le <strong>code de retrait</strong> que le joueur vous montre.
         </p>
         <form onSubmit={searchPlayer} className="flex gap-3">
           <input
             type="text"
             value={playerId}
             onChange={(e) => setPlayerId(e.target.value)}
-            placeholder="Numéro joueur (ex: 100001)"
+            placeholder="N° joueur (100001) ou code retrait (794330)"
             className="flex-1 px-4 py-3 text-xl font-mono border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none"
             autoFocus
           />
