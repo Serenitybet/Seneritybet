@@ -6,10 +6,13 @@ import toast from "react-hot-toast";
 const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL ?? "https://seneritybet.onrender.com/api";
 
 interface ShopStats {
+  totalDepositsXAF: number;
+  countDeposits: number;
   totalWithdrawalsXAF: number;
   countWithdrawals: number;
   pendingAmountXAF: number;
   countPending: number;
+  balanceXAF: number;
 }
 
 interface Shop {
@@ -143,11 +146,12 @@ export default function ShopsPage() {
 
       {/* Totaux globaux */}
       {shops.length > 0 && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 gap-3">
           {[
-            { label: "Total retraits validés", value: shops.reduce((s, sh) => s + (sh.stats?.totalWithdrawalsXAF ?? 0), 0), color: "text-red-400" },
-            { label: "Montant en attente",      value: shops.reduce((s, sh) => s + (sh.stats?.pendingAmountXAF    ?? 0), 0), color: "text-gold" },
-            { label: "Total engagé",             value: shops.reduce((s, sh) => s + (sh.stats?.totalWithdrawalsXAF ?? 0) + (sh.stats?.pendingAmountXAF ?? 0), 0), color: "text-t-primary" },
+            { label: "Total dépôts",    value: shops.reduce((s, sh) => s + (sh.stats?.totalDepositsXAF    ?? 0), 0), color: "text-green-400" },
+            { label: "Total retraits",  value: shops.reduce((s, sh) => s + (sh.stats?.totalWithdrawalsXAF  ?? 0), 0), color: "text-red-400" },
+            { label: "En attente",      value: shops.reduce((s, sh) => s + (sh.stats?.pendingAmountXAF     ?? 0), 0), color: "text-gold" },
+            { label: "Balance globale", value: shops.reduce((s, sh) => s + (sh.stats?.balanceXAF           ?? 0), 0), color: "text-t-primary" },
           ].map(({ label, value, color }) => (
             <div key={label} className="bo-card p-4 text-center">
               <p className="text-[10px] uppercase tracking-widest text-t-faint mb-1">{label}</p>
@@ -206,21 +210,28 @@ export default function ShopsPage() {
                     </div>
 
                     {/* Ligne 2 : rapport financier */}
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-4 gap-2">
                       <div className="bg-bo-surface border border-bo-border rounded-lg px-3 py-2 text-center">
-                        <p className="text-[10px] text-t-faint uppercase tracking-wide mb-0.5">Total retraits</p>
-                        <p className="text-sm font-black text-red-400">{fmtXAF(totalRetraits)}</p>
+                        <p className="text-[10px] text-t-faint uppercase tracking-wide mb-0.5">Dépôts</p>
+                        <p className="text-sm font-black text-green-400">{fmtXAF(s?.totalDepositsXAF ?? 0)}</p>
+                        <p className="text-[10px] text-t-faint">{s?.countDeposits ?? 0} opération(s)</p>
+                      </div>
+                      <div className="bg-bo-surface border border-bo-border rounded-lg px-3 py-2 text-center">
+                        <p className="text-[10px] text-t-faint uppercase tracking-wide mb-0.5">Retraits</p>
+                        <p className="text-sm font-black text-red-400">{fmtXAF(s?.totalWithdrawalsXAF ?? 0)}</p>
                         <p className="text-[10px] text-t-faint">{s?.countWithdrawals ?? 0} opération(s)</p>
                       </div>
                       <div className="bg-bo-surface border border-bo-border rounded-lg px-3 py-2 text-center">
                         <p className="text-[10px] text-t-faint uppercase tracking-wide mb-0.5">En attente</p>
-                        <p className="text-sm font-black text-gold">{fmtXAF(enAttente)}</p>
+                        <p className="text-sm font-black text-gold">{fmtXAF(s?.pendingAmountXAF ?? 0)}</p>
                         <p className="text-[10px] text-t-faint">{s?.countPending ?? 0} demande(s)</p>
                       </div>
-                      <div className="bg-bo-surface border border-bo-border rounded-lg px-3 py-2 text-center">
-                        <p className="text-[10px] text-t-faint uppercase tracking-wide mb-0.5">Total validé</p>
-                        <p className="text-sm font-black text-t-primary">{fmtXAF(totalRetraits + enAttente)}</p>
-                        <p className="text-[10px] text-t-faint">{(s?.countWithdrawals ?? 0) + (s?.countPending ?? 0)} total</p>
+                      <div className={`bg-bo-surface border rounded-lg px-3 py-2 text-center ${(s?.balanceXAF ?? 0) >= 0 ? "border-green-600/30" : "border-red-500/30"}`}>
+                        <p className="text-[10px] text-t-faint uppercase tracking-wide mb-0.5">Balance</p>
+                        <p className={`text-sm font-black ${(s?.balanceXAF ?? 0) >= 0 ? "text-green-400" : "text-red-400"}`}>
+                          {(s?.balanceXAF ?? 0) >= 0 ? "+" : ""}{fmtXAF(s?.balanceXAF ?? 0)}
+                        </p>
+                        <p className="text-[10px] text-t-faint">dépôts − retraits</p>
                       </div>
                     </div>
                   </div>

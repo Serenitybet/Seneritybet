@@ -124,6 +124,9 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
+  shopId              String?
+  shop                Shop?   @relation("CashierShop", fields: [shopId], references: [id])
+
   wallet              Wallet?
   bets                Bet[]
   transactions        Transaction[]
@@ -329,6 +332,7 @@ model Shop {
   createdAt DateTime @default(now())
 
   withdrawalRequests WithdrawalRequest[]
+  cashiers           User[]              @relation("CashierShop")
 
   @@index([city])
   @@index([isActive])

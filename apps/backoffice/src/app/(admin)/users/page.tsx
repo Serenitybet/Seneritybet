@@ -50,8 +50,9 @@ export default function UsersPage() {
   const [resetting, setResetting]       = useState(false);
   const [form, setForm] = useState({
     firstName: "", lastName: "", email: "", phone: "",
-    password: "", role: "CASHIER", dateOfBirth: "1990-01-01",
+    password: "", role: "CASHIER", dateOfBirth: "1990-01-01", shopId: "",
   });
+  const [shops, setShops] = useState<{id: string; name: string; city: string}[]>([]);
 
   function loadUsers() {
     const token = localStorage.getItem("bo_token");
@@ -72,6 +73,14 @@ export default function UsersPage() {
   }
 
   useEffect(() => { setApiUsers([]); setApiLoaded(false); loadUsers(); }, [page, search, tab]);
+
+  useEffect(() => {
+    const token = localStorage.getItem("bo_token");
+    fetch(`${API}/admin/shops`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => { if (d.data) setShops(d.data.map((s: any) => ({ id: s.id, name: s.name, city: s.city }))); })
+      .catch(() => {});
+  }, []);
 
   async function updateStatus(userId: string, status: string) {
     const token = localStorage.getItem("bo_token");
@@ -132,7 +141,7 @@ export default function UsersPage() {
       if (!res.ok) { toast.error(data.error ?? "Erreur création"); return; }
       toast.success(`✓ ${ROLE_LABELS[form.role]} créé : ${form.email}`);
       setShowModal(false);
-      setForm({ firstName: "", lastName: "", email: "", phone: "", password: "", role: "CASHIER", dateOfBirth: "1990-01-01" });
+      setForm({ firstName: "", lastName: "", email: "", phone: "", password: "", role: "CASHIER", dateOfBirth: "1990-01-01", shopId: "" });
       loadUsers();
     } catch {
       toast.error("Erreur réseau");
@@ -408,6 +417,24 @@ export default function UsersPage() {
                   placeholder="+23560000000"
                   onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
               </div>
+
+              {/* Boutique (obligatoire pour caissier) */}
+              {form.role === "CASHIER" && (
+                <div>
+                  <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1.5">Boutique assignée *</label>
+                  <select className="bo-select w-full" required value={form.shopId}
+                    onChange={e => setForm(f => ({ ...f, shopId: e.target.value }))}>
+                    <option value="">-- Choisir une boutique --</option>
+                    {[...new Set(shops.map(s => s.city))].sort().map(city => (
+                      <optgroup key={city} label={`📍 ${city}`}>
+                        {shops.filter(s => s.city === city).map(s => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Mot de passe */}
               <div>

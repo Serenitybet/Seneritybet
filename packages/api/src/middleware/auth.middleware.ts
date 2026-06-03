@@ -4,7 +4,7 @@ import { prisma } from "../lib/prisma";
 import { Role } from "@serenitybet/db";
 
 export interface AuthRequest extends Request {
-  user?: { id: string; role: Role; email: string };
+  user?: { id: string; role: Role; email: string; shopId?: string | null };
 }
 
 export async function authenticate(req: AuthRequest, res: Response, next: NextFunction) {
@@ -24,7 +24,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
 
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, role: true, email: true, status: true },
+      select: { id: true, role: true, email: true, status: true, shopId: true },
     });
 
     if (!user || user.status !== "ACTIVE") {
@@ -32,7 +32,7 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
       return;
     }
 
-    req.user = { id: user.id, role: user.role, email: user.email };
+    req.user = { id: user.id, role: user.role, email: user.email, shopId: user.shopId };
     next();
   } catch {
     res.status(401).json({ success: false, error: "Token invalide ou expiré" });

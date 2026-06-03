@@ -88,6 +88,7 @@ cashierRouter.post("/deposit", asyncHandler(async (req: AuthRequest, res: Respon
         metadata: {
           cashierId: req.user!.id,
           cashierEmail: req.user!.email,
+          shopId: req.user!.shopId ?? null,
           notes: notes ?? null,
           channel: "POS",
         },

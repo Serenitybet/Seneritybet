@@ -9,7 +9,7 @@ export const adminUsersRouter = Router();
 // POST /api/admin/users — créer un caissier ou admin
 adminUsersRouter.post("/", requireRole("ADMIN", "SUPER_ADMIN"),
   asyncHandler(async (req: Request, res: Response) => {
-    const { email, phone, firstName, lastName, password, role, dateOfBirth } = req.body;
+    const { email, phone, firstName, lastName, password, role, dateOfBirth, shopId } = req.body;
 
     if (!email || !phone || !firstName || !lastName || !password || !role) {
       res.status(400).json({ success: false, error: "Tous les champs sont requis" }); return;
@@ -17,6 +17,9 @@ adminUsersRouter.post("/", requireRole("ADMIN", "SUPER_ADMIN"),
     const allowedRoles = ["CASHIER", "TRADER", "FINANCE", "ADMIN"];
     if (!allowedRoles.includes(role)) {
       res.status(400).json({ success: false, error: "Rôle non autorisé" }); return;
+    }
+    if (role === "CASHIER" && !shopId) {
+      res.status(400).json({ success: false, error: "Un caissier doit être assigné à une boutique" }); return;
     }
     const exists = await prisma.user.findFirst({ where: { OR: [{ email }, { phone }] } });
     if (exists) {
@@ -29,9 +32,11 @@ adminUsersRouter.post("/", requireRole("ADMIN", "SUPER_ADMIN"),
         status: "ACTIVE",
         kycStatus: "APPROVED",
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : new Date("1990-01-01"),
+        ...(shopId ? { shopId } : {}),
       },
+      include: { shop: { select: { name: true, city: true } } },
     });
-    res.status(201).json({ success: true, data: { id: user.id, email: user.email, role: user.role } });
+    res.status(201).json({ success: true, data: { id: user.id, email: user.email, role: user.role, shop: (user as any).shop } });
   }),
 );
 
@@ -42,6 +47,7 @@ adminUsersRouter.get("/staff", asyncHandler(async (req: Request, res: Response) 
     select: {
       id: true, email: true, phone: true, firstName: true, lastName: true,
       role: true, status: true, kycStatus: true, createdAt: true,
+      shop: { select: { id: true, name: true, city: true } },
     },
     orderBy: { createdAt: "desc" },
   });
