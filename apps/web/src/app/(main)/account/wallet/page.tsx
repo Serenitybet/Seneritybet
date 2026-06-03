@@ -322,39 +322,41 @@ export default function WalletPage() {
                 <p className="text-xs text-txt-muted">Choisissez la ville et la boutique où vous souhaitez retirer vos fonds.</p>
               </div>
 
-              {/* Sélection ville */}
-              <div>
-                <label className="block text-xs font-medium text-txt-secondary mb-1.5">Ville</label>
-                <select className="field" value={selectedCity}
-                  onChange={(e) => { setSelectedCity(e.target.value); setSelectedShop(""); }} required>
-                  <option value="">-- Choisir une ville --</option>
-                  {Object.keys(cities).sort().map((city) => (
-                    <option key={city} value={city}>{city}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Sélection boutique */}
-              {selectedCity && (
+              {/* Ville + Boutique sur la même ligne */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-txt-secondary mb-1.5">Ville</label>
+                  <select className="field" value={selectedCity}
+                    onChange={(e) => { setSelectedCity(e.target.value); setSelectedShop(""); }} required>
+                    <option value="">-- Ville --</option>
+                    {Object.keys(cities).sort().map((city) => (
+                      <option key={city} value={city}>{city}</option>
+                    ))}
+                  </select>
+                </div>
                 <div>
                   <label className="block text-xs font-medium text-txt-secondary mb-1.5">Boutique</label>
-                  <div className="space-y-2">
+                  <select className="field" value={selectedShop}
+                    onChange={(e) => setSelectedShop(e.target.value)}
+                    required disabled={!selectedCity}>
+                    <option value="">-- Boutique --</option>
                     {shopsInCity.map((shop) => (
-                      <button key={shop.id} type="button"
-                        onClick={() => setSelectedShop(shop.id)}
-                        className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${
-                          selectedShop === shop.id
-                            ? "bg-green-600/10 border-green-600/40 text-green-400"
-                            : "bg-bg-card border-bg-border text-txt-primary hover:border-bg-hover"
-                        }`}>
-                        <div className="font-semibold text-sm">{shop.name}</div>
-                        {shop.address && <div className="text-xs text-txt-muted">{shop.address}</div>}
-                        {shop.phone && <div className="text-xs text-txt-muted">📞 {shop.phone}</div>}
-                      </button>
+                      <option key={shop.id} value={shop.id}>{shop.name}</option>
                     ))}
-                  </div>
+                  </select>
                 </div>
-              )}
+              </div>
+              {/* Infos boutique sélectionnée */}
+              {selectedShop && (() => {
+                const shop = shopsInCity.find(s => s.id === selectedShop);
+                return shop ? (
+                  <div className="flex items-center gap-2 text-xs text-txt-muted bg-bg-card border border-bg-border rounded-lg px-3 py-2">
+                    <span>📍</span>
+                    <span>{shop.address ?? shop.city}</span>
+                    {shop.phone && <><span>·</span><span>📞 {shop.phone}</span></>}
+                  </div>
+                ) : null;
+              })()}
 
               {/* Montant */}
               <div>
