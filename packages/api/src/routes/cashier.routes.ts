@@ -281,7 +281,11 @@ cashierRouter.get("/transactions", asyncHandler(async (req: AuthRequest, res: Re
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  const transactions = await prisma.transaction.findMany({
+  const cashierId = req.user!.id;
+  const shopId    = req.user!.shopId;
+
+  // Filtrer par boutique si le caissier en a une, sinon par caissier uniquement
+  const allCashTx = await prisma.transaction.findMany({
     where: {
       provider: "CASH",
       createdAt: { gte: today, lt: tomorrow },
@@ -290,7 +294,18 @@ cashierRouter.get("/transactions", asyncHandler(async (req: AuthRequest, res: Re
       user: { select: { firstName: true, lastName: true, phone: true } },
     },
     orderBy: { createdAt: "desc" },
-    take: 200,
+    take: 500,
+  });
+
+  // Filtrer côté JS sur metadata.shopId ou metadata.cashierId
+  const transactions = allCashTx.filter(t => {
+    const meta = t.metadata as Record<string, unknown> | null;
+    if (shopId) {
+      // Caissier assigné à une boutique → on montre toutes les tx de cette boutique
+      return meta?.shopId === shopId;
+    }
+    // Pas de boutique → on montre uniquement les tx de ce caissier
+    return meta?.cashierId === cashierId;
   });
 
   const deposits = transactions.filter(t => t.type === "DEPOSIT");
