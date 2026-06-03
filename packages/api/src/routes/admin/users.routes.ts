@@ -95,7 +95,7 @@ adminUsersRouter.get("/", asyncHandler(async (req: Request, res: Response) => {
     prisma.user.findMany({
       where,
       select: {
-        id: true, email: true, phone: true, firstName: true, lastName: true,
+        id: true, playerNumber: true, email: true, phone: true, firstName: true, lastName: true,
         status: true, kycStatus: true, createdAt: true,
         wallet: { select: { balance: true } },
         _count:  { select: { bets: true } },

@@ -170,7 +170,9 @@ export default function UsersPage() {
       <div className="bo-filter-bar">
         <input
           className="bo-input flex-1"
-          placeholder="Rechercher par ID (ex: 100001), téléphone, nom ou email…"
+          placeholder={tab === "players"
+            ? "Rechercher joueur par ID (ex: 100001), téléphone (+235…), nom ou email…"
+            : "Rechercher staff par ID, téléphone, nom ou email…"}
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
         />
