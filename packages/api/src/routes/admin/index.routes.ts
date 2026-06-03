@@ -4,6 +4,7 @@ import { adminUsersRouter } from "./users.routes";
 import { adminBetsRouter } from "./bets.routes";
 import { adminSportsRouter } from "./sports.routes";
 import { adminReportsRouter } from "./reports.routes";
+import { adminShopsRouter } from "./shops.routes";
 
 export const adminRouter = Router();
 
@@ -14,3 +15,4 @@ adminRouter.use("/users", adminUsersRouter);
 adminRouter.use("/bets", adminBetsRouter);
 adminRouter.use("/sports", adminSportsRouter);
 adminRouter.use("/reports", adminReportsRouter);
+adminRouter.use("/shops", adminShopsRouter);

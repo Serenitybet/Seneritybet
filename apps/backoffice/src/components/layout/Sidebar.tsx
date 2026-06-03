@@ -30,8 +30,9 @@ const NAV = [
   {
     section: "Système",
     items: [
-      { href: "/settings", label: "Paramètres",        icon: "⚙", badge: null },
-      { href: "/logs",     label: "Logs système",       icon: "▶", badge: null },
+      { href: "/shops",    label: "Boutiques",          icon: "🏪", badge: null },
+      { href: "/settings", label: "Paramètres",         icon: "⚙",  badge: null },
+      { href: "/logs",     label: "Logs système",        icon: "▶",  badge: null },
     ],
   },
 ];
