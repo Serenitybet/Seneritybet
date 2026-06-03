@@ -1,4 +1,5 @@
 import { Router, Response } from "express";
+import bcrypt from "bcryptjs";
 import { authenticate, requireRole, AuthRequest } from "../middleware/auth.middleware";
 import { prisma } from "../lib/prisma";
 import { asyncHandler } from "../lib/asyncHandler";
@@ -43,8 +44,8 @@ cashierRouter.get("/customer/:phone", asyncHandler(async (req: AuthRequest, res:
       lastName: player.lastName,
       phone: player.phone,
       kycStatus: player.kycStatus,
-      balance: player.wallet?.balance ? Number(player.wallet.balance) : 0,
-      bonusBalance: player.wallet?.bonusBalance ? Number(player.wallet.bonusBalance) : 0,
+      // Solde masqué — le caissier ne doit pas voir le solde du joueur
+      hasWallet: !!player.wallet,
     },
   });
 }));
@@ -109,9 +110,10 @@ cashierRouter.post("/deposit", asyncHandler(async (req: AuthRequest, res: Respon
 
 // ─── Retrait espèces ──────────────────────────────────────────────────────────
 cashierRouter.post("/withdraw", asyncHandler(async (req: AuthRequest, res: Response) => {
-  const { playerId, amount, notes } = req.body;
+  const { playerId, amount, notes, playerPassword } = req.body;
 
   if (!playerId || !amount) throw new AppError(400, "playerId et amount sont requis");
+  if (!playerPassword) throw new AppError(400, "Le mot de passe du joueur est requis pour authoriser le retrait");
 
   const amountCentimes = BigInt(Math.round(Number(amount)));
   const MIN = BigInt(100_000);      // 1 000 XAF minimum
@@ -128,6 +130,11 @@ cashierRouter.post("/withdraw", asyncHandler(async (req: AuthRequest, res: Respo
   if (!player) throw new AppError(404, "Client introuvable");
   if (player.status !== "ACTIVE") throw new AppError(403, "Compte client suspendu");
   if (!player.wallet) throw new AppError(400, "Portefeuille non initialisé");
+
+  // Vérifier le mot de passe du joueur avant tout retrait
+  const passwordValid = await bcrypt.compare(playerPassword, player.password);
+  if (!passwordValid) throw new AppError(401, "Mot de passe du joueur incorrect — retrait refusé");
+
   if (player.wallet.balance < amountCentimes) throw new AppError(400, "Solde insuffisant");
 
   const [updatedWallet, transaction] = await prisma.$transaction([
