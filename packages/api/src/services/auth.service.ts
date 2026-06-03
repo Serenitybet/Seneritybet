@@ -88,10 +88,14 @@ export async function refreshTokens(refreshToken: string) {
 }
 
 function generateTokens(userId: string, role: string, email: string) {
+  // Les caissiers ont un token de 24h pour ne pas se reconnecter toute la journée
+  const isCashier = role === "CASHIER";
+  const accessExpiry = isCashier ? "24h" : (process.env.JWT_EXPIRES_IN ?? "15m");
+
   const accessToken = jwt.sign(
     { sub: userId, role, email },
     process.env.JWT_SECRET!,
-    { expiresIn: process.env.JWT_EXPIRES_IN ?? "15m" },
+    { expiresIn: accessExpiry },
   );
 
   const refreshToken = jwt.sign(
