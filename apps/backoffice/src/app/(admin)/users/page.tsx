@@ -49,7 +49,7 @@ export default function UsersPage() {
   function loadUsers() {
     const token = localStorage.getItem("bo_token");
     const url = tab === "staff"
-      ? `${API}/admin/users/staff`
+      ? `${API}/admin/users/staff${search ? `?search=${encodeURIComponent(search)}` : ""}`
       : `${API}/admin/users?page=${page}&limit=25${search ? `&search=${encodeURIComponent(search)}` : ""}`;
 
     fetch(url, { headers: { Authorization: `Bearer ${token}` } })
@@ -170,7 +170,7 @@ export default function UsersPage() {
       <div className="bo-filter-bar">
         <input
           className="bo-input flex-1"
-          placeholder="Nom, email, username…"
+          placeholder="Rechercher par ID (ex: 100001), téléphone, nom ou email…"
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(1); }}
         />
@@ -253,7 +253,9 @@ export default function UsersPage() {
                       </div>
                       <div>
                         <p className="text-t-primary font-medium">{name}</p>
-                        <p className="text-t-faint text-[10px]">{u.username ?? ""}</p>
+                        <p className="text-t-faint text-[10px]">
+                          {u.playerNumber ? `#${u.playerNumber}` : ""}{u.phone ? ` · ${u.phone}` : ""}
+                        </p>
                       </div>
                     </div>
                   </td>

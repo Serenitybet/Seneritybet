@@ -42,10 +42,24 @@ adminUsersRouter.post("/", requireRole("ADMIN", "SUPER_ADMIN"),
 
 // GET /api/admin/users/staff — liste du personnel (non-PLAYER)
 adminUsersRouter.get("/staff", asyncHandler(async (req: Request, res: Response) => {
+  const search = req.query.search as string | undefined;
+  const playerNumSearch = search && /^\d+$/.test(search.trim()) ? parseInt(search.trim(), 10) : null;
+
   const staff = await prisma.user.findMany({
-    where: { role: { not: "PLAYER" } },
+    where: {
+      role: { not: "PLAYER" },
+      ...(search ? {
+        OR: [
+          { email:     { contains: search, mode: "insensitive" as const } },
+          { phone:     { contains: search } },
+          { firstName: { contains: search, mode: "insensitive" as const } },
+          { lastName:  { contains: search, mode: "insensitive" as const } },
+          ...(playerNumSearch ? [{ playerNumber: playerNumSearch }] : []),
+        ],
+      } : {}),
+    },
     select: {
-      id: true, email: true, phone: true, firstName: true, lastName: true,
+      id: true, playerNumber: true, email: true, phone: true, firstName: true, lastName: true,
       role: true, status: true, kycStatus: true, createdAt: true,
       shop: { select: { id: true, name: true, city: true } },
     },
@@ -60,15 +74,18 @@ adminUsersRouter.get("/", asyncHandler(async (req: Request, res: Response) => {
   const search = req.query.search as string | undefined;
   const status = req.query.status as string | undefined;
 
+  const playerNumSearch = search && /^\d+$/.test(search.trim()) ? parseInt(search.trim(), 10) : null;
+
   const where = {
     role: "PLAYER" as const,
     ...(status ? { status: status as any } : {}),
     ...(search ? {
       OR: [
-        { email:     { contains: search, mode: "insensitive" as const } },
-        { phone:     { contains: search } },
-        { firstName: { contains: search, mode: "insensitive" as const } },
-        { lastName:  { contains: search, mode: "insensitive" as const } },
+        { email:        { contains: search, mode: "insensitive" as const } },
+        { phone:        { contains: search } },
+        { firstName:    { contains: search, mode: "insensitive" as const } },
+        { lastName:     { contains: search, mode: "insensitive" as const } },
+        ...(playerNumSearch ? [{ playerNumber: playerNumSearch }] : []),
       ],
     } : {}),
   };
