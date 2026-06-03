@@ -5,14 +5,6 @@ import toast from "react-hot-toast";
 
 const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL ?? "https://seneritybet.onrender.com/api";
 
-const DEMO_MATCHES = [
-  { id: "1", t1: "Real Madrid",  t2: "Bayern Munich", comp: "Ligue des Champions", date: "27/05 · 20:45", o1: "2.15", oX: "3.35", o2: "2.80", status: "live", margin: "10.2" },
-  { id: "2", t1: "PSG",          t2: "Arsenal",       comp: "Ligue des Champions", date: "27/05 · 21:00", o1: "1.72", oX: "3.55", o2: "4.30", status: "prog", margin: "9.8" },
-  { id: "3", t1: "Cameroun",     t2: "Nigeria",       comp: "CAN 2026",            date: "28/05 · 19:00", o1: "2.40", oX: "3.10", o2: "2.70", status: "prog", margin: "10.0" },
-  { id: "4", t1: "Man City",     t2: "Liverpool",     comp: "Premier League",      date: "27/05 · 19:30", o1: "2.10", oX: "3.45", o2: "3.20", status: "live", margin: "10.5" },
-  { id: "5", t1: "FC Barcelone", t2: "Séville FC",    comp: "La Liga",             date: "27/05 · 20:00", o1: "1.45", oX: "4.20", o2: "6.50", status: "prog", margin: "11.2" },
-  { id: "6", t1: "Chelsea",      t2: "Tottenham",     comp: "Premier League",      date: "27/05 · 17:30", o1: "1.95", oX: "3.60", o2: "3.80", status: "fin",  margin: "9.4" },
-];
 
 function statusBadge(s: string) {
   if (s === "live") return <span className="bo-badge-red"><span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse inline-block mr-0.5" />En direct</span>;
@@ -23,7 +15,7 @@ function statusBadge(s: string) {
 export default function SportsPage() {
   const [apiEvents, setApiEvents] = useState<any[]>([]);
   const [editOdd, setEditOdd] = useState<{ id: string; value: string } | null>(null);
-  const [apiLoaded, setApiLoaded] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState({
     t1: "", t2: "", comp: "", date: "", sport: "Football", status: "Programmé",
@@ -46,8 +38,9 @@ export default function SportsPage() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.json())
-      .then((d) => { if (d.data?.events?.length) { setApiEvents(d.data.events); setApiLoaded(true); } })
-      .catch(() => {});
+      .then((d) => { if (d.data?.events) setApiEvents(d.data.events); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   async function toggleMarket(marketId: string, suspended: boolean) {
@@ -78,8 +71,8 @@ export default function SportsPage() {
     setForm({ t1: "", t2: "", comp: "", date: "", sport: "Football", status: "Programmé", o1: "1.80", oX: "3.40", o2: "4.00" });
   }
 
-  const filtered = DEMO_MATCHES.filter((m) =>
-    !search || [m.t1, m.t2, m.comp].some((s) => s.toLowerCase().includes(search.toLowerCase()))
+  const filtered = apiEvents.filter((m: any) =>
+    !search || [m.homeTeam, m.awayTeam, m.competition?.name].some((s: string) => s?.toLowerCase().includes(search.toLowerCase()))
   );
 
   return (

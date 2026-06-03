@@ -6,15 +6,6 @@ import toast from "react-hot-toast";
 
 const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL ?? "https://seneritybet.onrender.com/api";
 
-const DEMO_TRANSACTIONS = [
-  { id: "#TX-9182", user: "@ali_hass",  type: "DEPOSIT",    amount:  50000, method: "Airtel Money",  status: "COMPLETED", date: "14:21" },
-  { id: "#TX-9181", user: "@mbaye_d",   type: "WITHDRAWAL", amount: -20000, method: "Orange Money",  status: "PENDING",   date: "14:10" },
-  { id: "#TX-9180", user: "@fatou_k",   type: "DEPOSIT",    amount:  10000, method: "Moov Money",    status: "COMPLETED", date: "13:55" },
-  { id: "#TX-9179", user: "@jean_p",    type: "WITHDRAWAL", amount:  -5000, method: "Airtel Money",  status: "FAILED",    date: "13:30" },
-  { id: "#TX-9178", user: "@omar_s",    type: "DEPOSIT",    amount: 100000, method: "Airtel Money",  status: "COMPLETED", date: "12:44" },
-  { id: "#TX-9177", user: "@aisha_m",   type: "BET_WON",    amount:  48750, method: "Portefeuille",  status: "COMPLETED", date: "12:22" },
-  { id: "#TX-9176", user: "@hassan_b",  type: "DEPOSIT",    amount: 200000, method: "Orange Money",  status: "COMPLETED", date: "11:15" },
-];
 
 function txTypeBadge(t: string) {
   if (t === "DEPOSIT")    return <span className="bo-badge-green">Dépôt</span>;
@@ -48,28 +39,25 @@ export default function ReportsPage() {
 
   const summaries = [
     {
-      label: "Dépôts du mois",
-      value: formatXAF(20677400),
-      sub: "+14.2% vs mois dernier",
+      label: "Dépôts de la période",
+      value: apiData.length ? formatXAF(apiData.filter((t: any) => t.type === "DEPOSIT").reduce((s: number, t: any) => s + Math.abs(Number(t.amount)), 0)) : "—",
+      sub: `${apiData.filter((t: any) => t.type === "DEPOSIT").length} transactions`,
       accent: "border-green-500",
-      icon: "↑",
       color: "text-green-400",
     },
     {
-      label: "GGR (Revenu brut jeux)",
-      value: formatXAF(2215400),
-      sub: "Marge moyenne : 10.2%",
-      accent: "border-blue-500",
-      icon: "📈",
-      color: "text-blue-400",
+      label: "Retraits de la période",
+      value: apiData.length ? formatXAF(apiData.filter((t: any) => t.type === "WITHDRAWAL").reduce((s: number, t: any) => s + Math.abs(Number(t.amount)), 0)) : "—",
+      sub: `${apiData.filter((t: any) => t.type === "WITHDRAWAL").length} transactions`,
+      accent: "border-red-500",
+      color: "text-red-400",
     },
     {
-      label: "Retraits du mois",
-      value: formatXAF(18462000),
-      sub: "347 transactions",
-      accent: "border-red-500",
-      icon: "↓",
-      color: "text-red-400",
+      label: "Total transactions",
+      value: apiData.length ? apiData.length.toString() : "—",
+      sub: "Sur la période sélectionnée",
+      accent: "border-blue-500",
+      color: "text-blue-400",
     },
   ];
 
@@ -113,7 +101,7 @@ export default function ReportsPage() {
       <div className="bo-card">
         <div className="bo-card-header">
           <span className="bo-card-title">↕ Dernières transactions</span>
-          <span className="text-[11px] text-t-faint">{DEMO_TRANSACTIONS.length} transactions</span>
+          <span className="text-[11px] text-t-faint">{apiData.length} transactions</span>
         </div>
         <table className="bo-table">
           <thead>
@@ -128,19 +116,23 @@ export default function ReportsPage() {
             </tr>
           </thead>
           <tbody>
-            {DEMO_TRANSACTIONS.map((tx) => (
-              <tr key={tx.id}>
-                <td className="font-mono text-t-faint text-[11px]">{tx.id}</td>
-                <td>{tx.user}</td>
-                <td>{txTypeBadge(tx.type)}</td>
-                <td className={`font-mono font-bold ${tx.amount > 0 ? "text-green-400" : "text-red-400"}`}>
-                  {tx.amount > 0 ? "+" : ""}{formatXAF(Math.abs(tx.amount) * 100)}
-                </td>
-                <td className="text-t-muted">{tx.method}</td>
-                <td>{txStatusBadge(tx.status)}</td>
-                <td className="font-mono text-t-faint">{tx.date}</td>
-              </tr>
-            ))}
+            {apiData.length === 0 ? (
+              <tr><td colSpan={7} className="text-center py-8 text-t-faint">Aucune transaction sur cette période</td></tr>
+            ) : (
+              apiData.map((tx: any) => (
+                <tr key={tx.id}>
+                  <td className="font-mono text-t-faint text-[11px]">{tx.id?.slice(-8).toUpperCase()}</td>
+                  <td className="text-t-muted">{tx.user?.firstName} {tx.user?.lastName}</td>
+                  <td>{txTypeBadge(tx.type)}</td>
+                  <td className={`font-mono font-bold ${Number(tx.amount) > 0 ? "text-green-400" : "text-red-400"}`}>
+                    {Number(tx.amount) > 0 ? "+" : ""}{formatXAF(Math.abs(Number(tx.amount)))}
+                  </td>
+                  <td className="text-t-muted">{tx.provider}</td>
+                  <td>{txStatusBadge(tx.status)}</td>
+                  <td className="font-mono text-t-faint text-xs">{new Date(tx.createdAt).toLocaleDateString("fr-FR")}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
