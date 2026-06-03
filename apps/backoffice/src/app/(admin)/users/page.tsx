@@ -6,14 +6,6 @@ import toast from "react-hot-toast";
 
 const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL ?? "https://seneritybet.onrender.com/api";
 
-const DEMO_USERS = [
-  { id: "1", initials: "MD", color: "text-blue-400   bg-blue-500/10",  username: "@mbaye_d",  name: "Mbaye Diop",    email: "mbaye.diop@email.com",   balance: 124000, total: 482000, bets: 47, status: "ACTIVE",    kyc: "APPROVED",  date: "12 jan 2026" },
-  { id: "2", initials: "AH", color: "text-green-400  bg-green-500/10", username: "@ali_hass", name: "Ali Hassan",    email: "ali.hassan@email.com",   balance: 350000, total: 1240000, bets: 98, status: "ACTIVE",   kyc: "APPROVED",  date: "3 fév 2026" },
-  { id: "3", initials: "FK", color: "text-orange-400 bg-orange-500/10",username: "@fatou_k",  name: "Fatou Koné",    email: "fatou.k@email.com",      balance: 78000,  total: 210000, bets: 23, status: "ACTIVE",    kyc: "PENDING",   date: "18 mar 2026" },
-  { id: "4", initials: "JP", color: "text-red-400    bg-red-500/10",   username: "@jean_p",   name: "Jean Pierre",   email: "jean.pierre@email.com",  balance: 5000,   total: 89000,  bets: 15, status: "ACTIVE",    kyc: "REJECTED",  date: "22 avr 2026" },
-  { id: "5", initials: "OS", color: "text-t-muted    bg-bo-surface",   username: "@omar_s",   name: "Omar Saleh",    email: "omar.saleh@email.com",   balance: 210000, total: 640000, bets: 62, status: "SUSPENDED", kyc: "APPROVED",  date: "5 jan 2026" },
-  { id: "6", initials: "AM", color: "text-blue-400   bg-blue-500/10",  username: "@aisha_m",  name: "Aisha Moussa",  email: "aisha.m@email.com",      balance: 42000,  total: 180000, bets: 31, status: "ACTIVE",    kyc: "APPROVED",  date: "14 mar 2026" },
-];
 
 function kycBadge(s: string) {
   if (s === "APPROVED") return <span className="bo-badge-green">✓ Vérifié</span>;
@@ -94,7 +86,6 @@ export default function UsersPage() {
   }
 
   async function openUser(userId: string) {
-    if (userId.length < 10) return; // demo user
     setLoadingUser(true);
     setSelectedUser(null);
     setNewPassword("");
@@ -150,7 +141,6 @@ export default function UsersPage() {
     }
   }
 
-  const displayUsers = apiLoaded ? apiUsers : DEMO_USERS;
 
   return (
     <div className="space-y-4">
@@ -198,17 +188,46 @@ export default function UsersPage() {
       {/* Tableau */}
       <div className="bo-card">
         <div className="bo-card-header">
-          <span className="bo-card-title">👥 Parieurs inscrits</span>
-          <span className="text-[11px] text-t-faint">{apiLoaded ? total : DEMO_USERS.length} comptes</span>
+          <span className="bo-card-title">
+            {tab === "players" ? "👥 Parieurs inscrits" : "🛡️ Staff & Caissiers"}
+          </span>
+          <span className="text-[11px] text-t-faint">
+            {apiLoaded ? `${total} compte(s)` : "Chargement…"}
+          </span>
         </div>
+
+        {/* État chargement */}
+        {!apiLoaded && (
+          <div className="p-12 text-center text-t-faint">
+            <div className="w-6 h-6 border-2 border-green-500/30 border-t-green-500 rounded-full animate-spin mx-auto mb-3" />
+            Chargement des données…
+          </div>
+        )}
+
+        {/* État vide */}
+        {apiLoaded && apiUsers.length === 0 && (
+          <div className="p-12 text-center text-t-faint">
+            <div className="text-4xl mb-2">{tab === "players" ? "👥" : "🛡️"}</div>
+            <p className="font-semibold text-t-primary mb-1">
+              {tab === "players" ? "Aucun parieur inscrit" : "Aucun membre du staff"}
+            </p>
+            <p className="text-sm">
+              {tab === "players"
+                ? "Les joueurs apparaîtront ici une fois inscrits sur le site."
+                : "Créez votre premier caissier ou admin avec le bouton \"+ Créer utilisateur\"."}
+            </p>
+          </div>
+        )}
+
+        {/* Tableau des utilisateurs */}
+        {apiLoaded && apiUsers.length > 0 && (
         <table className="bo-table">
           <thead>
             <tr>
               <th>Utilisateur</th>
               <th>Email</th>
-              <th>Solde</th>
-              <th>Total misé</th>
-              <th>Paris</th>
+              {tab === "players" && <><th>Solde</th><th>Paris</th></>}
+              {tab === "staff"   && <th>Boutique</th>}
               <th>KYC</th>
               <th>Statut</th>
               <th>Inscription</th>
@@ -216,17 +235,12 @@ export default function UsersPage() {
             </tr>
           </thead>
           <tbody>
-            {displayUsers.map((u: any) => {
-              const initials = apiLoaded ? `${u.firstName?.[0]}${u.lastName?.[0]}`.toUpperCase() : u.initials;
-              const name     = apiLoaded ? `${u.firstName} ${u.lastName}` : u.name;
-              const email    = apiLoaded ? u.email : u.email;
-              const balance  = apiLoaded ? Number(u.wallet?.balance ?? 0) : u.balance;
-              const total_m  = apiLoaded ? 0 : u.total;
-              const bets_c   = apiLoaded ? (u._count?.bets ?? 0) : u.bets;
-              const status   = apiLoaded ? u.status : u.status;
-              const kyc      = apiLoaded ? u.kycStatus : u.kyc;
-              const date     = apiLoaded ? new Date(u.createdAt).toLocaleDateString("fr-FR") : u.date;
-              const colorCls = u.color ?? "text-green-400 bg-green-500/10";
+            {apiUsers.map((u: any) => {
+              const initials = `${u.firstName?.[0] ?? "?"}${u.lastName?.[0] ?? ""}`.toUpperCase();
+              const name     = `${u.firstName} ${u.lastName}`;
+              const balance  = Number(u.wallet?.balance ?? 0);
+              const bets_c   = u._count?.bets ?? 0;
+              const colorCls = "text-green-400 bg-green-500/10";
 
               return (
                 <tr key={u.id}>
@@ -241,17 +255,25 @@ export default function UsersPage() {
                       </div>
                     </div>
                   </td>
-                  <td>{email}</td>
-                  <td className="text-green-400 font-medium font-mono">{formatXAF(balance)}</td>
-                  <td className="font-mono">{formatXAF(total_m)}</td>
-                  <td>{bets_c}</td>
-                  <td>{kycBadge(kyc)}</td>
-                  <td>{statusBadge(status)}</td>
-                  <td className="text-t-faint">{date}</td>
+                  <td>{u.email}</td>
+                  {tab === "players" && (
+                    <>
+                      <td className="text-green-400 font-medium font-mono">{formatXAF(balance)}</td>
+                      <td>{bets_c}</td>
+                    </>
+                  )}
+                  {tab === "staff" && (
+                    <td className="text-xs text-t-muted">
+                      {u.shop ? `🏪 ${u.shop.name}` : <span className="text-t-faint">—</span>}
+                    </td>
+                  )}
+                  <td>{kycBadge(u.kycStatus)}</td>
+                  <td>{statusBadge(u.status)}</td>
+                  <td className="text-t-faint">{new Date(u.createdAt).toLocaleDateString("fr-FR")}</td>
                   <td>
                     <div className="flex gap-1.5">
                       <button className="bo-btn-secondary bo-btn-sm" onClick={() => openUser(u.id)}>👁</button>
-                      {status === "ACTIVE"
+                      {u.status === "ACTIVE"
                         ? <button className="bo-btn-danger bo-btn-sm" onClick={() => updateStatus(u.id, "SUSPENDED")}>🔒</button>
                         : <button className="bo-btn-primary bo-btn-sm" onClick={() => updateStatus(u.id, "ACTIVE")}>✓</button>
                       }
@@ -262,10 +284,11 @@ export default function UsersPage() {
             })}
           </tbody>
         </table>
+        )}
 
-        {apiLoaded && (
+        {apiLoaded && apiUsers.length > 0 && (
           <div className="flex justify-between items-center p-3 border-t border-bo-border">
-            <span className="text-[11px] text-t-faint">Page {page} — {total} utilisateurs</span>
+            <span className="text-[11px] text-t-faint">Page {page} — {total} utilisateur(s)</span>
             <div className="flex gap-2">
               <button className="bo-btn-secondary bo-btn-sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>← Préc.</button>
               <button className="bo-btn-secondary bo-btn-sm" disabled={apiUsers.length < 25} onClick={() => setPage(p => p + 1)}>Suiv. →</button>
