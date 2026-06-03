@@ -281,8 +281,8 @@ export default function UsersPage() {
                 {/* Identité */}
                 <div className="bg-bo-surface border border-bo-border rounded-xl p-4 grid grid-cols-2 gap-3 text-sm">
                   <div>
-                    <p className="text-[10px] uppercase tracking-widest text-t-faint mb-0.5">ID</p>
-                    <p className="font-mono text-xs text-t-muted break-all">{selectedUser.id}</p>
+                    <p className="text-[10px] uppercase tracking-widest text-t-faint mb-0.5">Numéro joueur</p>
+                    <p className="font-mono text-xl font-black text-green-400">#{selectedUser.playerNumber ?? "—"}</p>
                   </div>
                   <div>
                     <p className="text-[10px] uppercase tracking-widest text-t-faint mb-0.5">Inscription</p>

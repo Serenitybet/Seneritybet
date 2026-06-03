@@ -24,7 +24,7 @@ export async function register(payload: RegisterPayload) {
       dateOfBirth: new Date(payload.dateOfBirth),
       wallet: { create: { balance: BigInt(0) } },
     },
-    select: { id: true, email: true, phone: true, firstName: true, lastName: true, role: true, kycStatus: true, createdAt: true },
+    select: { id: true, playerNumber: true, email: true, phone: true, firstName: true, lastName: true, role: true, kycStatus: true, createdAt: true },
   });
 
   const tokens = generateTokens(user.id, user.role, user.email);
@@ -34,8 +34,21 @@ export async function register(payload: RegisterPayload) {
 }
 
 export async function login(payload: LoginPayload) {
-  const user = await prisma.user.findUnique({ where: { email: payload.email } });
-  if (!user) throw new AppError(401, "Email ou mot de passe incorrect");
+  const identifier = payload.email.trim();
+
+  // Recherche par playerNumber (6 chiffres), téléphone ou email
+  const isPlayerNumber = /^\d{6}$/.test(identifier);
+  const isPhone = /^\+?\d{8,15}$/.test(identifier) && !isPlayerNumber;
+
+  const user = await prisma.user.findFirst({
+    where: isPlayerNumber
+      ? { playerNumber: parseInt(identifier, 10) }
+      : isPhone
+      ? { phone: identifier }
+      : { email: identifier },
+  });
+
+  if (!user) throw new AppError(401, "Identifiant ou mot de passe incorrect");
   if (user.status !== "ACTIVE") throw new AppError(403, "Compte suspendu ou fermé");
 
   const valid = await bcrypt.compare(payload.password, user.password);

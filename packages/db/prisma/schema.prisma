@@ -103,18 +103,19 @@ enum BetItemResult {
 // ─── Models ─────────────────────────────────────────────────────────────────
 
 model User {
-  id          String     @id @default(cuid())
-  email       String     @unique
-  phone       String     @unique
-  password    String
-  firstName   String
-  lastName    String
-  dateOfBirth DateTime
-  role        Role       @default(PLAYER)
-  status      UserStatus @default(ACTIVE)
-  kycStatus   KycStatus  @default(PENDING)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id           String     @id @default(cuid())
+  playerNumber Int        @unique @default(autoincrement())
+  email        String     @unique
+  phone        String     @unique
+  password     String
+  firstName    String
+  lastName     String
+  dateOfBirth  DateTime
+  role         Role       @default(PLAYER)
+  status       UserStatus @default(ACTIVE)
+  kycStatus    KycStatus  @default(PENDING)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   wallet       Wallet?
   bets         Bet[]
@@ -124,6 +125,7 @@ model User {
 
   @@index([email])
   @@index([phone])
+  @@index([playerNumber])
   @@index([role])
   @@index([status])
 }

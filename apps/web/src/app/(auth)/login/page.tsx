@@ -66,19 +66,19 @@ export default function LoginPage() {
         {/* Carte formulaire */}
         <div className="bg-bg-secondary border border-bg-border rounded-2xl p-6 shadow-2xl">
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email */}
+            {/* Identifiant */}
             <div>
               <label className="block text-sm font-medium text-txt-secondary mb-1.5">
-                Adresse email
+                Email, téléphone ou numéro joueur
               </label>
               <input
-                type="email"
+                type="text"
                 className="field"
-                placeholder="votre@email.com"
+                placeholder="ex: 100001 · +23566000001 · email@..."
                 value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                 required
-                autoComplete="email"
+                autoComplete="username"
               />
             </div>
 
