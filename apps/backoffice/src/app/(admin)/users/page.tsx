@@ -55,13 +55,15 @@ export default function UsersPage() {
     fetch(url, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
       .then((d) => {
-        if (d.data?.users !== undefined) {
-          setApiUsers(d.data.users);
-          setTotal(d.data.total ?? d.data.users.length);
-          setApiLoaded(true);
-        }
+        setApiUsers(d.data?.users ?? []);
+        setTotal(d.data?.total ?? d.data?.users?.length ?? 0);
+        setApiLoaded(true);
       })
-      .catch(() => {});
+      .catch(() => {
+        // En cas d'erreur (token expiré, réseau...) on arrête le spinner
+        setApiLoaded(true);
+        setApiUsers([]);
+      });
   }
 
   useEffect(() => { setApiUsers([]); setApiLoaded(false); loadUsers(); }, [page, search, tab]);
