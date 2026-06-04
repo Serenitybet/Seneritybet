@@ -129,6 +129,7 @@ model User {
 
   wallet              Wallet?
   cashierWallet       CashierWallet?
+  savedCoupons        SavedCoupon[]
   bets                Bet[]
   transactions        Transaction[]
   sessions            Session[]
@@ -331,6 +332,26 @@ model CashierWallet {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+// ─── Coupons sauvegardés (tickets physiques) ─────────────────────────────────
+
+model SavedCoupon {
+  id         String    @id @default(cuid())
+  code       String    @unique
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id])
+  selections Json
+  suggestedStake BigInt?
+  status     String    @default("PENDING")
+  expiresAt  DateTime
+  usedAt     DateTime?
+  betId      String?
+  createdAt  DateTime  @default(now())
+
+  @@index([code])
+  @@index([userId])
+  @@index([status])
 }
 
 // ─── Boutiques (salles de jeux physiques) ─────────────────────────────────────

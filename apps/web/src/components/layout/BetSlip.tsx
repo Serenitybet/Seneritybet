@@ -12,11 +12,51 @@ export function BetSlip() {
   const { user } = useAuthStore();
   const [stake, setStake] = useState("");
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedCode, setSavedCode] = useState<string | null>(null);
 
   const stakeXAF = (parseFloat(stake) || 0) * 100;
   const potentialWin = stakeXAF * totalOdds;
 
   const QUICK_STAKES = [500, 1000, 2000, 5000];
+
+  async function handleSaveCoupon() {
+    if (!user) { toast.error("Connectez-vous d'abord"); return; }
+    if (selections.length === 0) { toast.error("Coupon vide"); return; }
+    setSaving(true);
+    setSavedCode(null);
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/coupons/save`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
+        body: JSON.stringify({
+          selections: selections.map(s => ({
+            eventId:     s.eventId,
+            marketId:    s.marketId,
+            oddId:       s.oddId,
+            teamHome:    s.eventLabel?.split(" vs ")?.[0] ?? "",
+            teamAway:    s.eventLabel?.split(" vs ")?.[1] ?? "",
+            eventName:   s.eventLabel,
+            marketName:  s.marketName,
+            oddLabel:    s.oddLabel,
+            oddValue:    s.oddValue,
+          })),
+          suggestedStake: stake ? parseFloat(stake) * 100 : null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error ?? "Erreur"); return; }
+      setSavedCode(data.data.code);
+      toast.success(`✅ Coupon sauvegardé ! Code : ${data.data.code}`, { duration: 8000 });
+    } catch {
+      toast.error("Erreur réseau");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function handlePlaceBet() {
     if (!user) { toast.error("Connectez-vous pour parier"); return; }
@@ -174,15 +214,33 @@ export function BetSlip() {
               </div>
             )}
 
-            {/* Bouton parier */}
+            {/* Code coupon sauvegardé */}
+            {savedCode && (
+              <div className="bg-gold/10 border border-gold/30 rounded-lg p-3 text-center">
+                <p className="text-xs text-txt-muted mb-1">Code coupon (valable 48h)</p>
+                <p className="font-mono text-xl font-black text-gold tracking-widest">{savedCode}</p>
+                <p className="text-[10px] text-txt-muted mt-1">Présentez ce code en salle de jeux</p>
+              </div>
+            )}
+
+            {/* Boutons */}
             {user ? (
-              <button
-                className="btn-green w-full py-2.5 text-sm"
-                onClick={handlePlaceBet}
-                disabled={loading || stakeXAF < 100}
-              >
-                {loading ? "Validation en cours..." : `Parier${stakeXAF > 0 ? ` — ${formatXAF(stakeXAF)}` : ""}`}
-              </button>
+              <div className="space-y-2">
+                <button
+                  className="btn-green w-full py-2.5 text-sm"
+                  onClick={handlePlaceBet}
+                  disabled={loading || stakeXAF < 100}
+                >
+                  {loading ? "Validation..." : `Parier en ligne${stakeXAF > 0 ? ` — ${formatXAF(stakeXAF)}` : ""}`}
+                </button>
+                <button
+                  className="w-full py-2 text-sm font-semibold border border-gold/40 text-gold bg-gold/5 hover:bg-gold/10 rounded-lg transition-colors"
+                  onClick={handleSaveCoupon}
+                  disabled={saving || selections.length === 0}
+                >
+                  {saving ? "Sauvegarde..." : "🎫 Jouer en salle de jeux (code)"}
+                </button>
+              </div>
             ) : (
               <Link href="/login" className="btn-green w-full py-2.5 text-sm text-center block">
                 Se connecter pour parier

@@ -58,6 +58,14 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
             🏠 Caisse
           </Link>
           <Link
+            href="/tickets"
+            className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
+              pathname === "/tickets" ? "bg-white text-green-700" : "hover:bg-green-600 text-white"
+            }`}
+          >
+            🎫 Tickets
+          </Link>
+          <Link
             href="/withdrawals"
             className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
               pathname === "/withdrawals" ? "bg-white text-green-700" : "hover:bg-green-600 text-white"
