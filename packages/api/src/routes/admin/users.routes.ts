@@ -61,8 +61,6 @@ adminUsersRouter.get("/staff", asyncHandler(async (req: Request, res: Response) 
     select: {
       id: true, playerNumber: true, email: true, phone: true, firstName: true, lastName: true,
       role: true, status: true, kycStatus: true, createdAt: true,
-      shop: { select: { id: true, name: true, city: true } },
-      cashierWallet: { select: { balance: true } },
     },
     orderBy: { createdAt: "desc" },
   });
