@@ -18,7 +18,7 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
       router.replace("/login");
     } else {
       setAuthToken(token);
-      api.get("/cashier/wallet").then(r => setFloatXAF(r.data.data.balanceXAF)).catch(() => {});
+      api.get("/cashier-wallet/my").then(r => setFloatXAF(r.data.data.balanceXAF)).catch(() => {});
     }
   }, [token, router]);
 

@@ -38,8 +38,11 @@ export default function UsersPage() {
   const [creating, setCreating]   = useState(false);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [loadingUser, setLoadingUser]   = useState(false);
-  const [newPassword, setNewPassword]   = useState("");
-  const [resetting, setResetting]       = useState(false);
+  const [newPassword, setNewPassword]     = useState("");
+  const [resetting, setResetting]         = useState(false);
+  const [rechargeAmount, setRechargeAmount] = useState("");
+  const [recharging, setRecharging]       = useState(false);
+  const [wallets, setWallets]             = useState<Record<string, number>>({});
   const [form, setForm] = useState({
     firstName: "", lastName: "", email: "", phone: "",
     password: "", role: "CASHIER", dateOfBirth: "1990-01-01", shopId: "",
@@ -67,6 +70,22 @@ export default function UsersPage() {
   }
 
   useEffect(() => { setApiUsers([]); setApiLoaded(false); loadUsers(); }, [page, search, tab]);
+
+  // Charger les wallets caissiers quand on est sur l'onglet staff
+  useEffect(() => {
+    if (tab !== "staff") return;
+    const t = localStorage.getItem("bo_token");
+    fetch(`${API}/cashier-wallet/all`, { headers: { Authorization: `Bearer ${t}` } })
+      .then(r => r.json())
+      .then(d => {
+        if (d.data) {
+          const map: Record<string, number> = {};
+          d.data.forEach((w: any) => { map[w.userId] = w.balanceXAF; });
+          setWallets(map);
+        }
+      })
+      .catch(() => {});
+  }, [tab, apiLoaded]);
 
   useEffect(() => {
     const token = localStorage.getItem("bo_token");
@@ -100,6 +119,29 @@ export default function UsersPage() {
       if (d.data) setSelectedUser(d.data);
     } catch { toast.error("Impossible de charger le profil"); }
     finally { setLoadingUser(false); }
+  }
+
+  async function rechargeWallet(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedUser || !rechargeAmount) return;
+    setRecharging(true);
+    const token = localStorage.getItem("bo_token");
+    try {
+      const res = await fetch(`${API}/cashier-wallet/recharge/${selectedUser.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ amount: parseFloat(rechargeAmount) }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        toast.success(`✓ Float rechargé : ${d.data.rechargedXAF.toLocaleString("fr-FR")} XAF → Nouveau solde : ${d.data.newBalanceXAF.toLocaleString("fr-FR")} XAF`);
+        setRechargeAmount("");
+        // Mettre à jour le wallet affiché
+        setWallets(prev => ({ ...prev, [selectedUser.id]: d.data.newBalanceXAF }));
+        setSelectedUser((prev: any) => prev ? { ...prev, walletBalance: d.data.newBalanceXAF } : null);
+      } else toast.error(d.error ?? "Erreur");
+    } catch { toast.error("Erreur réseau"); }
+    finally { setRecharging(false); }
   }
 
   async function resetPassword(e: React.FormEvent) {
@@ -270,18 +312,26 @@ export default function UsersPage() {
                   )}
                   {tab === "staff" && (
                     <>
-                      <td className="text-xs text-t-muted">
-                        {u.shop ? `🏪 ${u.shop.name}` : <span className="text-t-faint">—</span>}
+                      <td>
+                        <span className={`bo-badge-gray text-[10px] ${u.role === "CASHIER" ? "bo-badge-orange" : u.role === "ADMIN" || u.role === "SUPER_ADMIN" ? "bo-badge-red" : "bo-badge-blue"}`}>
+                          {u.role}
+                        </span>
                       </td>
-                      {u.role === "CASHIER" && (
-                        <td className="font-mono font-bold text-sm">
-                          <span className={Number(u.cashierWallet?.balance ?? 0) < 0 ? "text-red-400" : "text-green-400"}>
-                            {formatXAF(Math.abs(Number(u.cashierWallet?.balance ?? 0)))}
-                            {Number(u.cashierWallet?.balance ?? 0) < 0 ? " ↓" : ""}
-                          </span>
-                        </td>
-                      )}
-                      {u.role !== "CASHIER" && <td className="text-t-faint text-xs">—</td>}
+                      <td className="font-mono font-bold text-sm">
+                        {u.role === "CASHIER" ? (
+                          (() => {
+                            const bal = wallets[u.id] ?? 0;
+                            return (
+                              <span className={bal < 0 ? "text-red-400" : bal === 0 ? "text-t-faint" : "text-green-400"}>
+                                {bal < 0 ? "-" : ""}{Math.abs(bal).toLocaleString("fr-FR")} XAF
+                                {bal < 0 ? " ⚠️" : ""}
+                              </span>
+                            );
+                          })()
+                        ) : (
+                          <span className="text-t-faint text-xs">—</span>
+                        )}
+                      </td>
                     </>
                   )}
                   <td>{kycBadge(u.kycStatus)}</td>
@@ -404,6 +454,36 @@ export default function UsersPage() {
                         </button>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {/* Recharge float caissier */}
+                {selectedUser.role === "CASHIER" && (
+                  <div className="bg-green-600/10 border border-green-600/20 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-sm font-semibold text-t-primary">💰 Float caissier</p>
+                      <span className={`text-lg font-black ${(wallets[selectedUser.id] ?? 0) < 0 ? "text-red-400" : "text-green-400"}`}>
+                        {(wallets[selectedUser.id] ?? 0).toLocaleString("fr-FR")} XAF
+                      </span>
+                    </div>
+                    <form onSubmit={rechargeWallet} className="flex gap-2">
+                      <input
+                        type="number"
+                        className="bo-input flex-1"
+                        placeholder="Montant à recharger (XAF)"
+                        value={rechargeAmount}
+                        min={1000}
+                        step={1000}
+                        required
+                        onChange={e => setRechargeAmount(e.target.value)}
+                      />
+                      <button type="submit" disabled={recharging} className="bo-btn-primary shrink-0">
+                        {recharging ? "..." : "💳 Recharger"}
+                      </button>
+                    </form>
+                    <p className="text-[11px] text-t-faint mt-1">
+                      Solde négatif = caissier a encaissé plus qu'il n'a distribué.
+                    </p>
                   </div>
                 )}
 

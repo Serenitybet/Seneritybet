@@ -128,6 +128,7 @@ model User {
   shop                Shop?          @relation("CashierShop", fields: [shopId], references: [id])
 
   wallet              Wallet?
+  cashierWallet       CashierWallet?
   bets                Bet[]
   transactions        Transaction[]
   sessions            Session[]
@@ -318,6 +319,18 @@ model BetItem {
 
   @@index([betId])
   @@index([marketId])
+}
+
+// ─── Portefeuille caissier (float espèces) ───────────────────────────────────
+
+model CashierWallet {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  balance   BigInt   @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 // ─── Boutiques (salles de jeux physiques) ─────────────────────────────────────

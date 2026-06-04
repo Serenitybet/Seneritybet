@@ -111,10 +111,11 @@ cashierRouter.post("/deposit", asyncHandler(async (req: AuthRequest, res: Respon
         },
       },
     }),
-    // Portefeuille caissier ↓ (il a encaissé du cash → doit du crédit)
-    prisma.cashierWallet.update({
-      where: { userId: req.user!.id },
-      data: { balance: { decrement: amountCentimes } },
+    // Portefeuille caissier ↓ (il reçoit du cash → son float e-money diminue)
+    prisma.cashierWallet.upsert({
+      where:  { userId: req.user!.id },
+      update: { balance: { decrement: amountCentimes } },
+      create: { userId: req.user!.id, balance: -amountCentimes },
     }),
   ]);
 
@@ -313,10 +314,11 @@ cashierRouter.post("/validate-withdrawal/:id", asyncHandler(async (req: AuthRequ
         },
       },
     }),
-    // Portefeuille caissier ↑ (il donne du cash → récupère du crédit)
-    prisma.cashierWallet.update({
-      where: { userId: req.user!.id },
-      data: { balance: { increment: request.amount } },
+    // Portefeuille caissier ↑ (il donne du cash → son float e-money augmente)
+    prisma.cashierWallet.upsert({
+      where:  { userId: req.user!.id },
+      update: { balance: { increment: request.amount } },
+      create: { userId: req.user!.id, balance: request.amount },
     }),
   ]);
 

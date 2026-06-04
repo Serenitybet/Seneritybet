@@ -33,10 +33,11 @@ adminUsersRouter.post("/", requireRole("ADMIN", "SUPER_ADMIN"),
         kycStatus: "APPROVED",
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : new Date("1990-01-01"),
         ...(shopId ? { shopId } : {}),
+        // Créer automatiquement un portefeuille vide pour les caissiers
+        ...(role === "CASHIER" ? { cashierWallet: { create: { balance: BigInt(0) } } } : {}),
       },
-      include: { shop: { select: { name: true, city: true } } },
     });
-    res.status(201).json({ success: true, data: { id: user.id, email: user.email, role: user.role, shop: (user as any).shop } });
+    res.status(201).json({ success: true, data: { id: user.id, email: user.email, role: user.role } });
   }),
 );
 
