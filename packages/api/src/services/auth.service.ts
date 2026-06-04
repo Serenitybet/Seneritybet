@@ -88,9 +88,13 @@ export async function refreshTokens(refreshToken: string) {
 }
 
 function generateTokens(userId: string, role: string, email: string) {
-  // Les caissiers ont un token de 24h pour ne pas se reconnecter toute la journée
-  const isCashier = role === "CASHIER";
-  const accessExpiry = isCashier ? "24h" : (process.env.JWT_EXPIRES_IN ?? "15m");
+  // Caissiers : 24h (ne pas se reconnecter pendant le service)
+  // Joueurs : 8h (journée complète de paris sans déconnexion)
+  // Admins/autres : configurable via JWT_EXPIRES_IN (défaut 15m)
+  const accessExpiry =
+    role === "CASHIER" ? "24h" :
+    role === "PLAYER"  ? "8h"  :
+    (process.env.JWT_EXPIRES_IN ?? "15m");
 
   const accessToken = jwt.sign(
     { sub: userId, role, email },
