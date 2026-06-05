@@ -59,6 +59,18 @@ const SPORTS_CONFIG = [
   },
 ];
 
+// Tournois prioritaires pour le marché africain
+const FOOTBALL_TOURNAMENTS = [
+  { id: "sr:tournament:17",  name: "Premier League",       country: "England" },
+  { id: "sr:tournament:34",  name: "UEFA Champions League", country: "Europe" },
+  { id: "sr:tournament:679", name: "Ligue 1",               country: "France" },
+  { id: "sr:tournament:238", name: "La Liga",               country: "Spain" },
+  { id: "sr:tournament:35",  name: "Serie A",               country: "Italy" },
+  { id: "sr:tournament:44",  name: "Bundesliga",            country: "Germany" },
+  { id: "sr:tournament:68",  name: "UEFA Europa League",    country: "Europe" },
+  { id: "sr:tournament:140", name: "Africa Cup of Nations", country: "Africa" },
+];
+
 // ─── Sync des événements football depuis Sportradar ───────────────────────────
 export async function syncSportradarFootball() {
   if (!API_KEY) {
@@ -66,34 +78,81 @@ export async function syncSportradarFootball() {
     return;
   }
 
-  const today    = new Date().toISOString().slice(0, 10);
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const sport = await prisma.sport.upsert({
+    where:  { slug: "football" },
+    update: {},
+    create: { slug: "football", name: "Football", icon: "⚽", sortOrder: 1 },
+  });
 
-  for (const date of [today, tomorrow]) {
+  for (const tourney of FOOTBALL_TOURNAMENTS) {
     try {
-      const url = `${BASE}/soccer/trial/v4/en/schedules/${date}/schedule.json`;
+      const url = `${BASE}/soccer/trial/v4/en/tournaments/${tourney.id}/schedule.json`;
       const res = await axios.get(url, { params: { api_key: API_KEY } });
 
-      const sportEvents = res.data?.sport_events ?? [];
+      const schedule   = res.data?.tournament_schedule ?? res.data;
+      const sportEvents = schedule?.sport_events ?? schedule?.schedules ?? [];
 
-      // S'assurer que le sport Football existe en base
-      const sport = await prisma.sport.upsert({
-        where:  { slug: "football" },
-        update: {},
-        create: { slug: "football", name: "Football", icon: "⚽", sortOrder: 1 },
+      // Créer/mettre à jour la compétition
+      const competition = await prisma.competition.upsert({
+        where:  { externalId: tourney.id },
+        update: { name: tourney.name },
+        create: {
+          name:       tourney.name,
+          slug:       slugify(tourney.name),
+          country:    tourney.country,
+          externalId: tourney.id,
+          sportId:    sport.id,
+        },
       });
 
+      let synced = 0;
       for (const ev of sportEvents) {
         try {
-          await upsertSportradarEvent(sport.id, ev);
-        } catch (e) {
-          // Ignorer les erreurs individuelles
-        }
+          await upsertSportradarEventWithCompetition(competition.id, ev);
+          synced++;
+        } catch { /* ignorer erreurs individuelles */ }
       }
+
+      if (synced > 0) console.log(`⚽ ${tourney.name}: ${synced} matchs synchronisés`);
+      await sleep(SR_DELAY);
     } catch (err: any) {
-      console.error(`Erreur sync Sportradar football ${date}:`, err.message);
+      if (err.response?.status !== 404) {
+        console.error(`Erreur sync ${tourney.name}:`, err.message);
+      }
+      await sleep(SR_DELAY);
     }
   }
+}
+
+async function upsertSportradarEventWithCompetition(competitionId: string, ev: any) {
+  if (!ev.id || !ev.competitors || ev.competitors.length < 2) return;
+  const home = ev.competitors.find((c: any) => c.qualifier === "home");
+  const away = ev.competitors.find((c: any) => c.qualifier === "away");
+  if (!home || !away) return;
+
+  const startTime = new Date(ev.scheduled ?? ev.start_time);
+  if (isNaN(startTime.getTime())) return;
+
+  // Ne pas insérer les matchs trop vieux
+  const threeDaysAgo = new Date(Date.now() - 3 * 86400000);
+  if (startTime < threeDaysAgo) return;
+
+  const status = ev.status === "live" ? "LIVE"
+    : ev.status === "closed" || ev.status === "ended" ? "FINISHED"
+    : "UPCOMING";
+
+  await prisma.event.upsert({
+    where:  { externalId: ev.id },
+    update: { homeTeam: home.name, awayTeam: away.name, startTime, status },
+    create: {
+      externalId:    ev.id,
+      competitionId,
+      homeTeam:      home.name,
+      awayTeam:      away.name,
+      startTime,
+      status,
+    },
+  });
 }
 
 // ─── Sync matchs en direct ────────────────────────────────────────────────────
