@@ -37,7 +37,8 @@ app.use(cors({
     if (
       ALLOWED_ORIGINS.includes(origin) ||
       /^https:\/\/[\w-]+(\.vercel\.app)$/.test(origin) ||
-      /^https:\/\/[\w-]+\.serenitybet\.td$/.test(origin)
+      /^https:\/\/[\w-]+\.serenitybet\.td$/.test(origin) ||
+      /^https:\/\/([\w-]+\.)?serenitybet\.africa$/.test(origin)
     ) {
       return callback(null, true);
     }
