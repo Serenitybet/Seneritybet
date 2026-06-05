@@ -6,15 +6,26 @@ const API_KEY = process.env.ODDS_API_KEY;
 
 // Sports TheOddsAPI → slug interne + métadonnées
 const SPORTS_CONFIG = [
-  // ⚽ Football
-  { key: "soccer_epl",                    slug: "football",   name: "Premier League",        country: "England",  icon: "⚽", sortOrder: 1 },
-  { key: "soccer_uefa_champs_league",     slug: "football",   name: "Champions League",      country: "Europe",   icon: "⚽", sortOrder: 1 },
-  { key: "soccer_france_ligue_one",       slug: "football",   name: "Ligue 1",               country: "France",   icon: "⚽", sortOrder: 1 },
-  { key: "soccer_spain_la_liga",          slug: "football",   name: "La Liga",               country: "Spain",    icon: "⚽", sortOrder: 1 },
-  { key: "soccer_italy_serie_a",          slug: "football",   name: "Serie A",               country: "Italy",    icon: "⚽", sortOrder: 1 },
-  { key: "soccer_germany_bundesliga",     slug: "football",   name: "Bundesliga",            country: "Germany",  icon: "⚽", sortOrder: 1 },
-  { key: "soccer_uefa_europa_league",     slug: "football",   name: "Europa League",         country: "Europe",   icon: "⚽", sortOrder: 1 },
-  { key: "soccer_africa_cup_of_nations",  slug: "football",   name: "CAN",                   country: "Africa",   icon: "⚽", sortOrder: 1 },
+  // ⚽ Football — Ligues européennes (saison sept-mai)
+  { key: "soccer_epl",                      slug: "football", name: "Premier League",          country: "England",   icon: "⚽", sortOrder: 1 },
+  { key: "soccer_uefa_champs_league",       slug: "football", name: "Champions League",        country: "Europe",    icon: "⚽", sortOrder: 1 },
+  { key: "soccer_france_ligue_one",         slug: "football", name: "Ligue 1",                 country: "France",    icon: "⚽", sortOrder: 1 },
+  { key: "soccer_spain_la_liga",            slug: "football", name: "La Liga",                 country: "Spain",     icon: "⚽", sortOrder: 1 },
+  { key: "soccer_italy_serie_a",            slug: "football", name: "Serie A",                 country: "Italy",     icon: "⚽", sortOrder: 1 },
+  { key: "soccer_germany_bundesliga",       slug: "football", name: "Bundesliga",              country: "Germany",   icon: "⚽", sortOrder: 1 },
+  { key: "soccer_uefa_europa_league",       slug: "football", name: "Europa League",           country: "Europe",    icon: "⚽", sortOrder: 1 },
+  { key: "soccer_africa_cup_of_nations",    slug: "football", name: "CAN",                     country: "Africa",    icon: "⚽", sortOrder: 1 },
+  // ⚽ Football — Ligues actives toute l'année
+  { key: "soccer_brazil_campeonato",        slug: "football", name: "Brasileirão",             country: "Brazil",    icon: "⚽", sortOrder: 1 },
+  { key: "soccer_argentina_primera_div",   slug: "football", name: "Primera División",        country: "Argentina", icon: "⚽", sortOrder: 1 },
+  { key: "soccer_conmebol_copa_libertadores", slug: "football", name: "Copa Libertadores",    country: "South America", icon: "⚽", sortOrder: 1 },
+  { key: "soccer_usa_mls",                  slug: "football", name: "MLS",                     country: "USA",       icon: "⚽", sortOrder: 1 },
+  { key: "soccer_mexico_ligamx",            slug: "football", name: "Liga MX",                 country: "Mexico",    icon: "⚽", sortOrder: 1 },
+  { key: "soccer_japan_j_league",           slug: "football", name: "J-League",                country: "Japan",     icon: "⚽", sortOrder: 1 },
+  { key: "soccer_turkey_super_league",      slug: "football", name: "Süper Lig",               country: "Turkey",    icon: "⚽", sortOrder: 1 },
+  { key: "soccer_australia_aleague",        slug: "football", name: "A-League",                country: "Australia", icon: "⚽", sortOrder: 1 },
+  { key: "soccer_netherlands_eredivisie",   slug: "football", name: "Eredivisie",              country: "Netherlands", icon: "⚽", sortOrder: 1 },
+  { key: "soccer_portugal_primeira_liga",   slug: "football", name: "Primeira Liga",           country: "Portugal",  icon: "⚽", sortOrder: 1 },
   // 🏀 Basketball
   { key: "basketball_nba",               slug: "basketball", name: "NBA",                   country: "USA",      icon: "🏀", sortOrder: 2 },
   { key: "basketball_euroleague",        slug: "basketball", name: "Euroleague",             country: "Europe",   icon: "🏀", sortOrder: 2 },
@@ -45,7 +56,7 @@ export async function syncOddsFromAPI() {
         params: {
           apiKey:      API_KEY,
           regions:     "eu",
-          markets:     "h2h,totals",
+          markets:     "h2h,totals,spreads",
           oddsFormat:  "decimal",
           dateFormat:  "iso",
         },
