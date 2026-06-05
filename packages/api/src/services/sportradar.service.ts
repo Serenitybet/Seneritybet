@@ -1,6 +1,10 @@
 import axios from "axios";
 import { prisma } from "../lib/prisma";
 
+// Délai entre requêtes pour respecter le rate limit Sportradar (QPS: 1)
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+const SR_DELAY = 1100; // 1.1 seconde entre chaque appel
+
 const API_KEY = process.env.SPORTRADAR_API_KEY;
 const BASE    = "https://api.sportradar.com";
 
@@ -250,10 +254,114 @@ function slugify(s: string): string {
   return s.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "").slice(0, 60);
 }
 
-// ─── Sync complète (appelée par le worker BullMQ) ────────────────────────────
+// ─── Sync cotes pré-match depuis l'API Odds Comparison ───────────────────────
+export async function syncPreMatchOdds(date: string) {
+  if (!API_KEY) return;
+  try {
+    // Récupère toutes les cotes pré-match pour un sport sur une date
+    const url = `${BASE}/oddscomparison-prematch/trial/v2/en/sports/sr:sport:1/schedules/pre/${date}/summaries.json`;
+    const res = await axios.get(url, { params: { api_key: API_KEY } });
+
+    const summaries = res.data?.summaries ?? [];
+    let processed = 0;
+
+    for (const summary of summaries) {
+      const ev = summary.sport_event;
+      if (!ev?.id) continue;
+
+      const dbEvent = await prisma.event.findUnique({ where: { externalId: ev.id } });
+      if (!dbEvent) continue;
+
+      // Cotes disponibles dans le summary
+      const markets = summary.markets ?? summary.odds_markets ?? [];
+      if (markets.length > 0) {
+        const home = ev.competitors?.find((c: any) => c.qualifier === "home");
+        const away = ev.competitors?.find((c: any) => c.qualifier === "away");
+        await upsertMarkets(dbEvent.id, home?.name ?? "", away?.name ?? "", markets);
+      }
+
+      processed++;
+      if (processed % 5 === 0) await sleep(SR_DELAY);
+    }
+
+    console.log(`📊 Cotes pré-match ${date}: ${processed} événements mis à jour`);
+  } catch (err: any) {
+    if (err.response?.status !== 404) {
+      console.error("Erreur sync cotes pré-match:", err.message);
+    }
+  }
+}
+
+// ─── Sync cotes en direct ─────────────────────────────────────────────────────
+export async function syncLiveOdds() {
+  if (!API_KEY) return;
+  try {
+    const url = `${BASE}/oddscomparison-standard/trial/v2/en/sports/sr:sport:1/schedules/live/sport_events.json`;
+    const res = await axios.get(url, { params: { api_key: API_KEY } });
+
+    const events = res.data?.sport_events ?? [];
+    let updated = 0;
+
+    for (const item of events) {
+      const ev = item.sport_event ?? item;
+      if (!ev?.id) continue;
+
+      const dbEvent = await prisma.event.findUnique({ where: { externalId: ev.id } });
+      if (!dbEvent) continue;
+
+      // Marquer comme LIVE
+      await prisma.event.update({
+        where: { id: dbEvent.id },
+        data:  { status: "LIVE" },
+      });
+
+      const markets = item.markets ?? [];
+      if (markets.length > 0) {
+        const home = ev.competitors?.find((c: any) => c.qualifier === "home");
+        const away = ev.competitors?.find((c: any) => c.qualifier === "away");
+        await upsertMarkets(dbEvent.id, home?.name ?? dbEvent.homeTeam, away?.name ?? dbEvent.awayTeam, markets);
+      }
+
+      updated++;
+      await sleep(SR_DELAY);
+    }
+
+    if (updated > 0) console.log(`⚡ ${updated} matchs live mis à jour`);
+  } catch (err: any) {
+    if (err.response?.status !== 404) {
+      console.error("Erreur sync cotes live:", err.message);
+    }
+  }
+}
+
+// ─── Sync complète (appelée par le worker) ────────────────────────────────────
 export async function syncAllSportradar() {
   console.log("🔄 Sync Sportradar démarrée...");
+
+  const today    = new Date().toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+
+  // 1. Événements football
   await syncSportradarFootball();
+  await sleep(SR_DELAY);
+
+  // 2. Cotes pré-match pour aujourd'hui et demain
+  await syncPreMatchOdds(today);
+  await sleep(SR_DELAY);
+  await syncPreMatchOdds(tomorrow);
+  await sleep(SR_DELAY);
+
+  // 3. Matchs en direct + leurs cotes
   await syncLiveMatches();
+  await sleep(SR_DELAY);
+  await syncLiveOdds();
+
   console.log("✅ Sync Sportradar terminée");
+}
+
+// ─── Sync live uniquement (appelée toutes les 60s) ───────────────────────────
+export async function syncLiveOnly() {
+  await syncLiveMatches();
+  await sleep(SR_DELAY);
+  await syncLiveOdds();
 }

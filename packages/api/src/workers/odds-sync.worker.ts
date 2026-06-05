@@ -1,20 +1,19 @@
-import { syncAllSportradar } from "../services/sportradar.service";
+import { syncAllSportradar, syncLiveOnly } from "../services/sportradar.service";
 
 export function startOddsSyncWorker() {
-  // Sync toutes les 5 minutes pour les événements
-  const EVENTS_INTERVAL = parseInt(process.env.ODDS_SYNC_INTERVAL_MS ?? "300000", 10);
-  // Sync live toutes les 60 secondes
-  const LIVE_INTERVAL   = 60_000;
+  const FULL_INTERVAL = 5 * 60 * 1000;  // Sync complète toutes les 5 min
+  const LIVE_INTERVAL = 60 * 1000;       // Sync live toutes les 60s
 
-  const run = async () => {
-    try {
-      await syncAllSportradar();
-    } catch (err) {
-      console.error("Erreur sync Sportradar:", err);
-    }
-  };
+  // Sync complète au démarrage
+  syncAllSportradar().catch(err => console.error("Erreur sync initiale:", err));
 
-  // Première sync au démarrage
-  run();
-  setInterval(run, EVENTS_INTERVAL);
+  // Sync complète répétée toutes les 5 minutes
+  setInterval(() => {
+    syncAllSportradar().catch(err => console.error("Erreur sync complète:", err));
+  }, FULL_INTERVAL);
+
+  // Sync live rapide toutes les 60 secondes
+  setInterval(() => {
+    syncLiveOnly().catch(err => console.error("Erreur sync live:", err));
+  }, LIVE_INTERVAL);
 }
