@@ -1,16 +1,35 @@
 import axios from "axios";
 import { prisma } from "../lib/prisma";
 
-const ODDS_API_BASE = process.env.ODDS_API_BASE_URL ?? "https://api.the-odds-api.com/v4";
+const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
 const API_KEY = process.env.ODDS_API_KEY;
 
-// Sports supportés par l'API externe → slug interne
-const SPORT_MAPPING: Record<string, string> = {
-  "soccer_epl": "premier-league",
-  "soccer_uefa_champs_league": "champions-league",
-  "soccer_france_ligue_one": "ligue-1",
-  "basketball_nba": "nba",
-};
+// Sports TheOddsAPI → slug interne + métadonnées
+const SPORTS_CONFIG = [
+  // ⚽ Football
+  { key: "soccer_epl",                    slug: "football",   name: "Premier League",        country: "England",  icon: "⚽", sortOrder: 1 },
+  { key: "soccer_uefa_champs_league",     slug: "football",   name: "Champions League",      country: "Europe",   icon: "⚽", sortOrder: 1 },
+  { key: "soccer_france_ligue_one",       slug: "football",   name: "Ligue 1",               country: "France",   icon: "⚽", sortOrder: 1 },
+  { key: "soccer_spain_la_liga",          slug: "football",   name: "La Liga",               country: "Spain",    icon: "⚽", sortOrder: 1 },
+  { key: "soccer_italy_serie_a",          slug: "football",   name: "Serie A",               country: "Italy",    icon: "⚽", sortOrder: 1 },
+  { key: "soccer_germany_bundesliga",     slug: "football",   name: "Bundesliga",            country: "Germany",  icon: "⚽", sortOrder: 1 },
+  { key: "soccer_uefa_europa_league",     slug: "football",   name: "Europa League",         country: "Europe",   icon: "⚽", sortOrder: 1 },
+  { key: "soccer_africa_cup_of_nations",  slug: "football",   name: "CAN",                   country: "Africa",   icon: "⚽", sortOrder: 1 },
+  // 🏀 Basketball
+  { key: "basketball_nba",               slug: "basketball", name: "NBA",                   country: "USA",      icon: "🏀", sortOrder: 2 },
+  { key: "basketball_euroleague",        slug: "basketball", name: "Euroleague",             country: "Europe",   icon: "🏀", sortOrder: 2 },
+  // 🎾 Tennis
+  { key: "tennis_atp_french_open",       slug: "tennis",     name: "Roland Garros",         country: "France",   icon: "🎾", sortOrder: 3 },
+  { key: "tennis_atp_wimbledon",         slug: "tennis",     name: "Wimbledon",             country: "England",  icon: "🎾", sortOrder: 3 },
+  // 🏒 Ice Hockey
+  { key: "icehockey_nhl",               slug: "hockey",     name: "NHL",                   country: "USA",      icon: "🏒", sortOrder: 4 },
+  // 🏈 American Football
+  { key: "americanfootball_nfl",        slug: "american-football", name: "NFL",            country: "USA",      icon: "🏈", sortOrder: 5 },
+  // 🥊 MMA
+  { key: "mma_mixed_martial_arts",      slug: "mma",        name: "MMA",                   country: "World",    icon: "🥊", sortOrder: 6 },
+  // ⚾ Baseball
+  { key: "baseball_mlb",               slug: "baseball",   name: "MLB",                   country: "USA",      icon: "⚾", sortOrder: 7 },
+];
 
 export async function syncOddsFromAPI() {
   if (!API_KEY) {
@@ -18,70 +37,105 @@ export async function syncOddsFromAPI() {
     return;
   }
 
-  for (const [apiSport, competitionSlug] of Object.entries(SPORT_MAPPING)) {
+  let totalEvents = 0;
+
+  for (const config of SPORTS_CONFIG) {
     try {
-      const response = await axios.get(`${ODDS_API_BASE}/sports/${apiSport}/odds`, {
+      const res = await axios.get(`${ODDS_API_BASE}/sports/${config.key}/odds`, {
         params: {
-          apiKey: API_KEY,
-          regions: "eu",
-          markets: "h2h,totals",
-          oddsFormat: "decimal",
+          apiKey:      API_KEY,
+          regions:     "eu",
+          markets:     "h2h,totals",
+          oddsFormat:  "decimal",
+          dateFormat:  "iso",
+        },
+        timeout: 10000,
+      });
+
+      if (!res.data || res.data.length === 0) continue;
+
+      // Upsert sport
+      const sport = await prisma.sport.upsert({
+        where:  { slug: config.slug },
+        update: {},
+        create: { slug: config.slug, name: getSportLabel(config.slug), icon: config.icon, sortOrder: config.sortOrder },
+      });
+
+      // Upsert compétition
+      const competition = await prisma.competition.upsert({
+        where:  { slug: config.name.toLowerCase().replace(/\s+/g, "-") },
+        update: { name: config.name },
+        create: {
+          name:    config.name,
+          slug:    config.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
+          country: config.country,
+          sportId: sport.id,
         },
       });
 
-      const competition = await prisma.competition.findUnique({ where: { slug: competitionSlug } });
-      if (!competition) continue;
-
-      for (const game of response.data) {
+      // Upsert événements
+      for (const game of res.data) {
         await upsertEvent(competition.id, game);
+        totalEvents++;
       }
-    } catch (err) {
-      console.error(`Erreur sync odds pour ${apiSport}:`, err);
+    } catch (err: any) {
+      if (err.response?.status === 422) continue; // Sport pas disponible
+      if (err.response?.status === 401) {
+        console.error("ODDS_API_KEY invalide ou quota dépassé");
+        break;
+      }
+      // Ignorer silencieusement les autres erreurs
     }
   }
+
+  if (totalEvents > 0) console.log(`📅 TheOddsAPI: ${totalEvents} événements synchronisés`);
 }
 
 async function upsertEvent(competitionId: string, game: any) {
   const event = await prisma.event.upsert({
-    where: { externalId: game.id },
+    where:  { externalId: game.id },
     update: {
-      homeTeam: game.home_team,
-      awayTeam: game.away_team,
+      homeTeam:  game.home_team,
+      awayTeam:  game.away_team,
       startTime: new Date(game.commence_time),
     },
     create: {
       competitionId,
       externalId: game.id,
-      homeTeam: game.home_team,
-      awayTeam: game.away_team,
-      startTime: new Date(game.commence_time),
+      homeTeam:   game.home_team,
+      awayTeam:   game.away_team,
+      startTime:  new Date(game.commence_time),
+      status:     "UPCOMING",
     },
   });
 
-  // Prendre les cotes du premier bookmaker disponible
-  const bookmaker = game.bookmakers?.[0];
+  // Prendre les cotes du meilleur bookmaker EU disponible
+  const bookmaker = game.bookmakers?.find((b: any) =>
+    ["bet365", "unibet", "betway", "1xbet", "pinnacle"].includes(b.key)
+  ) ?? game.bookmakers?.[0];
+
   if (!bookmaker) return;
 
   for (const apiMarket of bookmaker.markets) {
     const marketType = apiMarket.key === "h2h" ? "MATCH_WINNER" : "OVER_UNDER";
-    const marketName = apiMarket.key === "h2h" ? "Résultat du match" : "Plus/Moins de 2.5 buts";
+    const marketName = apiMarket.key === "h2h"
+      ? `Résultat : ${game.home_team} vs ${game.away_team}`
+      : "Plus/Moins de 2.5 buts";
 
     let market = await prisma.market.findFirst({ where: { eventId: event.id, type: marketType } });
     if (!market) {
-      market = await prisma.market.create({
-        data: { eventId: event.id, name: marketName, type: marketType },
-      });
+      market = await prisma.market.create({ data: { eventId: event.id, name: marketName, type: marketType } });
     }
 
     for (const outcome of apiMarket.outcomes) {
       const label = outcome.name === game.home_team ? "1"
         : outcome.name === game.away_team ? "2"
         : outcome.name === "Draw" ? "X"
-        : outcome.name; // Over / Under
+        : outcome.name;
 
-      const existingOdd = await prisma.odd.findFirst({ where: { marketId: market.id, label } });
-      if (existingOdd) {
-        await prisma.odd.update({ where: { id: existingOdd.id }, data: { value: outcome.price } });
+      const existing = await prisma.odd.findFirst({ where: { marketId: market.id, label } });
+      if (existing) {
+        await prisma.odd.update({ where: { id: existing.id }, data: { value: outcome.price } });
       } else {
         await prisma.odd.create({ data: { marketId: market.id, label, value: outcome.price } });
       }
@@ -89,27 +143,34 @@ async function upsertEvent(competitionId: string, game: any) {
   }
 }
 
+function getSportLabel(slug: string): string {
+  const labels: Record<string, string> = {
+    "football":         "Football",
+    "basketball":       "Basketball",
+    "tennis":           "Tennis",
+    "hockey":           "Hockey sur glace",
+    "american-football":"Football Américain",
+    "mma":              "MMA / Boxe",
+    "baseball":         "Baseball",
+  };
+  return labels[slug] ?? slug;
+}
+
 export async function getUpcomingEvents(sportSlug?: string, page = 1, limit = 20) {
   const now = new Date();
 
-  const competition = sportSlug
-    ? await prisma.competition.findFirst({ where: { sport: { slug: sportSlug } }, select: { id: true } })
-    : null;
+  const where = {
+    startTime: { gte: now },
+    status:    { in: ["UPCOMING" as const, "LIVE" as const] },
+    ...(sportSlug ? {
+      competition: { sport: { slug: sportSlug } },
+    } : {}),
+  };
 
   const [total, events] = await Promise.all([
-    prisma.event.count({
-      where: {
-        startTime: { gte: now },
-        status: { in: ["UPCOMING", "LIVE"] },
-        ...(competition ? { competitionId: competition.id } : {}),
-      },
-    }),
+    prisma.event.count({ where }),
     prisma.event.findMany({
-      where: {
-        startTime: { gte: now },
-        status: { in: ["UPCOMING", "LIVE"] },
-        ...(competition ? { competitionId: competition.id } : {}),
-      },
+      where,
       include: {
         competition: { include: { sport: true } },
         markets: {
@@ -117,7 +178,7 @@ export async function getUpcomingEvents(sportSlug?: string, page = 1, limit = 20
           include: { odds: { where: { isActive: true } } },
         },
       },
-      orderBy: { startTime: "asc" },
+      orderBy: [{ status: "asc" }, { startTime: "asc" }],
       skip: (page - 1) * limit,
       take: limit,
     }),
