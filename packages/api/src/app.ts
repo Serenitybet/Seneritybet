@@ -16,6 +16,7 @@ import seedRouter from "./routes/seed.routes";
 import { withdrawalRequestRouter } from "./routes/withdrawal-request.routes";
 import { cashierWalletRouter } from "./routes/cashier-wallet.routes";
 import { couponRouter } from "./routes/coupon.routes";
+import { partnersRouter } from "./routes/partners.routes";
 import { errorHandler } from "./middleware/error.middleware";
 
 export const app = express();
@@ -96,6 +97,9 @@ app.use("/api/cashier-wallet", cashierWalletRouter);
 
 // ─── Coupons / Tickets physiques ─────────────────────────────────────────────
 app.use("/api/coupons", couponRouter);
+
+// ─── Programme partenaires ───────────────────────────────────────────────────
+app.use("/api/partners", partnersRouter);
 
 // ─── Route seed temporaire (init admin) ──────────────────────────────────────
 app.use("/api/seed", seedRouter);

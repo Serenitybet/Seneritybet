@@ -130,6 +130,7 @@ model User {
   wallet              Wallet?
   cashierWallet       CashierWallet?
   savedCoupons        SavedCoupon[]
+  partnerReferral     PartnerReferral?  @relation("PartnerReferral")
   bets                Bet[]
   transactions        Transaction[]
   sessions            Session[]
@@ -351,6 +352,87 @@ model SavedCoupon {
 
   @@index([code])
   @@index([userId])
+  @@index([status])
+}
+
+// ─── Programme d'affiliation partenaires ─────────────────────────────────────
+
+enum PartnerStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum PartnerWithdrawalStatus {
+  PENDING
+  PAID
+  REJECTED
+}
+
+model Partner {
+  id              String               @id @default(cuid())
+  email           String               @unique
+  phone           String               @unique
+  password        String
+  firstName       String
+  lastName        String
+  bio             String?
+  socialMedia     String?
+  promoCode       String               @unique
+  commissionRate  Float                @default(0.10) // 10% par défaut
+  status          PartnerStatus        @default(PENDING)
+  balance         Float                @default(0)
+  totalEarned     Float                @default(0)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  referrals       PartnerReferral[]
+  commissions     PartnerCommission[]
+  withdrawals     PartnerWithdrawal[]
+
+  @@index([promoCode])
+  @@index([status])
+}
+
+model PartnerReferral {
+  id          String   @id @default(cuid())
+  partnerId   String
+  partner     Partner  @relation(fields: [partnerId], references: [id])
+  userId      String   @unique
+  user        User     @relation("PartnerReferral", fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([partnerId])
+}
+
+model PartnerCommission {
+  id          String   @id @default(cuid())
+  partnerId   String
+  partner     Partner  @relation(fields: [partnerId], references: [id])
+  userId      String
+  betId       String?
+  amount      Float
+  rate        Float
+  description String?
+  createdAt   DateTime @default(now())
+
+  @@index([partnerId])
+  @@index([createdAt])
+}
+
+model PartnerWithdrawal {
+  id          String                  @id @default(cuid())
+  partnerId   String
+  partner     Partner                 @relation(fields: [partnerId], references: [id])
+  amount      Float
+  method      String
+  account     String
+  status      PartnerWithdrawalStatus @default(PENDING)
+  processedAt DateTime?
+  notes       String?
+  createdAt   DateTime                @default(now())
+
+  @@index([partnerId])
   @@index([status])
 }
 
