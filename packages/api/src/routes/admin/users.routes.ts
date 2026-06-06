@@ -18,9 +18,7 @@ adminUsersRouter.post("/", requireRole("ADMIN", "SUPER_ADMIN"),
     if (!allowedRoles.includes(role)) {
       res.status(400).json({ success: false, error: "Rôle non autorisé" }); return;
     }
-    if (role === "CASHIER" && !shopId) {
-      res.status(400).json({ success: false, error: "Un caissier doit être assigné à une boutique" }); return;
-    }
+    // shopId optionnel — peut être assigné plus tard depuis le backoffice
     const exists = await prisma.user.findFirst({ where: { OR: [{ email }, { phone }] } });
     if (exists) {
       res.status(409).json({ success: false, error: "Email ou téléphone déjà utilisé" }); return;
