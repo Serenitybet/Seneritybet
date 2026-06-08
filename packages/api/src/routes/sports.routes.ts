@@ -14,10 +14,12 @@ sportsRouter.get("/", asyncHandler(async (_req: Request, res: Response) => {
 }));
 
 sportsRouter.get("/events", asyncHandler(async (req: Request, res: Response) => {
-  const sport = req.query.sport as string | undefined;
-  const page  = parseInt((req.query.page  as string) ?? "1",  10);
-  const limit = parseInt((req.query.limit as string) ?? "20", 10);
-  const result = await getUpcomingEvents(sport, page, Math.min(limit, 50));
+  const sport    = req.query.sport as string | undefined;
+  const page     = parseInt((req.query.page  as string) ?? "1",  10);
+  const limit    = parseInt((req.query.limit as string) ?? "50", 10);
+  const dateFilter = req.query.date as string | undefined; // today | tomorrow | 3days | all
+
+  const result = await getUpcomingEvents(sport, page, Math.min(limit, 200), dateFilter);
   res.json({ success: true, data: result });
 }));
 

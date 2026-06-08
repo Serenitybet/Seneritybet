@@ -1,35 +1,63 @@
+import Link from "next/link";
 import { EventCard } from "@/components/sports/EventCard";
 import { SportNav } from "@/components/sports/SportNav";
+import { DateTabs } from "@/components/sports/DateTabs";
 import type { EventDTO } from "@serenitybet/shared";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 
-async function getEvents(sport?: string) {
+// ─── Drapeaux par pays ────────────────────────────────────────────────────────
+const COUNTRY_FLAG: Record<string, string> = {
+  England: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", France: "🇫🇷", Spain: "🇪🇸", Italy: "🇮🇹", Germany: "🇩🇪",
+  Europe: "🇪🇺", Brazil: "🇧🇷", Argentina: "🇦🇷", USA: "🇺🇸", Mexico: "🇲🇽",
+  Japan: "🇯🇵", Turkey: "🇹🇷", Australia: "🇦🇺", Netherlands: "🇳🇱", Portugal: "🇵🇹",
+  Africa: "🌍", World: "🌐", Chad: "🇹🇩", "South America": "🌎",
+};
+
+// ─── Fetch ────────────────────────────────────────────────────────────────────
+async function getEvents(sport?: string, date?: string) {
   try {
-    const params = new URLSearchParams({ limit: "50" });
+    const params = new URLSearchParams({ limit: "150" });
     if (sport) params.set("sport", sport);
+    if (date && date !== "all") params.set("date", date);
     const res = await fetch(`${API_URL}/sports/events?${params}`, {
-      cache: "no-store",
+      next: { revalidate: 60 }, // cache 60s
     });
-    if (!res.ok) return { events: [] };
+    if (!res.ok) return { events: [], total: 0 };
     const json = await res.json();
-    return json.data ?? { events: [] };
+    return json.data ?? { events: [], total: 0 };
   } catch {
-    return { events: [] };
+    return { events: [], total: 0 };
   }
 }
 
-/** Regroupe les événements par compétition */
-function groupByCompetition(events: EventDTO[]) {
-  const map = new Map<string, { name: string; country: string; icon: string; events: EventDTO[] }>();
+// ─── Groupement compétition ───────────────────────────────────────────────────
+interface CompGroup {
+  compId:   string;
+  compName: string;
+  country:  string;
+  flag:     string;
+  sportIcon: string;
+  sportName: string;
+  sportSlug: string;
+  events:   EventDTO[];
+}
+
+function groupByCompetition(events: EventDTO[]): CompGroup[] {
+  const map = new Map<string, CompGroup>();
   for (const ev of events) {
     const key = ev.competition?.id ?? "other";
     if (!map.has(key)) {
+      const country = (ev.competition as any)?.country ?? "";
       map.set(key, {
-        name: ev.competition?.name ?? "Compétition",
-        country: ev.competition?.country ?? "",
-        icon: ev.sport?.icon ?? "⚽",
-        events: [],
+        compId:    key,
+        compName:  ev.competition?.name ?? "Autre",
+        country,
+        flag:      COUNTRY_FLAG[country] ?? "🌐",
+        sportIcon: (ev as any).sport?.icon ?? (ev.competition as any)?.sport?.icon ?? "🏅",
+        sportName: (ev as any).sport?.name ?? (ev.competition as any)?.sport?.name ?? "",
+        sportSlug: (ev as any).sport?.slug ?? (ev.competition as any)?.sport?.slug ?? "",
+        events:    [],
       });
     }
     map.get(key)!.events.push(ev);
@@ -37,131 +65,215 @@ function groupByCompetition(events: EventDTO[]) {
   return [...map.values()];
 }
 
-const PROMO_BANNERS = [
-  {
-    id: 1,
-    title: "Bonus Bienvenue",
-    sub: "100% jusqu'à 50 000 XAF sur votre 1er dépôt",
-    badge: "NOUVEAU",
-    color: "from-green-900/60 to-green-600/20",
-    icon: "🎁",
-  },
-  {
-    id: 2,
-    title: "Pari Remboursé",
-    sub: "Si votre 1er pari est perdant, remboursé jusqu'à 5 000 XAF",
-    badge: "OFFRE",
-    color: "from-blue-900/60 to-blue-600/20",
-    icon: "🛡️",
-  },
-  {
-    id: 3,
-    title: "Cote Boostée du jour",
-    sub: "Nigeria vs Cameroun — Cote spéciale 4.50 au lieu de 3.10",
-    badge: "BOOST",
-    color: "from-amber-900/60 to-amber-600/20",
-    icon: "⚡",
-  },
-];
+// ─── Groupement par sport ─────────────────────────────────────────────────────
+interface SportGroup {
+  slug: string;
+  name: string;
+  icon: string;
+  competitions: CompGroup[];
+  liveCount: number;
+}
 
+function groupBySport(events: EventDTO[]): SportGroup[] {
+  const byComp = groupByCompetition(events);
+  const sportMap = new Map<string, SportGroup>();
+  for (const comp of byComp) {
+    const key = comp.sportSlug || "other";
+    if (!sportMap.has(key)) {
+      sportMap.set(key, { slug: key, name: comp.sportName, icon: comp.sportIcon, competitions: [], liveCount: 0 });
+    }
+    const sg = sportMap.get(key)!;
+    sg.competitions.push(comp);
+    sg.liveCount += comp.events.filter(e => e.status === "LIVE").length;
+  }
+  // Tri : Football d'abord, puis par nombre d'événements
+  const ORDER = ["football", "basketball", "tennis", "hockey", "mma", "baseball", "american-football"];
+  return [...sportMap.values()].sort((a, b) => {
+    const ia = ORDER.indexOf(a.slug), ib = ORDER.indexOf(b.slug);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    if (ia !== -1) return -1;
+    if (ib !== -1) return 1;
+    return b.competitions.reduce((s, c) => s + c.events.length, 0)
+         - a.competitions.reduce((s, c) => s + c.events.length, 0);
+  });
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ sport?: string; filter?: string }>;
+  searchParams: Promise<{ sport?: string; date?: string }>;
 }) {
-  const { sport } = await searchParams;
-  const { events } = await getEvents(sport);
-  const groups = groupByCompetition(events as EventDTO[]);
+  const { sport, date } = await searchParams;
+  const { events, total } = await getEvents(sport, date);
+  const eventsArr = (events ?? []) as EventDTO[];
+
+  const liveEvents = eventsArr.filter(e => e.status === "LIVE");
 
   return (
     <div className="space-y-0">
       {/* Onglets sports */}
       <SportNav activeSport={sport} />
 
-      <div className="space-y-4 pt-4">
-        {/* Bannières promotionnelles */}
-        {!sport && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            {PROMO_BANNERS.map((promo) => (
-              <div
-                key={promo.id}
-                className={`relative overflow-hidden rounded-xl border border-bg-border bg-gradient-to-r ${promo.color} p-3.5 cursor-pointer hover:brightness-110 transition-all`}
-              >
-                <span className="absolute top-2 right-2 text-[10px] font-black px-2 py-0.5 bg-green-600 text-white rounded-full">
-                  {promo.badge}
-                </span>
-                <div className="flex items-start gap-2.5">
-                  <span className="text-2xl mt-0.5">{promo.icon}</span>
-                  <div>
-                    <p className="font-bold text-txt-primary text-sm leading-tight">{promo.title}</p>
-                    <p className="text-xs text-txt-secondary mt-0.5 leading-relaxed">{promo.sub}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+      <div className="space-y-3 pt-3">
+
+        {/* Navigation par date */}
+        <DateTabs activeSport={sport} />
+
+        {/* Compteur */}
+        {eventsArr.length > 0 && (
+          <p className="text-[11px] text-txt-muted">
+            {total ?? eventsArr.length} événement{(total ?? eventsArr.length) > 1 ? "s" : ""}
+            {liveEvents.length > 0 && (
+              <span className="ml-2 text-live font-semibold">
+                · <span className="animate-pulse">●</span> {liveEvents.length} en direct
+              </span>
+            )}
+          </p>
         )}
 
-        {/* Matchs en direct (badge) */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 bg-live rounded-full animate-pulse" />
-            <span className="text-xs font-bold text-live uppercase tracking-wider">En direct</span>
-          </div>
-          <div className="h-px flex-1 bg-bg-border" />
-          <a href="/live" className="text-[11px] text-txt-muted hover:text-green-400 transition-colors">
-            Voir tout ›
-          </a>
-        </div>
-
-        {/* Événements groupés par compétition */}
-        {events.length === 0 ? (
+        {/* Vide */}
+        {eventsArr.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <span className="text-5xl mb-4">⚽</span>
-            <p className="text-txt-primary font-semibold mb-1">Aucun match disponible</p>
-            <p className="text-txt-muted text-sm">
-              Les matchs apparaîtront ici dès que les cotes seront disponibles.
+            <span className="text-5xl mb-4">📅</span>
+            <p className="text-txt-primary font-semibold mb-1">Aucun match pour cette période</p>
+            <p className="text-txt-muted text-sm mb-4">
+              Essayez un autre filtre de date ou revenez plus tard.
+            </p>
+            <Link href="/" className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-500 transition-colors">
+              Voir tous les matchs
+            </Link>
+          </div>
+        ) : sport ? (
+          // ── Vue sport sélectionné : groupé par compétition ───────────────────
+          <CompetitionGroups groups={groupByCompetition(eventsArr)} />
+        ) : (
+          // ── Vue "Tous" : groupé par sport puis compétition ───────────────────
+          <AllSportsView sportGroups={groupBySport(eventsArr)} />
+        )}
+
+        {/* Mention légale */}
+        {eventsArr.length > 0 && (
+          <div className="text-center py-4 border-t border-bg-border">
+            <p className="text-[11px] text-txt-muted">
+              🔞 Paris réservés aux +18 ans · Licence Serenitybet (Tchad) ·{" "}
+              <Link href="/responsible-gaming" className="text-green-500 hover:underline">Jeu responsable</Link>
             </p>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {groups.map((group) => (
-              <div key={group.name} className="overflow-hidden rounded-xl border border-bg-border">
-                {/* En-tête compétition */}
-                <div className="flex items-center gap-2 px-3 py-2 bg-bg-secondary border-b border-bg-border">
-                  <span className="text-sm">{group.icon}</span>
-                  <span className="text-xs font-bold text-txt-primary uppercase tracking-wide">
-                    {group.name}
-                  </span>
-                  {group.country && (
-                    <span className="text-[10px] text-txt-muted">· {group.country}</span>
-                  )}
-                  <span className="ml-auto text-[10px] text-txt-muted">
-                    {group.events.length} match{group.events.length > 1 ? "s" : ""}
-                  </span>
-                </div>
-
-                {/* Liste des matchs */}
-                <div className="divide-y divide-bg-border">
-                  {group.events.map((event) => (
-                    <EventCard key={event.id} event={event} />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
         )}
-
-        {/* Bas de page — mention responsable */}
-        <div className="text-center py-4 border-t border-bg-border">
-          <p className="text-[11px] text-txt-muted">
-            🔞 Paris sportifs réservés aux personnes de 18 ans et plus · Jouez de façon responsable ·{" "}
-            <a href="/responsible-gaming" className="text-green-500 hover:underline">
-              Aide
-            </a>
-          </p>
-        </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Composant : vue "Tous les sports" ───────────────────────────────────────
+
+function AllSportsView({ sportGroups }: { sportGroups: SportGroup[] }) {
+  return (
+    <div className="space-y-4">
+      {sportGroups.map(sg => (
+        <div key={sg.slug}>
+          {/* En-tête sport */}
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-base">{sg.icon}</span>
+            <Link
+              href={`/?sport=${sg.slug}`}
+              className="text-sm font-black text-txt-primary uppercase tracking-wide hover:text-green-400 transition-colors"
+            >
+              {sg.name}
+            </Link>
+            <div className="h-px flex-1 bg-bg-border" />
+            {sg.liveCount > 0 && (
+              <span className="text-[10px] font-bold text-live flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-live animate-pulse inline-block" />
+                {sg.liveCount} live
+              </span>
+            )}
+            <Link
+              href={`/?sport=${sg.slug}`}
+              className="text-[11px] text-txt-muted hover:text-green-400 transition-colors shrink-0"
+            >
+              Tout voir ›
+            </Link>
+          </div>
+
+          {/* Compétitions de ce sport */}
+          <CompetitionGroups groups={sg.competitions} maxPerGroup={5} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Composant : liste de groupes par compétition ────────────────────────────
+
+function CompetitionGroups({
+  groups,
+  maxPerGroup,
+}: {
+  groups: CompGroup[];
+  maxPerGroup?: number;
+}) {
+  return (
+    <div className="space-y-2">
+      {groups.map((group) => {
+        const shown    = maxPerGroup ? group.events.slice(0, maxPerGroup) : group.events;
+        const hidden   = maxPerGroup ? Math.max(0, group.events.length - maxPerGroup) : 0;
+        const liveCount = group.events.filter(e => e.status === "LIVE").length;
+
+        return (
+          <div key={group.compId} className="overflow-hidden rounded-xl border border-bg-border bg-bg-secondary">
+            {/* En-tête compétition */}
+            <div className="flex items-center gap-2 px-3 py-2 bg-bg-card border-b border-bg-border">
+              <span className="text-sm">{group.flag}</span>
+              <span className="text-xs font-bold text-txt-primary uppercase tracking-wide truncate">
+                {group.compName}
+              </span>
+              {group.country && (
+                <span className="text-[10px] text-txt-muted hidden sm:block shrink-0">
+                  · {group.country}
+                </span>
+              )}
+              {liveCount > 0 && (
+                <span className="flex items-center gap-1 text-[10px] font-bold text-live shrink-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-live animate-pulse inline-block" />
+                  {liveCount} live
+                </span>
+              )}
+              <span className="ml-auto text-[10px] text-txt-muted shrink-0">
+                {group.events.length} match{group.events.length > 1 ? "s" : ""}
+              </span>
+            </div>
+
+            {/* Ligne d'entêtes des cotes */}
+            <div className="hidden sm:grid grid-cols-[1fr_auto] items-center px-3 py-1 bg-bg-primary border-b border-bg-border/50">
+              <span className="text-[9px] uppercase tracking-widest text-txt-muted">Match</span>
+              <div className="flex gap-1 mr-12">
+                {["1", "X", "2"].map(l => (
+                  <span key={l} className="text-[9px] uppercase tracking-widest text-txt-muted w-12 text-center">{l}</span>
+                ))}
+              </div>
+            </div>
+
+            {/* Matchs */}
+            <div className="divide-y divide-bg-border">
+              {shown.map((event) => (
+                <EventCard key={event.id} event={event} />
+              ))}
+            </div>
+
+            {/* "Voir plus" si tronqué */}
+            {hidden > 0 && (
+              <Link
+                href={`/?sport=${group.sportSlug}`}
+                className="flex items-center justify-center gap-1 px-3 py-2 text-[11px] text-green-400 hover:text-green-300 hover:bg-green-600/5 transition-colors border-t border-bg-border"
+              >
+                +{hidden} autres matchs · Voir tout {group.compName} ›
+              </Link>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -184,11 +184,26 @@ function getSportLabel(slug: string): string {
   return labels[slug] ?? slug;
 }
 
-export async function getUpcomingEvents(sportSlug?: string, page = 1, limit = 20) {
+export async function getUpcomingEvents(sportSlug?: string, page = 1, limit = 50, dateFilter?: string) {
   const now = new Date();
 
+  // ── Filtre de date ────────────────────────────────────────────────────────────
+  let dateFrom = now;
+  let dateTo: Date | undefined;
+
+  if (dateFilter === "today") {
+    dateFrom = new Date(now); dateFrom.setHours(0, 0, 0, 0);
+    dateTo   = new Date(now); dateTo.setHours(23, 59, 59, 999);
+  } else if (dateFilter === "tomorrow") {
+    dateFrom = new Date(now); dateFrom.setDate(now.getDate() + 1); dateFrom.setHours(0, 0, 0, 0);
+    dateTo   = new Date(dateFrom);                                  dateTo.setHours(23, 59, 59, 999);
+  } else if (dateFilter === "3days") {
+    dateFrom = new Date(now);
+    dateTo   = new Date(now); dateTo.setDate(now.getDate() + 3); dateTo.setHours(23, 59, 59, 999);
+  }
+
   const where = {
-    startTime: { gte: now },
+    startTime: { gte: dateFrom, ...(dateTo ? { lte: dateTo } : {}) },
     status:    { in: ["UPCOMING" as const, "LIVE" as const] },
     ...(sportSlug ? {
       competition: { sport: { slug: sportSlug } },
