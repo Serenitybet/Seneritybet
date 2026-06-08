@@ -58,7 +58,7 @@ export async function syncOddsFromAPI() {
         params: {
           apiKey:      API_KEY,
           regions:     "eu",
-          markets:     "h2h,totals",   // spreads supprimé → économise ~30% de crédits
+          markets:     "h2h,totals,spreads", // 3 marchés — 1 crédit par appel (indépendant du nb marchés)
           oddsFormat:  "decimal",
           dateFormat:  "iso",
         },
@@ -141,14 +141,19 @@ async function upsertEvent(competitionId: string, game: any, sportSlug = "footba
   if (!bookmaker) return;
 
   for (const apiMarket of bookmaker.markets) {
-    const marketType = apiMarket.key === "h2h" ? "MATCH_WINNER" : "OVER_UNDER";
+    const marketType =
+      apiMarket.key === "h2h"     ? "MATCH_WINNER" :
+      apiMarket.key === "spreads" ? "HANDICAP"      : "OVER_UNDER";
+
     const ouLabel = sportSlug === "football"   ? "Plus/Moins de 2.5 buts"
       : sportSlug === "basketball" ? "Plus/Moins de points"
       : sportSlug === "baseball"   ? "Plus/Moins de points"
       : "Plus/Moins";
-    const marketName = apiMarket.key === "h2h"
-      ? `Résultat : ${game.home_team} vs ${game.away_team}`
-      : ouLabel;
+
+    const marketName =
+      apiMarket.key === "h2h"     ? `Résultat : ${game.home_team} vs ${game.away_team}` :
+      apiMarket.key === "spreads" ? "Handicap asiatique" :
+      ouLabel;
 
     let market = await prisma.market.findFirst({ where: { eventId: event.id, type: marketType } });
     if (!market) {
