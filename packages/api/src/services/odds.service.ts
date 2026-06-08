@@ -99,7 +99,7 @@ export async function syncOddsFromAPI() {
 
       // Upsert événements
       for (const game of res.data) {
-        await upsertEvent(competition.id, game);
+        await upsertEvent(competition.id, game, config.slug);
         totalEvents++;
       }
     } catch (err: any) {
@@ -115,7 +115,7 @@ export async function syncOddsFromAPI() {
   if (totalEvents > 0) console.log(`📅 TheOddsAPI: ${totalEvents} événements synchronisés`);
 }
 
-async function upsertEvent(competitionId: string, game: any) {
+async function upsertEvent(competitionId: string, game: any, sportSlug = "football") {
   const event = await prisma.event.upsert({
     where:  { externalId: game.id },
     update: {
@@ -142,9 +142,13 @@ async function upsertEvent(competitionId: string, game: any) {
 
   for (const apiMarket of bookmaker.markets) {
     const marketType = apiMarket.key === "h2h" ? "MATCH_WINNER" : "OVER_UNDER";
+    const ouLabel = sportSlug === "football"   ? "Plus/Moins de 2.5 buts"
+      : sportSlug === "basketball" ? "Plus/Moins de points"
+      : sportSlug === "baseball"   ? "Plus/Moins de points"
+      : "Plus/Moins";
     const marketName = apiMarket.key === "h2h"
       ? `Résultat : ${game.home_team} vs ${game.away_team}`
-      : "Plus/Moins de 2.5 buts";
+      : ouLabel;
 
     let market = await prisma.market.findFirst({ where: { eventId: event.id, type: marketType } });
     if (!market) {
