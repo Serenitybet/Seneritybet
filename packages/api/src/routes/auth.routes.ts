@@ -1,8 +1,26 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
+import axios from "axios";
 import * as authService from "../services/auth.service";
 import { authenticate, AuthRequest } from "../middleware/auth.middleware";
 import { asyncHandler } from "../lib/asyncHandler";
+
+// ─── Vérification hCaptcha ───────────────────────────────────────────────────
+async function verifyCaptcha(token: string): Promise<boolean> {
+  const secret = process.env.HCAPTCHA_SECRET;
+  if (!secret) return true; // Dev : pas de clé secrète → on passe
+  try {
+    const params = new URLSearchParams({ secret, response: token });
+    const { data } = await axios.post<{ success: boolean }>(
+      "https://hcaptcha.com/siteverify",
+      params.toString(),
+      { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+    );
+    return data.success === true;
+  } catch {
+    return false;
+  }
+}
 
 export const authRouter = Router();
 
@@ -19,6 +37,21 @@ const registerSchema = z.object({
 });
 
 authRouter.post("/register", asyncHandler(async (req: Request, res: Response) => {
+  // ── Vérification CAPTCHA ────────────────────────────────────────────────────
+  const captchaToken = req.body.captchaToken as string | undefined;
+  if (process.env.HCAPTCHA_SECRET) {
+    if (!captchaToken) {
+      res.status(400).json({ success: false, error: "Vérification CAPTCHA manquante" });
+      return;
+    }
+    const captchaOk = await verifyCaptcha(captchaToken);
+    if (!captchaOk) {
+      res.status(400).json({ success: false, error: "Vérification CAPTCHA échouée. Réessayez." });
+      return;
+    }
+  }
+
+  // ── Validation données ───────────────────────────────────────────────────────
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ success: false, error: parsed.error.errors[0].message });
@@ -31,9 +64,10 @@ authRouter.post("/register", asyncHandler(async (req: Request, res: Response) =>
 authRouter.post("/login", asyncHandler(async (req: Request, res: Response) => {
   const { email, password } = req.body;
   if (!email || !password) {
-    res.status(400).json({ success: false, error: "Email et mot de passe requis" });
+    res.status(400).json({ success: false, error: "Identifiant et mot de passe requis" });
     return;
   }
+  // Accepte : ID numérique (playerNumber), téléphone ou email
   const result = await authService.login({ email, password });
   res.cookie("refreshToken", result.refreshToken, {
     httpOnly: true,

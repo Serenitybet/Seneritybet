@@ -19,7 +19,8 @@
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.6.0",
     "react-hot-toast": "^2.5.1",
-    "date-fns": "^4.1.0"
+    "date-fns": "^4.1.0",
+    "@hcaptcha/react-hcaptcha": "^1.11.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.5",

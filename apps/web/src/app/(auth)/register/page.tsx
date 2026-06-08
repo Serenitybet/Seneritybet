@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import HCaptcha from "@hcaptcha/react-hcaptcha";
 import { useAuthStore } from "@/store/auth.store";
 import toast from "react-hot-toast";
 
@@ -16,6 +17,9 @@ export default function RegisterPage() {
   const [showPwd, setShowPwd] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captchaRef = useRef<HCaptcha>(null);
+
   const [form, setForm] = useState({
     email: "", phone: "", password: "",
     firstName: "", lastName: "", dateOfBirth: "",
@@ -35,22 +39,34 @@ export default function RegisterPage() {
       toast.error("Les mots de passe ne correspondent pas !");
       return;
     }
+    if (!captchaToken) {
+      toast.error("Veuillez compléter la vérification CAPTCHA");
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, captchaToken }),
       });
       const data = await res.json();
-      if (!res.ok) { toast.error(data.error ?? "Erreur d'inscription"); return; }
+      if (!res.ok) {
+        toast.error(data.error ?? "Erreur d'inscription");
+        // Réinitialiser le captcha en cas d'erreur
+        captchaRef.current?.resetCaptcha();
+        setCaptchaToken(null);
+        return;
+      }
 
       setAuth(data.data.user, data.data.accessToken);
       toast.success("🎉 Compte créé avec succès !");
       router.push("/");
     } catch {
       toast.error("Erreur réseau");
+      captchaRef.current?.resetCaptcha();
+      setCaptchaToken(null);
     } finally {
       setLoading(false);
     }
@@ -296,6 +312,24 @@ export default function RegisterPage() {
                 )}
               </div>
 
+              {/* ─── hCaptcha ─────────────────────────────────────────────── */}
+              <div className="flex flex-col items-center gap-1">
+                <HCaptcha
+                  ref={captchaRef}
+                  sitekey={process.env.NEXT_PUBLIC_HCAPTCHA_SITEKEY!}
+                  onVerify={(token) => setCaptchaToken(token)}
+                  onExpire={() => setCaptchaToken(null)}
+                  theme="dark"
+                  size="normal"
+                />
+                {!captchaToken && (
+                  <p className="text-[11px] text-txt-muted">Cochez la case pour prouver que vous n'êtes pas un robot</p>
+                )}
+                {captchaToken && (
+                  <p className="text-[11px] text-green-400">✓ Vérification réussie</p>
+                )}
+              </div>
+
               <p className="text-xs text-txt-muted bg-bg-card border border-bg-border rounded-lg p-3 leading-relaxed">
                 En vous inscrivant, vous acceptez nos{" "}
                 <a href="/terms" className="text-green-400 hover:underline">CGU</a>{" "}
@@ -314,8 +348,8 @@ export default function RegisterPage() {
                 </button>
                 <button
                   type="submit"
-                  className="btn-green flex-1 py-2.5 text-sm font-bold"
-                  disabled={loading}
+                  className="btn-green flex-1 py-2.5 text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={loading || !captchaToken}
                 >
                   {loading ? (
                     <span className="flex items-center justify-center gap-2">
