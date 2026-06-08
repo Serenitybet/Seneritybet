@@ -2,9 +2,39 @@ import { Router, Request, Response } from "express";
 import { requireRole } from "../../middleware/auth.middleware";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../lib/asyncHandler";
+import { getCreditsStatus } from "../../lib/credits.state";
 
 export const adminReportsRouter = Router();
 adminReportsRouter.use(requireRole("ADMIN", "SUPER_ADMIN", "FINANCE"));
+
+// GET /api/admin/reports/credits — statut crédits TheOddsAPI
+adminReportsRouter.get("/credits", asyncHandler(async (_req: Request, res: Response) => {
+  const credits = getCreditsStatus();
+  const MONTHLY_BUDGET = 100_000;
+  const now   = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysPassed  = now.getDate();
+  const expectedUsed = Math.round((daysPassed / daysInMonth) * MONTHLY_BUDGET * 0.56); // budget cible 56K
+
+  res.json({
+    success: true,
+    data: {
+      remaining:     credits.remaining,
+      used:          credits.used,
+      paused:        credits.paused,
+      lastSync:      credits.lastSync,
+      monthlyBudget: MONTHLY_BUDGET,
+      targetUsage:   56_000,
+      periodStart:   start,
+      expectedUsedSoFar: expectedUsed,
+      status: credits.remaining === null ? "unknown"
+        : credits.remaining < 500  ? "critical"
+        : credits.remaining < 5000 ? "warning"
+        : "ok",
+    },
+  });
+}));
 
 adminReportsRouter.get("/dashboard", asyncHandler(async (_req: Request, res: Response) => {
   const today = new Date();

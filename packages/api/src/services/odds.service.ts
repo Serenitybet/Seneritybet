@@ -1,5 +1,6 @@
 import axios from "axios";
 import { prisma } from "../lib/prisma";
+import { updateCredits } from "../lib/credits.state";
 
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
 const API_KEY = process.env.ODDS_API_KEY;
@@ -49,6 +50,7 @@ export async function syncOddsFromAPI() {
   }
 
   let totalEvents = 0;
+  let creditsUsedThisSync = 0;
 
   for (const config of SPORTS_CONFIG) {
     try {
@@ -56,12 +58,23 @@ export async function syncOddsFromAPI() {
         params: {
           apiKey:      API_KEY,
           regions:     "eu",
-          markets:     "h2h,totals,spreads",
+          markets:     "h2h,totals",   // spreads supprimé → économise ~30% de crédits
           oddsFormat:  "decimal",
           dateFormat:  "iso",
         },
         timeout: 10000,
       });
+
+      // ── Suivi crédits (headers TheOddsAPI) ───────────────────────────────────
+      const remaining = parseInt(res.headers["x-requests-remaining"] ?? "-1", 10);
+      const used      = parseInt(res.headers["x-requests-used"]      ?? "0",  10);
+      if (remaining >= 0) {
+        updateCredits(remaining);
+        creditsUsedThisSync++;
+      }
+      if (used > 0 && creditsUsedThisSync === 1) {
+        console.log(`📊 TheOddsAPI — crédits utilisés: ${used} | restants: ${remaining}`);
+      }
 
       if (!res.data || res.data.length === 0) continue;
 
