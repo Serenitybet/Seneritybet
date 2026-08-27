@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KrcRoulette — Rapports</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <div id="sidebar" class="sidebar"></div>
+    <div class="main">
+      <div class="toolbar">
+        <h1>Rapports</h1>
+        <div style="display:flex; gap:8px">
+          <button class="secondary" id="btn-generate">Générer maintenant</button>
+          <button id="btn-export">Export Excel</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <form id="filter-form" class="grid grid-3">
+          <div class="field">
+            <label>Du</label>
+            <input id="f-from" type="date" style="width:100%">
+          </div>
+          <div class="field">
+            <label>Au</label>
+            <input id="f-to" type="date" style="width:100%">
+          </div>
+          <div class="field" style="align-self:end">
+            <button type="submit" style="width:100%">Filtrer</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <table>
+          <thead><tr><th>Date</th><th>Shop</th><th>Ville</th><th>Misé</th><th>Payé</th><th>Tickets</th><th>RTP</th></tr></thead>
+          <tbody id="reports-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/api.js"></script>
+  <script src="../js/nav.js"></script>
+  <script>
+    KR.requireAuth();
+    renderNav('reports');
+
+    function query() {
+      const from = document.getElementById('f-from').value;
+      const to = document.getElementById('f-to').value;
+      const params = new URLSearchParams();
+      if (from) params.set('from', from);
+      if (to) params.set('to', to);
+      return params.toString();
+    }
+
+    async function load() {
+      const reports = await KR.request('/api/admin/reports?' + query());
+      document.getElementById('reports-body').innerHTML = reports
+        .map(
+          (r) => `
+        <tr>
+          <td>${new Date(r.date).toLocaleDateString('fr-FR')}</td>
+          <td>${r.shop.name}</td>
+          <td>${r.shop.ville?.name || ''}</td>
+          <td>${KR.fmtFcfa(r.totalWagered)}</td>
+          <td>${KR.fmtFcfa(r.totalPaid)}</td>
+          <td>${r.ticketsCount}</td>
+          <td>${r.rtp.toFixed(1)}%</td>
+        </tr>
+      `
+        )
+        .join('');
+    }
+
+    document.getElementById('filter-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      load();
+    });
+
+    document.getElementById('btn-generate').addEventListener('click', async () => {
+      await KR.request('/api/admin/reports/generate', { method: 'POST', body: {} });
+      load();
+    });
+
+    document.getElementById('btn-export').addEventListener('click', async () => {
+      const blob = await KR.request('/api/admin/reports/export?' + query());
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'krcroulette-rapports.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    load();
+  </script>
+</body>
+</html>

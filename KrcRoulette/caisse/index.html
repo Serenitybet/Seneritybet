@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KrcRoulette — Caisse</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+</head>
+<body>
+
+<!-- ─────────────── Écran de connexion ─────────────── -->
+<div class="login-page" id="login-screen">
+  <div class="card login-card">
+    <div class="brand">KrcRoulette — Caisse</div>
+    <form id="login-form">
+      <div class="field">
+        <label>Nom d'utilisateur</label>
+        <input id="username" required style="width:100%">
+      </div>
+      <div class="field">
+        <label>Mot de passe</label>
+        <input id="password" type="password" required style="width:100%">
+      </div>
+      <div class="field">
+        <label>Serveur (grand serveur central)</label>
+        <input id="api-base" style="width:100%">
+      </div>
+      <button type="submit" class="primary">Se connecter</button>
+      <div class="error-msg" id="login-error"></div>
+    </form>
+  </div>
+</div>
+
+<!-- ─────────────── App principale ─────────────── -->
+<div class="hidden" id="app-screen">
+  <div class="topbar">
+    <div class="brand">KrcRoulette — <span id="shop-name"></span></div>
+    <div class="logout" id="btn-logout">Déconnexion</div>
+  </div>
+
+  <div class="container">
+    <div class="tabs">
+      <button class="active" data-tab="bet">Nouvelle mise</button>
+      <button data-tab="validate">Valider un ticket</button>
+    </div>
+
+    <!-- Onglet: nouvelle mise -->
+    <div id="tab-bet">
+      <div class="card">
+        <h2>Mises du ticket</h2>
+        <div id="bets-list"></div>
+        <button type="button" class="secondary" id="btn-add-bet" style="width:100%; margin-top:8px">+ Ajouter une mise</button>
+        <div class="total-row">
+          <span>Total misé</span>
+          <span id="total-stake">0 FCFA</span>
+        </div>
+        <div class="error-msg" id="bet-error"></div>
+        <button class="primary" id="btn-submit-ticket">Enregistrer & imprimer le ticket</button>
+      </div>
+    </div>
+
+    <!-- Onglet: validation -->
+    <div id="tab-validate" class="hidden">
+      <div class="card">
+        <h2>Scanner un QR code</h2>
+        <video id="scanner-video" class="hidden" playsinline></video>
+        <canvas id="scanner-canvas" class="hidden"></canvas>
+        <button class="secondary" id="btn-toggle-scan" style="width:100%; margin-top:8px">Activer la caméra</button>
+      </div>
+      <div class="card">
+        <h2>Ou saisir le code du ticket</h2>
+        <div class="field">
+          <input id="manual-code" placeholder="TK-20260827-0842" style="width:100%">
+        </div>
+        <button class="secondary" id="btn-lookup" style="width:100%">Rechercher</button>
+      </div>
+      <div class="card hidden" id="ticket-result-card">
+        <h2>Ticket <span id="rt-code"></span></h2>
+        <p>Statut: <span class="status-badge" id="rt-status"></span></p>
+        <p>Total misé: <span id="rt-stake"></span></p>
+        <p>Total gain: <span id="rt-payout"></span></p>
+        <button class="primary hidden" id="btn-pay">Payer ce ticket</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─────────────── Zone d'impression (ticket physique) ─────────────── -->
+<div id="print-area" class="hidden"></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

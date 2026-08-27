@@ -1,0 +1,310 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Utilisateurs & hiérarchie
+// ─────────────────────────────────────────────────────────────
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN_VILLE
+  CAISSIER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  role         Role
+  isActive     Boolean  @default(true)
+
+  // ADMIN_VILLE: ville qu'il gère. CAISSIER: shop auquel il est rattaché.
+  villeId String?
+  ville   Ville?  @relation(fields: [villeId], references: [id])
+
+  shopId String?
+  shop   Shop?   @relation(fields: [shopId], references: [id])
+
+  // Permissions case à cocher pour ADMIN_VILLE, ex: {"canManageShops":true,"canManageUsers":false,...}
+  permissions Json @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdTickets      Ticket[]           @relation("TicketCreatedBy")
+  creditTransactions  CreditTransaction[] @relation("CreditPerformedBy")
+
+  @@index([villeId])
+  @@index([shopId])
+}
+
+model Ville {
+  id            String @id @default(cuid())
+  name          String @unique
+  creditBalance Int    @default(0)
+
+  shops              Shop[]
+  users              User[]
+  creditTransactions CreditTransaction[]
+
+  createdAt DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────
+// Shops
+// ─────────────────────────────────────────────────────────────
+
+model Shop {
+  id      String @id @default(cuid())
+  name    String
+  villeId String
+  ville   Ville  @relation(fields: [villeId], references: [id])
+
+  workCode String @unique
+
+  // Crédit en FCFA entier (pas de décimales)
+  creditBalance         Int @default(0)
+  creditAlertThreshold  Int @default(5000)
+
+  // Roulette
+  roundTimerSeconds Int @default(30)
+
+  // Mode bonus RTP
+  bonusModeActive   Boolean   @default(false)
+  bonusModeExpiresAt DateTime?
+
+  isActive Boolean @default(true)
+
+  users               User[]
+  creditTransactions  CreditTransaction[]
+  shopGames           ShopGame[]
+  rounds              RouletteRound[]
+  tickets             Ticket[]
+  rtpDailyStats       RtpDailyStat[]
+  dailyReports        DailyReport[]
+  rtpConfigOverride   RtpConfig?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([villeId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Crédit (cascade)
+// ─────────────────────────────────────────────────────────────
+
+enum CreditTransactionType {
+  SUPER_TO_VILLE
+  VILLE_TO_SHOP
+  SHOP_DEBIT_BET
+  SHOP_CREDIT_PAYOUT
+}
+
+model CreditTransaction {
+  id     String                @id @default(cuid())
+  type   CreditTransactionType
+
+  villeId String?
+  ville   Ville?  @relation(fields: [villeId], references: [id])
+
+  shopId String?
+  shop   Shop?   @relation(fields: [shopId], references: [id])
+
+  amount       Int
+  balanceAfter Int
+  note         String?
+
+  performedByUserId String?
+  performedByUser   User?   @relation("CreditPerformedBy", fields: [performedByUserId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([villeId])
+  @@index([shopId])
+  @@index([createdAt])
+}
+
+// Crédit global détenu par le Super Admin (source de la cascade)
+model SuperAdminCredit {
+  id      String @id @default("singleton")
+  balance Int    @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────
+// Jeux
+// ─────────────────────────────────────────────────────────────
+
+model Game {
+  id             String  @id @default(cuid())
+  key            String  @unique // "roulette", "blackjack", "crash"...
+  name           String
+  isGlobalActive Boolean @default(true)
+
+  shopGames ShopGame[]
+
+  createdAt DateTime @default(now())
+}
+
+model ShopGame {
+  shopId String
+  shop   Shop   @relation(fields: [shopId], references: [id])
+
+  gameId String
+  game   Game   @relation(fields: [gameId], references: [id])
+
+  isActive Boolean @default(true)
+
+  @@id([shopId, gameId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Roulette
+// ─────────────────────────────────────────────────────────────
+
+enum RoundStatus {
+  OPEN
+  CLOSED
+  SETTLED
+}
+
+model RouletteRound {
+  id          String      @id @default(cuid())
+  shopId      String
+  shop        Shop        @relation(fields: [shopId], references: [id])
+  roundNumber Int
+  status      RoundStatus @default(OPEN)
+
+  openedAt  DateTime  @default(now())
+  closesAt  DateTime
+  settledAt DateTime?
+
+  winningNumber Int?
+  winningColor  String?
+
+  tickets Ticket[]
+
+  @@index([shopId, status])
+  @@index([shopId, roundNumber])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Tickets
+// ─────────────────────────────────────────────────────────────
+
+enum TicketStatus {
+  PENDING
+  WON
+  LOST
+  PAID
+  EXPIRED
+}
+
+model Ticket {
+  id         String       @id @default(cuid())
+  ticketCode String       @unique
+
+  shopId String
+  shop   Shop   @relation(fields: [shopId], references: [id])
+
+  roundId String?
+  round   RouletteRound? @relation(fields: [roundId], references: [id])
+
+  status      TicketStatus @default(PENDING)
+  totalStake  Int
+  totalPayout Int          @default(0)
+
+  createdByUserId String
+  createdByUser   User   @relation("TicketCreatedBy", fields: [createdByUserId], references: [id])
+
+  bets TicketBet[]
+
+  createdAt   DateTime  @default(now())
+  validatedAt DateTime?
+  paidAt      DateTime?
+
+  @@index([shopId, status])
+  @@index([roundId])
+}
+
+enum BetType {
+  NUMBER
+  COLOR
+  PARITY
+  DOZEN
+}
+
+model TicketBet {
+  id       String  @id @default(cuid())
+  ticketId String
+  ticket   Ticket  @relation(fields: [ticketId], references: [id])
+
+  betType           BetType
+  betValue          String // "7", "rouge", "pair", "1-12"...
+  stake             Int
+  payoutMultiplier  Float
+  isWinner          Boolean @default(false)
+  payoutAmount      Int     @default(0)
+
+  @@index([ticketId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// RTP
+// ─────────────────────────────────────────────────────────────
+
+model RtpConfig {
+  id String @id @default("global")
+
+  targetRtp   Float @default(85)
+  bonusRtp    Float @default(90)
+  alertYellow Float @default(88)
+  alertRed    Float @default(92)
+
+  // Override optionnel pour un shop précis (sinon null = config globale)
+  shopId String? @unique
+  shop   Shop?   @relation(fields: [shopId], references: [id])
+
+  updatedAt DateTime @updatedAt
+}
+
+model RtpDailyStat {
+  id     String @id @default(cuid())
+  shopId String
+  shop   Shop   @relation(fields: [shopId], references: [id])
+
+  date         DateTime // jour tronqué à minuit
+  totalWagered Int      @default(0)
+  totalPaid    Int      @default(0)
+
+  @@unique([shopId, date])
+  @@index([shopId, date])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Rapports
+// ─────────────────────────────────────────────────────────────
+
+model DailyReport {
+  id     String @id @default(cuid())
+  shopId String
+  shop   Shop   @relation(fields: [shopId], references: [id])
+
+  date         DateTime
+  totalWagered Int
+  totalPaid    Int
+  ticketsCount Int
+  rtp          Float
+
+  generatedAt DateTime @default(now())
+
+  @@unique([shopId, date])
+  @@index([shopId, date])
+}

@@ -1,0 +1,92 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #0b0b0f;
+  --bg-panel: #16161d;
+  --bg-panel-2: #1e1e28;
+  --border: #2a2a36;
+  --text: #e9e9ee;
+  --text-muted: #9a9aa8;
+  --accent: #f5c518;
+  --red: #e5484d;
+  --green: #3fb950;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  min-height: 100vh;
+}
+
+h1, h2, h3 { font-family: 'Syne', sans-serif; font-weight: 700; margin: 0 0 0.5em; }
+
+.topbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 24px; border-bottom: 1px solid var(--border); background: var(--bg-panel);
+}
+.topbar .brand { font-family:'Syne',sans-serif; font-weight:800; color: var(--accent); }
+.topbar .logout { color: var(--red); cursor: pointer; font-size: 0.85rem; }
+
+.container { max-width: 720px; margin: 0 auto; padding: 24px; }
+
+.tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+.tabs button {
+  flex: 1; padding: 12px; background: var(--bg-panel-2); border: 1px solid var(--border);
+  color: var(--text-muted); border-radius: 8px; cursor: pointer; font-family:'DM Mono',monospace;
+}
+.tabs button.active { background: var(--accent); color: #1a1a12; border-color: var(--accent); }
+
+.card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+
+input, select, button {
+  font-family: 'DM Mono', monospace; font-size: 0.95rem; background: var(--bg-panel-2);
+  border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 12px;
+}
+input:focus, select:focus { outline: none; border-color: var(--accent); }
+label { display: block; margin-bottom: 6px; color: var(--text-muted); font-size: 0.85rem; }
+.field { margin-bottom: 14px; }
+
+button.primary { background: var(--accent); color: #1a1a12; font-weight: 600; border: none; cursor: pointer; width: 100%; }
+button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); cursor: pointer; }
+
+.bet-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+.bet-row select, .bet-row input { flex: 1; }
+.bet-row .remove { flex: 0 0 auto; background: transparent; border: none; color: var(--red); cursor: pointer; font-size: 1.2rem; }
+
+.total-row { display: flex; justify-content: space-between; font-family:'Syne',sans-serif; font-weight: 700; font-size: 1.2rem; margin: 16px 0; }
+
+.login-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.login-card { width: 360px; padding: 28px; }
+.login-card .brand { text-align: center; font-family:'Syne',sans-serif; font-weight:800; font-size:1.6rem; color: var(--accent); margin-bottom: 20px; }
+.error-msg { color: var(--red); font-size: 0.85rem; margin-top: 8px; min-height: 1.2em; }
+
+/* Ticket imprimable — gabarit thermique 80mm */
+.ticket {
+  width: 280px; background: white; color: #111; padding: 16px; font-family: 'DM Mono', monospace;
+  margin: 0 auto; font-size: 12px;
+}
+.ticket .shop { font-weight: bold; text-align: center; font-size: 14px; }
+.ticket hr { border: none; border-top: 1px dashed #999; margin: 8px 0; }
+.ticket .line { display: flex; justify-content: space-between; }
+.ticket .qr { display: flex; justify-content: center; margin: 10px 0; }
+.ticket .code { text-align: center; font-size: 10px; margin-top: 4px; }
+
+.hidden { display: none !important; }
+
+.status-badge { display:inline-block; padding: 4px 12px; border-radius: 999px; font-size: 0.8rem; }
+.status-badge.WON, .status-badge.PAID { background: rgba(63,185,80,0.15); color: var(--green); }
+.status-badge.LOST, .status-badge.EXPIRED { background: rgba(229,72,77,0.15); color: var(--red); }
+.status-badge.PENDING { background: rgba(245,197,24,0.15); color: var(--accent); }
+
+video#scanner-video { width: 100%; border-radius: 8px; border: 1px solid var(--border); }
+
+@media print {
+  body * { visibility: hidden; }
+  #print-area, #print-area * { visibility: visible; }
+  #print-area { position: absolute; top: 0; left: 0; }
+}

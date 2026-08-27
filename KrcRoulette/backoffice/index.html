@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KrcRoulette — Connexion</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="login-page">
+  <div class="card login-card">
+    <div class="brand">KrcRoulette</div>
+    <form id="login-form">
+      <div class="field">
+        <label for="username">Nom d'utilisateur</label>
+        <input id="username" name="username" autocomplete="username" required style="width:100%">
+      </div>
+      <div class="field">
+        <label for="password">Mot de passe</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required style="width:100%">
+      </div>
+      <div class="field">
+        <label for="api-base">Serveur (grand serveur central)</label>
+        <input id="api-base" name="api-base" style="width:100%">
+      </div>
+      <button type="submit" style="width:100%">Se connecter</button>
+      <div class="error-msg" id="error-msg"></div>
+    </form>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script>
+    document.getElementById('api-base').value = KR.getApiBase();
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorEl = document.getElementById('error-msg');
+      errorEl.textContent = '';
+
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const apiBase = document.getElementById('api-base').value.trim();
+      if (apiBase) KR.setApiBase(apiBase);
+
+      try {
+        const { token, user } = await KR.request('/api/auth/login', {
+          method: 'POST',
+          body: { username, password },
+        });
+        KR.setToken(token);
+        KR.setUser(user);
+        window.location.href = 'pages/dashboard.html';
+      } catch (err) {
+        errorEl.textContent = err.message || 'Échec de la connexion';
+      }
+    });
+  </script>
+</body>
+</html>

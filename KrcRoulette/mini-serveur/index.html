@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KrcRoulette — Écran</title>
+<script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #0b0b0f;
+    --accent: #f5c518;
+    --red: #e5484d;
+    --black-num: #1a1a24;
+    --text: #e9e9ee;
+    --text-muted: #8a8a98;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: 'DM Mono', monospace; overflow: hidden;
+  }
+  .screen { height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
+  .shop-name { font-family:'Syne',sans-serif; font-weight:800; font-size: 2rem; color: var(--accent); }
+  .round-label { color: var(--text-muted); font-size: 1.1rem; letter-spacing: 0.1em; text-transform: uppercase; }
+  .timer { font-family:'Syne',sans-serif; font-weight:800; font-size: 8rem; line-height:1; }
+  .timer.closing { color: var(--red); }
+  .result-wheel {
+    width: 220px; height: 220px; border-radius: 50%;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Syne',sans-serif; font-weight:800; font-size: 5rem;
+    border: 8px solid var(--accent); transition: transform 0.6s ease;
+  }
+  .result-wheel.spinning { animation: spin 0.9s linear infinite; }
+  @keyframes spin { from { transform: rotate(0deg);} to { transform: rotate(360deg);} }
+  .color-vert { background: #0e6b3a; }
+  .color-rouge { background: #7a1b1f; }
+  .color-noir { background: var(--black-num); }
+  .setup { max-width: 420px; width: 90%; text-align:center; }
+  .setup input {
+    width: 100%; padding: 14px; margin-top: 12px; font-family:'DM Mono',monospace;
+    background:#16161d; border:1px solid #2a2a36; color:var(--text); border-radius:8px; font-size:1.1rem; text-align:center; letter-spacing:0.15em;
+  }
+  .setup button {
+    margin-top:16px; width:100%; padding:14px; background:var(--accent); color:#1a1a12; border:none;
+    border-radius:8px; font-weight:600; cursor:pointer; font-family:'DM Mono',monospace;
+  }
+  .setup .error { color: var(--red); margin-top:10px; min-height:1.2em; }
+  .status-dot { position:fixed; top:16px; right:16px; width:10px; height:10px; border-radius:50%; background:var(--red); }
+  .status-dot.online { background:#3fb950; }
+</style>
+</head>
+<body>
+  <div class="status-dot" id="status-dot"></div>
+
+  <div class="screen hidden" id="setup-screen">
+    <div class="setup">
+      <div class="shop-name">KrcRoulette</div>
+      <p style="color:var(--text-muted)">Entrez le code de travail du shop et l'adresse du serveur central.</p>
+      <input id="work-code" placeholder="CODE DE TRAVAIL" autocapitalize="characters">
+      <input id="server-url" placeholder="http://localhost:4100">
+      <button id="btn-connect">Connecter l'écran</button>
+      <div class="error" id="setup-error"></div>
+    </div>
+  </div>
+
+  <div class="screen hidden" id="main-screen">
+    <div class="shop-name" id="shop-name"></div>
+    <div class="round-label" id="round-label">En attente...</div>
+    <div id="display-area">
+      <div class="timer" id="timer">--</div>
+    </div>
+  </div>
+
+  <script src="src/app.js"></script>
+</body>
+</html>

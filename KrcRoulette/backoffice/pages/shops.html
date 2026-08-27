@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KrcRoulette — Shops</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <div id="sidebar" class="sidebar"></div>
+    <div class="main">
+      <div class="toolbar">
+        <h1>Shops</h1>
+        <button id="btn-new-shop">+ Nouveau shop</button>
+      </div>
+
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th>Nom</th><th>Ville</th><th>Code de travail</th><th>Crédit</th><th>Timer (s)</th><th>Statut</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="shops-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="modal">
+    <div class="modal">
+      <h2>Nouveau shop</h2>
+      <form id="shop-form">
+        <div class="field">
+          <label>Nom du shop</label>
+          <input id="shop-name" required style="width:100%">
+        </div>
+        <div class="field" id="ville-select-field">
+          <label>Ville</label>
+          <select id="shop-ville" style="width:100%"></select>
+        </div>
+        <div class="field">
+          <label>Timer roulette (secondes)</label>
+          <input id="shop-timer" type="number" value="30" min="5" style="width:100%">
+        </div>
+        <div class="field">
+          <label>Seuil d'alerte crédit (FCFA)</label>
+          <input id="shop-threshold" type="number" value="5000" min="0" style="width:100%">
+        </div>
+        <div class="error-msg" id="shop-error"></div>
+        <div style="display:flex; gap:8px; justify-content:flex-end">
+          <button type="button" class="secondary" id="btn-cancel">Annuler</button>
+          <button type="submit">Créer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="../js/api.js"></script>
+  <script src="../js/nav.js"></script>
+  <script>
+    KR.requireAuth();
+    renderNav('shops');
+    const user = KR.getUser();
+
+    const modal = document.getElementById('modal');
+    document.getElementById('btn-new-shop').addEventListener('click', async () => {
+      if (user.role === 'SUPER_ADMIN') {
+        const villes = await KR.request('/api/admin/villes');
+        document.getElementById('shop-ville').innerHTML = villes.map((v) => `<option value="${v.id}">${v.name}</option>`).join('');
+      } else {
+        document.getElementById('ville-select-field').classList.add('hidden');
+      }
+      modal.classList.remove('hidden');
+    });
+    document.getElementById('btn-cancel').addEventListener('click', () => modal.classList.add('hidden'));
+
+    function statusBadge(shop) {
+      if (!shop.isActive) return '<span class="badge muted">Inactif</span>';
+      if (shop.creditBalance < shop.creditAlertThreshold) return '<span class="badge red">Crédit bas</span>';
+      return '<span class="badge green">Actif</span>';
+    }
+
+    async function load() {
+      const shops = await KR.request('/api/admin/shops');
+      document.getElementById('shops-body').innerHTML = shops
+        .map(
+          (s) => `
+        <tr>
+          <td>${s.name}</td>
+          <td>${s.ville?.name ?? ''}</td>
+          <td><code>${s.workCode}</code></td>
+          <td>${KR.fmtFcfa(s.creditBalance)}</td>
+          <td>${s.roundTimerSeconds}</td>
+          <td>${statusBadge(s)}</td>
+          <td>
+            <button class="secondary" data-regen="${s.id}">Régénérer code</button>
+            ${
+              s.bonusModeActive
+                ? `<button class="secondary" data-bonus-off="${s.id}">Désactiver bonus</button>`
+                : `<button class="secondary" data-bonus-on="${s.id}">Mode bonus 7j</button>`
+            }
+          </td>
+        </tr>
+      `
+        )
+        .join('');
+
+      document.querySelectorAll('[data-regen]').forEach((btn) =>
+        btn.addEventListener('click', async () => {
+          await KR.request(`/api/admin/shops/${btn.dataset.regen}/regenerate-code`, { method: 'POST' });
+          load();
+        })
+      );
+      document.querySelectorAll('[data-bonus-on]').forEach((btn) =>
+        btn.addEventListener('click', async () => {
+          await KR.request(`/api/admin/shops/${btn.dataset.bonusOn}/bonus-mode`, {
+            method: 'POST',
+            body: { durationDays: 7 },
+          });
+          load();
+        })
+      );
+      document.querySelectorAll('[data-bonus-off]').forEach((btn) =>
+        btn.addEventListener('click', async () => {
+          await KR.request(`/api/admin/shops/${btn.dataset.bonusOff}/bonus-mode`, { method: 'DELETE' });
+          load();
+        })
+      );
+    }
+
+    document.getElementById('shop-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorEl = document.getElementById('shop-error');
+      errorEl.textContent = '';
+      try {
+        await KR.request('/api/admin/shops', {
+          method: 'POST',
+          body: {
+            name: document.getElementById('shop-name').value.trim(),
+            villeId: user.role === 'SUPER_ADMIN' ? document.getElementById('shop-ville').value : undefined,
+            roundTimerSeconds: parseInt(document.getElementById('shop-timer').value, 10),
+            creditAlertThreshold: parseInt(document.getElementById('shop-threshold').value, 10),
+          },
+        });
+        modal.classList.add('hidden');
+        document.getElementById('shop-form').reset();
+        load();
+      } catch (err) {
+        errorEl.textContent = err.message;
+      }
+    });
+
+    load();
+  </script>
+</body>
+</html>

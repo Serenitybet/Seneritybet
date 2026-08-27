@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KrcRoulette — Jeux</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <div id="sidebar" class="sidebar"></div>
+    <div class="main">
+      <h1>Jeux</h1>
+      <p style="color:var(--text-muted)">Activez ou désactivez les jeux disponibles pour chaque shop.</p>
+
+      <div class="card">
+        <table>
+          <thead id="games-head"></thead>
+          <tbody id="games-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/api.js"></script>
+  <script src="../js/nav.js"></script>
+  <script>
+    KR.requireAuth();
+    renderNav('games');
+
+    async function load() {
+      const [games, shops] = await Promise.all([
+        KR.request('/api/admin/games'),
+        KR.request('/api/admin/shops'),
+      ]);
+
+      document.getElementById('games-head').innerHTML = `
+        <tr><th>Shop</th>${games.map((g) => `<th>${g.name}</th>`).join('')}</tr>
+      `;
+
+      const rows = await Promise.all(
+        shops.map(async (shop) => {
+          const detail = await KR.request(`/api/admin/shops/${shop.id}`);
+          const activeMap = {};
+          (detail.shopGames || []).forEach((sg) => (activeMap[sg.gameId] = sg.isActive));
+
+          const cells = games
+            .map((g) => {
+              const isActive = activeMap[g.id] !== undefined ? activeMap[g.id] : true;
+              return `<td><input type="checkbox" data-shop="${shop.id}" data-game="${g.id}" ${isActive ? 'checked' : ''}></td>`;
+            })
+            .join('');
+          return `<tr><td>${shop.name}</td>${cells}</tr>`;
+        })
+      );
+
+      document.getElementById('games-body').innerHTML = rows.join('');
+
+      document.querySelectorAll('input[type=checkbox][data-shop]').forEach((cb) =>
+        cb.addEventListener('change', async () => {
+          await KR.request(`/api/admin/games/shop/${cb.dataset.shop}/${cb.dataset.game}`, {
+            method: 'PATCH',
+            body: { isActive: cb.checked },
+          });
+        })
+      );
+    }
+
+    load();
+  </script>
+</body>
+</html>

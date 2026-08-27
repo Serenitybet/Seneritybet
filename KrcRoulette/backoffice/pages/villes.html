@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KrcRoulette — Villes</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <div id="sidebar" class="sidebar"></div>
+    <div class="main">
+      <div class="toolbar">
+        <h1>Villes</h1>
+        <button id="btn-new-ville">+ Nouvelle ville</button>
+      </div>
+
+      <div class="card">
+        <table>
+          <thead><tr><th>Nom</th><th>Shops</th><th>Crédit disponible</th></tr></thead>
+          <tbody id="villes-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="modal">
+    <div class="modal">
+      <h2>Nouvelle ville</h2>
+      <form id="ville-form">
+        <div class="field">
+          <label>Nom de la ville</label>
+          <input id="ville-name" required style="width:100%">
+        </div>
+        <div class="error-msg" id="ville-error"></div>
+        <div style="display:flex; gap:8px; justify-content:flex-end">
+          <button type="button" class="secondary" id="btn-cancel">Annuler</button>
+          <button type="submit">Créer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="../js/api.js"></script>
+  <script src="../js/nav.js"></script>
+  <script>
+    KR.requireAuth();
+    renderNav('villes');
+
+    const modal = document.getElementById('modal');
+    document.getElementById('btn-new-ville').addEventListener('click', () => modal.classList.remove('hidden'));
+    document.getElementById('btn-cancel').addEventListener('click', () => modal.classList.add('hidden'));
+
+    async function load() {
+      const villes = await KR.request('/api/admin/villes');
+      document.getElementById('villes-body').innerHTML = villes
+        .map(
+          (v) => `
+        <tr>
+          <td>${v.name}</td>
+          <td>${v._count?.shops ?? 0}</td>
+          <td>${KR.fmtFcfa(v.creditBalance)}</td>
+        </tr>
+      `
+        )
+        .join('');
+    }
+
+    document.getElementById('ville-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorEl = document.getElementById('ville-error');
+      errorEl.textContent = '';
+      try {
+        await KR.request('/api/admin/villes', {
+          method: 'POST',
+          body: { name: document.getElementById('ville-name').value.trim() },
+        });
+        modal.classList.add('hidden');
+        document.getElementById('ville-form').reset();
+        load();
+      } catch (err) {
+        errorEl.textContent = err.message;
+      }
+    });
+
+    load();
+  </script>
+</body>
+</html>

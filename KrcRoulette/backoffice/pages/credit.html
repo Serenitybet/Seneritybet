@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KrcRoulette — Crédit</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <div id="sidebar" class="sidebar"></div>
+    <div class="main">
+      <h1>Crédit</h1>
+
+      <div class="grid grid-2">
+        <div class="card" id="super-balance-card">
+          <h2>Crédit Super Admin</h2>
+          <div class="stat" id="super-balance">—</div>
+          <div class="field" style="margin-top:16px">
+            <label>Ajuster le solde source</label>
+            <div style="display:flex; gap:8px">
+              <input id="super-balance-input" type="number" min="0" style="flex:1">
+              <button id="btn-set-balance">Définir</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Recharger</h2>
+          <form id="recharge-form">
+            <div class="field hidden" id="ville-field">
+              <label>Ville</label>
+              <select id="r-ville" style="width:100%"></select>
+            </div>
+            <div class="field hidden" id="shop-field">
+              <label>Shop</label>
+              <select id="r-shop" style="width:100%"></select>
+            </div>
+            <div class="field">
+              <label>Montant (FCFA)</label>
+              <input id="r-amount" type="number" min="1" required style="width:100%">
+            </div>
+            <div class="field">
+              <label>Note (optionnel)</label>
+              <input id="r-note" style="width:100%">
+            </div>
+            <div class="error-msg" id="recharge-error"></div>
+            <button type="submit" style="width:100%">Recharger</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Historique</h2>
+        <table>
+          <thead><tr><th>Date</th><th>Type</th><th>Cible</th><th>Montant</th><th>Solde après</th><th>Par</th></tr></thead>
+          <tbody id="history-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/api.js"></script>
+  <script src="../js/nav.js"></script>
+  <script>
+    KR.requireAuth();
+    renderNav('credit');
+    const user = KR.getUser();
+
+    if (user.role !== 'SUPER_ADMIN') {
+      document.getElementById('super-balance-card').classList.add('hidden');
+      document.getElementById('shop-field').classList.remove('hidden');
+    } else {
+      document.getElementById('ville-field').classList.remove('hidden');
+    }
+
+    const typeLabels = {
+      SUPER_TO_VILLE: 'Super → Ville',
+      VILLE_TO_SHOP: 'Ville → Shop',
+      SHOP_DEBIT_BET: 'Débit mise',
+      SHOP_CREDIT_PAYOUT: 'Paiement gain',
+    };
+
+    async function loadSuperBalance() {
+      if (user.role !== 'SUPER_ADMIN') return;
+      const res = await KR.request('/api/admin/credit/super-balance');
+      document.getElementById('super-balance').textContent = KR.fmtFcfa(res.balance);
+    }
+
+    async function loadOptions() {
+      if (user.role === 'SUPER_ADMIN') {
+        const villes = await KR.request('/api/admin/villes');
+        document.getElementById('r-ville').innerHTML = villes.map((v) => `<option value="${v.id}">${v.name}</option>`).join('');
+      } else {
+        const shops = await KR.request('/api/admin/shops');
+        document.getElementById('r-shop').innerHTML = shops.map((s) => `<option value="${s.id}">${s.name}</option>`).join('');
+      }
+    }
+
+    async function loadHistory() {
+      const history = await KR.request('/api/admin/credit/history');
+      document.getElementById('history-body').innerHTML = history
+        .map(
+          (h) => `
+        <tr>
+          <td>${KR.fmtDate(h.createdAt)}</td>
+          <td>${typeLabels[h.type] || h.type}</td>
+          <td>${h.shop?.name || h.ville?.name || '—'}</td>
+          <td>${KR.fmtFcfa(h.amount)}</td>
+          <td>${KR.fmtFcfa(h.balanceAfter)}</td>
+          <td>${h.performedByUser?.username || '—'}</td>
+        </tr>
+      `
+        )
+        .join('');
+    }
+
+    document.getElementById('btn-set-balance')?.addEventListener('click', async () => {
+      const value = parseInt(document.getElementById('super-balance-input').value, 10);
+      if (Number.isNaN(value)) return;
+      await KR.request('/api/admin/credit/super-balance', { method: 'PATCH', body: { balance: value } });
+      loadSuperBalance();
+    });
+
+    document.getElementById('recharge-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorEl = document.getElementById('recharge-error');
+      errorEl.textContent = '';
+      try {
+        await KR.request('/api/admin/credit/recharge', {
+          method: 'POST',
+          body: {
+            villeId: user.role === 'SUPER_ADMIN' ? document.getElementById('r-ville').value : undefined,
+            shopId: user.role !== 'SUPER_ADMIN' ? document.getElementById('r-shop').value : undefined,
+            amount: parseInt(document.getElementById('r-amount').value, 10),
+            note: document.getElementById('r-note').value.trim() || undefined,
+          },
+        });
+        document.getElementById('recharge-form').reset();
+        loadSuperBalance();
+        loadHistory();
+      } catch (err) {
+        errorEl.textContent = err.message;
+      }
+    });
+
+    loadSuperBalance();
+    loadOptions();
+    loadHistory();
+  </script>
+</body>
+</html>

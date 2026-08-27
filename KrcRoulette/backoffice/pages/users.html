@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KrcRoulette — Utilisateurs</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <div id="sidebar" class="sidebar"></div>
+    <div class="main">
+      <div class="toolbar">
+        <h1>Utilisateurs</h1>
+        <button id="btn-new-user">+ Nouvel utilisateur</button>
+      </div>
+
+      <div class="card">
+        <table>
+          <thead><tr><th>Utilisateur</th><th>Rôle</th><th>Ville / Shop</th><th>Statut</th><th></th></tr></thead>
+          <tbody id="users-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop hidden" id="modal">
+    <div class="modal">
+      <h2>Nouvel utilisateur</h2>
+      <form id="user-form">
+        <div class="field">
+          <label>Nom d'utilisateur</label>
+          <input id="u-username" required style="width:100%">
+        </div>
+        <div class="field">
+          <label>Mot de passe</label>
+          <input id="u-password" type="password" required style="width:100%">
+        </div>
+        <div class="field" id="role-field">
+          <label>Rôle</label>
+          <select id="u-role" style="width:100%">
+            <option value="CAISSIER">Caissier</option>
+            <option value="ADMIN_VILLE">Admin Ville</option>
+          </select>
+        </div>
+        <div class="field hidden" id="ville-field">
+          <label>Ville</label>
+          <select id="u-ville" style="width:100%"></select>
+        </div>
+        <div class="field" id="shop-field">
+          <label>Shop</label>
+          <select id="u-shop" style="width:100%"></select>
+        </div>
+        <div class="field hidden" id="perms-field">
+          <label>Permissions Admin Ville</label>
+          <div class="checkbox-row"><input type="checkbox" id="perm-shops"> <label for="perm-shops" style="margin:0">Gérer les shops</label></div>
+          <div class="checkbox-row"><input type="checkbox" id="perm-users"> <label for="perm-users" style="margin:0">Gérer les utilisateurs (caissiers)</label></div>
+          <div class="checkbox-row"><input type="checkbox" id="perm-credit"> <label for="perm-credit" style="margin:0">Recharger les shops</label></div>
+          <div class="checkbox-row"><input type="checkbox" id="perm-games"> <label for="perm-games" style="margin:0">Gérer les jeux</label></div>
+        </div>
+        <div class="error-msg" id="user-error"></div>
+        <div style="display:flex; gap:8px; justify-content:flex-end">
+          <button type="button" class="secondary" id="btn-cancel">Annuler</button>
+          <button type="submit">Créer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="../js/api.js"></script>
+  <script src="../js/nav.js"></script>
+  <script>
+    KR.requireAuth();
+    renderNav('users');
+    const user = KR.getUser();
+
+    const roleSelect = document.getElementById('u-role');
+    const villeField = document.getElementById('ville-field');
+    const shopField = document.getElementById('shop-field');
+    const permsField = document.getElementById('perms-field');
+
+    if (user.role === 'ADMIN_VILLE') {
+      document.getElementById('role-field').classList.add('hidden');
+      roleSelect.value = 'CAISSIER';
+    }
+
+    function syncRoleFields() {
+      const role = roleSelect.value;
+      villeField.classList.toggle('hidden', role !== 'ADMIN_VILLE');
+      shopField.classList.toggle('hidden', role !== 'CAISSIER');
+      permsField.classList.toggle('hidden', role !== 'ADMIN_VILLE');
+    }
+    roleSelect.addEventListener('change', syncRoleFields);
+
+    const modal = document.getElementById('modal');
+    document.getElementById('btn-new-user').addEventListener('click', async () => {
+      const shops = await KR.request('/api/admin/shops');
+      document.getElementById('u-shop').innerHTML = shops.map((s) => `<option value="${s.id}">${s.name}</option>`).join('');
+
+      if (user.role === 'SUPER_ADMIN') {
+        const villes = await KR.request('/api/admin/villes');
+        document.getElementById('u-ville').innerHTML = villes.map((v) => `<option value="${v.id}">${v.name}</option>`).join('');
+      }
+
+      syncRoleFields();
+      modal.classList.remove('hidden');
+    });
+    document.getElementById('btn-cancel').addEventListener('click', () => modal.classList.add('hidden'));
+
+    function roleLabel(r) {
+      return { SUPER_ADMIN: 'Super Admin', ADMIN_VILLE: 'Admin Ville', CAISSIER: 'Caissier' }[r] || r;
+    }
+
+    async function load() {
+      const users = await KR.request('/api/admin/users');
+      document.getElementById('users-body').innerHTML = users
+        .map(
+          (u) => `
+        <tr>
+          <td>${u.username}</td>
+          <td>${roleLabel(u.role)}</td>
+          <td>${u.ville?.name || u.shop?.name || '—'}</td>
+          <td>${u.isActive ? '<span class="badge green">Actif</span>' : '<span class="badge muted">Désactivé</span>'}</td>
+          <td><button class="secondary" data-toggle="${u.id}" data-active="${u.isActive}">${u.isActive ? 'Désactiver' : 'Activer'}</button></td>
+        </tr>
+      `
+        )
+        .join('');
+
+      document.querySelectorAll('[data-toggle]').forEach((btn) =>
+        btn.addEventListener('click', async () => {
+          const isActive = btn.dataset.active === 'true';
+          await KR.request(`/api/admin/users/${btn.dataset.toggle}`, {
+            method: 'PATCH',
+            body: { isActive: !isActive },
+          });
+          load();
+        })
+      );
+    }
+
+    document.getElementById('user-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorEl = document.getElementById('user-error');
+      errorEl.textContent = '';
+      const role = user.role === 'ADMIN_VILLE' ? 'CAISSIER' : roleSelect.value;
+
+      try {
+        await KR.request('/api/admin/users', {
+          method: 'POST',
+          body: {
+            username: document.getElementById('u-username').value.trim(),
+            password: document.getElementById('u-password').value,
+            role,
+            villeId: role === 'ADMIN_VILLE' ? document.getElementById('u-ville').value : undefined,
+            shopId: role === 'CAISSIER' ? document.getElementById('u-shop').value : undefined,
+            permissions:
+              role === 'ADMIN_VILLE'
+                ? {
+                    canManageShops: document.getElementById('perm-shops').checked,
+                    canManageUsers: document.getElementById('perm-users').checked,
+                    canManageCredit: document.getElementById('perm-credit').checked,
+                    canManageGames: document.getElementById('perm-games').checked,
+                  }
+                : undefined,
+          },
+        });
+        modal.classList.add('hidden');
+        document.getElementById('user-form').reset();
+        load();
+      } catch (err) {
+        errorEl.textContent = err.message;
+      }
+    });
+
+    load();
+  </script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KrcRoulette — RTP</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <div id="sidebar" class="sidebar"></div>
+    <div class="main">
+      <h1>RTP (Retour sur Total Paris)</h1>
+
+      <div class="card" id="config-card">
+        <h2>Configuration globale</h2>
+        <form id="config-form" class="grid grid-2">
+          <div class="field">
+            <label>RTP cible (%)</label>
+            <input id="c-target" type="number" step="0.1" style="width:100%">
+          </div>
+          <div class="field">
+            <label>RTP mode bonus (%)</label>
+            <input id="c-bonus" type="number" step="0.1" style="width:100%">
+          </div>
+          <div class="field">
+            <label>Alerte jaune (%)</label>
+            <input id="c-yellow" type="number" step="0.1" style="width:100%">
+          </div>
+          <div class="field">
+            <label>Alerte rouge (%)</label>
+            <input id="c-red" type="number" step="0.1" style="width:100%">
+          </div>
+          <div style="grid-column: span 2">
+            <button type="submit">Enregistrer</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Vue temps réel par shop</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Shop</th><th>Misé (mois)</th><th>Payé (mois)</th><th>RTP mois</th><th>Projection fin de mois</th><th>Alerte</th>
+            </tr>
+          </thead>
+          <tbody id="rtp-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/api.js"></script>
+  <script src="../js/nav.js"></script>
+  <script>
+    KR.requireAuth();
+    renderNav('rtp');
+    const user = KR.getUser();
+    if (user.role !== 'SUPER_ADMIN') document.getElementById('config-card').classList.add('hidden');
+
+    function alertBadge(alert) {
+      if (alert === 'red') return '<span class="badge red">🔴 Rouge</span>';
+      if (alert === 'yellow') return '<span class="badge yellow">🟡 Jaune</span>';
+      return '<span class="badge green">OK</span>';
+    }
+
+    async function loadConfig() {
+      if (user.role !== 'SUPER_ADMIN') return;
+      const config = await KR.request('/api/admin/rtp/config');
+      document.getElementById('c-target').value = config.targetRtp;
+      document.getElementById('c-bonus').value = config.bonusRtp;
+      document.getElementById('c-yellow').value = config.alertYellow;
+      document.getElementById('c-red').value = config.alertRed;
+    }
+
+    async function loadLive() {
+      const live = await KR.request('/api/admin/rtp/live');
+      document.getElementById('rtp-body').innerHTML = live.shops
+        .map(
+          (s) => `
+        <tr>
+          <td>${s.shopName}</td>
+          <td>${KR.fmtFcfa(s.totalWagered)}</td>
+          <td>${KR.fmtFcfa(s.totalPaid)}</td>
+          <td>${s.rtp.toFixed(1)}%</td>
+          <td>${s.projectedRtp.toFixed(1)}%</td>
+          <td>${alertBadge(s.alert)}</td>
+        </tr>
+      `
+        )
+        .join('');
+    }
+
+    document.getElementById('config-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      await KR.request('/api/admin/rtp/config', {
+        method: 'PATCH',
+        body: {
+          targetRtp: parseFloat(document.getElementById('c-target').value),
+          bonusRtp: parseFloat(document.getElementById('c-bonus').value),
+          alertYellow: parseFloat(document.getElementById('c-yellow').value),
+          alertRed: parseFloat(document.getElementById('c-red').value),
+        },
+      });
+      loadConfig();
+    });
+
+    loadConfig();
+    loadLive();
+    setInterval(loadLive, 15000);
+  </script>
+</body>
+</html>

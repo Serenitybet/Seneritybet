@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KrcRoulette — Dashboard</title>
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+  <div class="layout">
+    <div id="sidebar" class="sidebar"></div>
+    <div class="main">
+      <h1>Dashboard</h1>
+
+      <div class="grid grid-3">
+        <div class="card">
+          <div class="stat-label">Villes</div>
+          <div class="stat" id="stat-villes">—</div>
+        </div>
+        <div class="card">
+          <div class="stat-label">Shops actifs</div>
+          <div class="stat" id="stat-shops">—</div>
+        </div>
+        <div class="card">
+          <div class="stat-label">Alertes RTP</div>
+          <div class="stat" id="stat-alerts">—</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>RTP en temps réel par shop</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Shop</th>
+              <th>RTP cible</th>
+              <th>RTP mois (cumul)</th>
+              <th>Projection fin de mois</th>
+              <th>Bonus</th>
+              <th>Alerte</th>
+            </tr>
+          </thead>
+          <tbody id="rtp-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/api.js"></script>
+  <script src="../js/nav.js"></script>
+  <script>
+    KR.requireAuth();
+    renderNav('dashboard');
+
+    function alertBadge(alert) {
+      if (alert === 'red') return '<span class="badge red">🔴 Rouge</span>';
+      if (alert === 'yellow') return '<span class="badge yellow">🟡 Jaune</span>';
+      return '<span class="badge green">OK</span>';
+    }
+
+    async function load() {
+      try {
+        const [villes, shops, rtpLive] = await Promise.all([
+          KR.request('/api/admin/villes'),
+          KR.request('/api/admin/shops'),
+          KR.request('/api/admin/rtp/live'),
+        ]);
+
+        document.getElementById('stat-villes').textContent = villes.length;
+        document.getElementById('stat-shops').textContent = shops.filter((s) => s.isActive).length;
+        document.getElementById('stat-alerts').textContent = rtpLive.shops.filter((s) => s.alert).length;
+
+        document.getElementById('rtp-table-body').innerHTML = rtpLive.shops
+          .map(
+            (s) => `
+          <tr>
+            <td>${s.shopName}</td>
+            <td>${s.targetRtp}%</td>
+            <td>${s.rtp.toFixed(1)}%</td>
+            <td>${s.projectedRtp.toFixed(1)}%</td>
+            <td>${s.bonusModeActive ? '<span class="badge yellow">Actif</span>' : '—'}</td>
+            <td>${alertBadge(s.alert)}</td>
+          </tr>
+        `
+          )
+          .join('');
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>
