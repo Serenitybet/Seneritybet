@@ -16,3 +16,6 @@ packages/db/generated/
 # OS
 .DS_Store
 Thumbs.db
+
+# Fichiers de travail temporaires (jamais destinés à ce dépôt)
+.scratchpad/
