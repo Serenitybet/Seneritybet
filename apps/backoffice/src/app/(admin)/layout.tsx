@@ -2,10 +2,12 @@ export const dynamic = "force-dynamic";
 
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
+import { IdleLogout } from "@/components/IdleLogout";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-bo-base">
+      <IdleLogout />
       <Sidebar />
       <div className="flex-1 flex flex-col ml-56 min-h-screen">
         <Topbar />
