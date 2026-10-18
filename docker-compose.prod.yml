@@ -1,6 +1,10 @@
 # Déploiement auto-hébergé (ex: Hetzner) — toutes les valeurs sensibles
 # viennent du fichier .env (non commité) à côté de ce fichier.
 #
+# Les ports publiés ne sont liés qu'à 127.0.0.1 : seul Caddy (reverse
+# proxy HTTPS installé en dehors de Docker, /etc/caddy/Caddyfile) est
+# censé exposer ces services publiquement.
+#
 # Utilisation :
 #   docker compose -f docker-compose.prod.yml up -d --build
 
@@ -56,7 +60,7 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       RISK_MAX_PAYOUT_XAF: ${RISK_MAX_PAYOUT_XAF:-5000000}
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
 
   pos:
     build:
@@ -72,7 +76,7 @@ services:
       PORT: 3002
       HOSTNAME: 0.0.0.0
     ports:
-      - "3002:3002"
+      - "127.0.0.1:3002:3002"
 
   backoffice:
     build:
@@ -88,7 +92,7 @@ services:
       PORT: 3001
       HOSTNAME: 0.0.0.0
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
 
 volumes:
   postgres_data:
