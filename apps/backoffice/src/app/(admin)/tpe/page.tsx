@@ -204,7 +204,10 @@ export default function TpePage() {
                   <p className="text-xs text-t-faint">Code d'appairage affiché sur l'appareil :</p>
                   <p className="font-mono text-lg font-black text-gold tracking-widest">{t.pairingCode}</p>
                 </div>
-                <button className="bo-btn-primary bo-btn-sm" onClick={() => approvePairing(t)}>✅ Valider l'appairage</button>
+                <div className="flex gap-2">
+                  <button className="bo-btn-secondary bo-btn-sm" onClick={() => removeTpe(t)}>✕ Rejeter</button>
+                  <button className="bo-btn-primary bo-btn-sm" onClick={() => approvePairing(t)}>✅ Valider l'appairage</button>
+                </div>
               </div>
             ))}
           </div>

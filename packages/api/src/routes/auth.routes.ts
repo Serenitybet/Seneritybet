@@ -1,9 +1,12 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
 import axios from "axios";
+import bcrypt from "bcryptjs";
 import * as authService from "../services/auth.service";
 import { authenticate, AuthRequest } from "../middleware/auth.middleware";
 import { asyncHandler } from "../lib/asyncHandler";
+import { AppError } from "../middleware/error.middleware";
+import { prisma } from "../lib/prisma";
 
 // ─── Vérification hCaptcha ───────────────────────────────────────────────────
 async function verifyCaptcha(token: string): Promise<boolean> {
@@ -104,3 +107,42 @@ authRouter.post("/logout", authenticate, asyncHandler(async (req: AuthRequest, r
 authRouter.get("/me", authenticate, (req: AuthRequest, res: Response) => {
   res.json({ success: true, data: req.user });
 });
+
+// PATCH /api/auth/me — modifier ses propres identifiants (email / mot de passe)
+const updateMeSchema = z.object({
+  currentPassword: z.string().min(1, "Mot de passe actuel requis"),
+  email: z.string().email("Email invalide").optional(),
+  newPassword: z.string().min(8, "Nouveau mot de passe trop court (8 caractères min)").optional(),
+  firstName: z.string().min(2).optional(),
+  lastName: z.string().min(2).optional(),
+});
+
+authRouter.patch("/me", authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
+  const parsed = updateMeSchema.safeParse(req.body);
+  if (!parsed.success) throw new AppError(400, parsed.error.errors[0].message);
+  const { currentPassword, email, newPassword, firstName, lastName } = parsed.data;
+
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+  if (!user) throw new AppError(404, "Utilisateur introuvable");
+
+  const validPassword = await bcrypt.compare(currentPassword, user.password);
+  if (!validPassword) throw new AppError(401, "Mot de passe actuel incorrect");
+
+  if (email && email !== user.email) {
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) throw new AppError(400, "Cet email est déjà utilisé");
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      ...(email ? { email } : {}),
+      ...(firstName ? { firstName } : {}),
+      ...(lastName ? { lastName } : {}),
+      ...(newPassword ? { password: await bcrypt.hash(newPassword, 12) } : {}),
+    },
+    select: { id: true, email: true, firstName: true, lastName: true, role: true },
+  });
+
+  res.json({ success: true, data: updated, message: "Identifiants mis à jour ✓" });
+}));

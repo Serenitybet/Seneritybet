@@ -3,6 +3,8 @@
 import { useState } from "react";
 import toast from "react-hot-toast";
 
+const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL ?? "https://seneritybet.onrender.com/api";
+
 function Toggle({ defaultOn = false }: { defaultOn?: boolean }) {
   const [on, setOn] = useState(defaultOn);
   return (
@@ -36,9 +38,69 @@ function SettingSection({ title, icon, children }: { title: string; icon: string
   );
 }
 
+function AccountSection() {
+  const [email, setEmail] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  function token() { return localStorage.getItem("bo_token"); }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!currentPassword) { toast.error("Mot de passe actuel requis"); return; }
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/auth/me`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({
+          currentPassword,
+          ...(email ? { email } : {}),
+          ...(newPassword ? { newPassword } : {}),
+        }),
+      });
+      const d = await res.json();
+      if (!res.ok) { toast.error(d.error ?? "Erreur"); return; }
+      toast.success("Identifiants mis à jour ✓");
+      setEmail(""); setCurrentPassword(""); setNewPassword("");
+    } catch { toast.error("Erreur réseau"); }
+    finally { setSaving(false); }
+  }
+
+  return (
+    <form onSubmit={submit} className="bg-bo-surface border border-bo-border2 rounded-xl p-4 space-y-3">
+      <h3 className="font-bold text-[13px] text-t-primary flex items-center gap-2">
+        <span>🔐</span> Mon compte
+      </h3>
+      <p className="text-[10px] text-t-faint">Modifier ton email et/ou ton mot de passe. Le mot de passe actuel est requis.</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div>
+          <label className="text-[10px] text-t-faint block mb-1">Nouvel email (optionnel)</label>
+          <input type="email" className="bo-input w-full" value={email} onChange={e => setEmail(e.target.value)} placeholder="nouvel-email@serenitybet.td" />
+        </div>
+        <div>
+          <label className="text-[10px] text-t-faint block mb-1">Nouveau mot de passe (optionnel)</label>
+          <input type="password" className="bo-input w-full" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="8 caractères min" />
+        </div>
+        <div>
+          <label className="text-[10px] text-t-faint block mb-1">Mot de passe actuel *</label>
+          <input type="password" className="bo-input w-full" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} required />
+        </div>
+      </div>
+      <div className="flex justify-end">
+        <button type="submit" className="bo-btn-primary bo-btn-sm" disabled={saving}>
+          {saving ? "Enregistrement…" : "💾 Mettre à jour"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export default function SettingsPage() {
   return (
     <div className="space-y-5">
+      <AccountSection />
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <SettingSection title="Jeu responsable" icon="🛡️">
           <SettingRow label="Limite de dépôt journalier" desc="Montant max par parieur / jour (XAF)">
