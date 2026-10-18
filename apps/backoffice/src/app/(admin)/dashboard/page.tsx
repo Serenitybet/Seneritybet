@@ -108,12 +108,12 @@ export default function DashboardPage() {
           <div className="bo-card-body">
             <ResponsiveContainer width="100%" height={180}>
               <BarChart data={chartData} barSize={28}>
-                <XAxis dataKey="day" tick={{ fill: "#475569", fontSize: 10 }} axisLine={false} tickLine={false} />
-                <YAxis tickFormatter={v => `${(v/1000).toFixed(0)}k`} tick={{ fill: "#475569", fontSize: 10 }} axisLine={false} tickLine={false} width={36} />
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
+                <XAxis dataKey="day" tick={{ fill: "#5b6168", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tickFormatter={v => `${(v/1000).toFixed(0)}k`} tick={{ fill: "#5b6168", fontSize: 10 }} axisLine={false} tickLine={false} width={36} />
+                <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(0,0,0,0.04)" }} />
                 <Bar dataKey="mises" radius={[4,4,0,0]}>
                   {chartData.map((_: any, i: number) => (
-                    <Cell key={i} fill={i === chartData.length - 1 ? "#22c55e" : "#222730"} />
+                    <Cell key={i} fill={i === chartData.length - 1 ? "#e0a812" : "#d1d5db"} />
                   ))}
                 </Bar>
               </BarChart>
