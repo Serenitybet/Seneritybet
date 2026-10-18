@@ -76,9 +76,10 @@ adminTpeRouter.post("/:id/approve", requireRole("ADMIN", "SUPER_ADMIN"),
 adminTpeRouter.patch("/:id", requireRole("ADMIN", "SUPER_ADMIN"),
   asyncHandler(async (req: Request, res: Response) => {
     const { name } = req.body;
+    const trimmed = typeof name === "string" ? name.trim() : null;
     const tpe = await prisma.tpe.update({
       where: { id: req.params.id },
-      data: { ...(name !== undefined ? { name: name.trim() } : {}) },
+      data: { ...(name !== undefined ? { name: trimmed || null } : {}) },
     });
     res.json({ success: true, data: serializeTpe(tpe) });
   }),

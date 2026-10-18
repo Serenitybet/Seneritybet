@@ -87,7 +87,10 @@ export default function TpePage() {
   useEffect(() => { loadAll(); }, []);
 
   async function approvePairing(tpe: Tpe) {
-    const name = prompt(`Nom du TPE (code actuel ${tpe.code}) :`, tpe.name ?? "");
+    const name = prompt(
+      `Donne un nom à ce terminal (ex: "Caisse Marché Central"). Laisse vide pour garder "${tpe.code}".\n(Ne pas saisir le code d'appairage ${tpe.pairingCode} — ce n'est pas un nom.)`,
+      tpe.name ?? "",
+    );
     if (name === null) return;
     try {
       const res = await fetch(`${API}/admin/tpe/${tpe.id}/approve`, {
@@ -107,6 +110,19 @@ export default function TpePage() {
     try {
       const res = await fetch(`${API}/admin/tpe/${tpe.id}/${action}`, { method: "POST", headers: authHeaders() });
       if (res.ok) { toast.success(`${tpe.code} ${action === "block" ? "bloqué" : "débloqué"} ✓`); loadAll(); }
+      else toast.error("Erreur");
+    } catch { toast.error("Erreur réseau"); }
+  }
+
+  async function renameTpe(tpe: Tpe) {
+    const name = prompt(`Renommer "${tpe.name ?? tpe.code}" (code ${tpe.code}) :`, tpe.name ?? "");
+    if (name === null) return;
+    try {
+      const res = await fetch(`${API}/admin/tpe/${tpe.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ name: name.trim() || null }),
+      });
+      if (res.ok) { toast.success("Nom mis à jour ✓"); loadAll(); }
       else toast.error("Erreur");
     } catch { toast.error("Erreur réseau"); }
   }
@@ -268,6 +284,7 @@ export default function TpePage() {
                     <p className="text-sm font-black text-green-400">{fmtXAF(t.creditXAF)}</p>
                   </div>
                   <div className="flex gap-2">
+                    <button className="bo-btn-secondary bo-btn-sm" onClick={() => renameTpe(t)}>✏️ Renommer</button>
                     <button className="bo-btn-secondary bo-btn-sm" onClick={() => setCreditModal(t)}>💰 Crédit</button>
                     <button
                       className={`bo-btn-sm ${t.status === "BLOCKED" ? "bo-btn-primary" : "bo-btn-danger"}`}
