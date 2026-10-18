@@ -69,12 +69,6 @@ export async function registerDevice(deviceSecret: string) {
   return { status: tpe.status, pairingCode: tpe.pairingCode, code: tpe.code };
 }
 
-export async function getDeviceStatus(deviceSecretHash: string) {
-  const tpe = await prisma.tpe.findUnique({ where: { deviceSecretHash } });
-  if (!tpe) throw new AppError(404, "Appareil inconnu");
-  return { status: tpe.status, pairingCode: tpe.pairingCode, name: tpe.name };
-}
-
 interface TicketSelection {
   marketId: string;
   oddId: string;
@@ -133,6 +127,20 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
   });
 
   return serializeTicket(ticket);
+}
+
+export async function listTicketsForTpe(tpeId: string, page: number, limit: number) {
+  const where = { tpeId };
+  const [total, tickets] = await Promise.all([
+    prisma.ticket.count({ where }),
+    prisma.ticket.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+  ]);
+  return { tickets: tickets.map(serializeTicket), total, page, limit, totalPages: Math.ceil(total / limit) };
 }
 
 export async function getTicketByCode(code: string) {

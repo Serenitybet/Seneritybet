@@ -22,6 +22,14 @@ tpeRouter.post("/tickets", asyncHandler(async (req: TpeRequest, res: Response) =
   res.status(201).json({ success: true, data: ticket });
 }));
 
+// GET /api/tpe/tickets — historique des tickets créés sur ce TPE
+tpeRouter.get("/tickets", asyncHandler(async (req: TpeRequest, res: Response) => {
+  const page  = parseInt((req.query.page  as string) ?? "1",  10);
+  const limit = parseInt((req.query.limit as string) ?? "25", 10);
+  const result = await tpeService.listTicketsForTpe(req.tpe!.id, page, Math.min(limit, 100));
+  res.json({ success: true, data: result });
+}));
+
 // GET /api/tpe/tickets/:code — consulter un ticket (encaissement, vérification)
 tpeRouter.get("/tickets/:code", asyncHandler(async (req: TpeRequest, res: Response) => {
   const ticket = await tpeService.getTicketByCode(req.params.code);

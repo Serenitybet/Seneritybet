@@ -16,6 +16,14 @@ tpeDeviceRouter.post("/register", asyncHandler(async (req: Request, res: Respons
 tpeDeviceRouter.get("/status", identifyTpeDevice, asyncHandler(async (req: TpeRequest, res: Response) => {
   res.json({
     success: true,
-    data: { status: req.tpe!.status, pairingCode: req.tpe!.pairingCode, name: req.tpe!.name, code: req.tpe!.code },
+    data: {
+      status: req.tpe!.status,
+      pairingCode: req.tpe!.pairingCode,
+      name: req.tpe!.name,
+      code: req.tpe!.code,
+      creditXAF: Number(req.tpe!.credit) / 100,
+      lastSeenAt: req.tpe!.lastSeenAt,
+      pairedAt: req.tpe!.pairedAt,
+    },
   });
 }));
