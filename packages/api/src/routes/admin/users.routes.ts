@@ -121,6 +121,24 @@ adminUsersRouter.get("/:id", asyncHandler(async (req: Request, res: Response) =>
   res.json({ success: true, data: safeUser });
 }));
 
+// PATCH /api/admin/users/:id/role — changer le rôle (pouvoirs) d'un membre du personnel
+adminUsersRouter.patch("/:id/role", requireRole("SUPER_ADMIN"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { role } = req.body;
+    const allowedRoles = ["CASHIER", "TRADER", "FINANCE", "ADMIN", "SUPER_ADMIN"];
+    if (!allowedRoles.includes(role)) {
+      res.status(400).json({ success: false, error: "Rôle non autorisé" }); return;
+    }
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) { res.status(404).json({ success: false, error: "Utilisateur introuvable" }); return; }
+    if (target.role === "PLAYER") {
+      res.status(400).json({ success: false, error: "Impossible de modifier le rôle d'un joueur" }); return;
+    }
+    await prisma.user.update({ where: { id: req.params.id }, data: { role } });
+    res.json({ success: true, message: `Rôle mis à jour : ${role}` });
+  }),
+);
+
 adminUsersRouter.patch("/:id/status", requireRole("ADMIN", "SUPER_ADMIN"),
   asyncHandler(async (req: Request, res: Response) => {
     const { status } = req.body;

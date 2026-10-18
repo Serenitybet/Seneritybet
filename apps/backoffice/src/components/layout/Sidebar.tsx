@@ -11,28 +11,21 @@ const NAV = [
       { href: "/dashboard", label: "Dashboard",       icon: "▣", badge: null },
       { href: "/sports",    label: "Matchs & Cotes",  icon: "⚽", badge: null },
       { href: "/bets",      label: "Paris",            icon: "🎯", badge: "12" },
-    ],
-  },
-  {
-    section: "Utilisateurs",
-    items: [
-      { href: "/users",     label: "Parieurs",         icon: "👥", badge: null },
-      { href: "/kyc",       label: "KYC / Vérification", icon: "🪪", badge: "5" },
+      { href: "/tpe-tickets", label: "Tickets TPE",    icon: "🎫", badge: null },
     ],
   },
   {
     section: "Finances",
     items: [
       { href: "/reports",     label: "Finances",       icon: "📊", badge: null },
-      { href: "/withdrawals", label: "Retraits",       icon: "↑↓", badge: "3" },
     ],
   },
   {
     section: "Système",
     items: [
       { href: "/partners", label: "Partenaires",         icon: "🤝", badge: null },
-      { href: "/shops",    label: "Boutiques",           icon: "🏪", badge: null },
       { href: "/tpe",      label: "Terminaux TPE",       icon: "🖥", badge: null },
+      { href: "/staff",    label: "Équipe backoffice",   icon: "🧑‍💼", badge: null },
       { href: "/settings", label: "Paramètres",         icon: "⚙",  badge: null },
       { href: "/logs",     label: "Logs système",        icon: "▶",  badge: null },
     ],

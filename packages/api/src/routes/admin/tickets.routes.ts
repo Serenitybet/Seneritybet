@@ -10,11 +10,17 @@ export const adminTicketsRouter = Router();
 
 // GET /api/admin/tickets
 adminTicketsRouter.get("/", asyncHandler(async (req: Request, res: Response) => {
-  const page   = parseInt((req.query.page  as string) ?? "1",  10);
-  const limit  = parseInt((req.query.limit as string) ?? "25", 10);
-  const status = req.query.status as string | undefined;
+  const page      = parseInt((req.query.page  as string) ?? "1",  10);
+  const limit     = parseInt((req.query.limit as string) ?? "100", 10);
+  const status    = req.query.status as string | undefined;
+  const tpeId     = req.query.tpeId as string | undefined;
+  const dangerous = req.query.dangerous === "true";
 
-  const where = status ? { status: status as any } : {};
+  const where = {
+    ...(status ? { status: status as any } : {}),
+    ...(tpeId ? { tpeId } : {}),
+    ...(dangerous ? { requiresApproval: true, approvedAt: null } : {}),
+  };
 
   const [total, tickets] = await Promise.all([
     prisma.ticket.count({ where }),
