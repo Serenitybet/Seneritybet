@@ -23,6 +23,14 @@ export function setAuthToken(token: string | null) {
   }
 }
 
+export function setDeviceSecret(secret: string | null) {
+  if (secret) {
+    api.defaults.headers.common["X-Tpe-Secret"] = secret;
+  } else {
+    delete api.defaults.headers.common["X-Tpe-Secret"];
+  }
+}
+
 export function formatXAF(centimes: number): string {
   const xaf = centimes / 100;
   return new Intl.NumberFormat("fr-FR", {

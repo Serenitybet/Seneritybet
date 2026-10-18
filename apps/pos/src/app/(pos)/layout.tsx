@@ -66,6 +66,22 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
             🎫 Tickets
           </Link>
           <Link
+            href="/tpe-ticket"
+            className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
+              pathname === "/tpe-ticket" ? "bg-white text-green-700" : "hover:bg-green-600 text-white"
+            }`}
+          >
+            🆕 Nouveau ticket
+          </Link>
+          <Link
+            href="/tpe-payout"
+            className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
+              pathname === "/tpe-payout" ? "bg-white text-green-700" : "hover:bg-green-600 text-white"
+            }`}
+          >
+            💵 Encaisser
+          </Link>
+          <Link
             href="/withdrawals"
             className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
               pathname === "/withdrawals" ? "bg-white text-green-700" : "hover:bg-green-600 text-white"

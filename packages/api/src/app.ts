@@ -16,6 +16,8 @@ import { withdrawalRequestRouter } from "./routes/withdrawal-request.routes";
 import { cashierWalletRouter } from "./routes/cashier-wallet.routes";
 import { couponRouter } from "./routes/coupon.routes";
 import { partnersRouter } from "./routes/partners.routes";
+import { tpeDeviceRouter } from "./routes/tpe-device.routes";
+import { tpeRouter } from "./routes/tpe.routes";
 import { errorHandler } from "./middleware/error.middleware";
 
 export const app = express();
@@ -116,6 +118,10 @@ app.use("/api/coupons", couponRouter);
 
 // ─── Programme partenaires ───────────────────────────────────────────────────
 app.use("/api/partners", partnersRouter);
+
+// ─── TPE (terminaux physiques — tickets anonymes) ────────────────────────────
+app.use("/api/tpe-device", tpeDeviceRouter);
+app.use("/api/tpe", tpeRouter);
 
 // ─── Gestion des erreurs ─────────────────────────────────────────────────────
 app.use(errorHandler);

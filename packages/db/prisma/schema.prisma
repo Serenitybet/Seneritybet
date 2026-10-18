@@ -107,6 +107,22 @@ enum WithdrawalRequestStatus {
   EXPIRED
 }
 
+enum TpeStatus {
+  PENDING_PAIRING
+  ACTIVE
+  BLOCKED
+  DELETED
+}
+
+enum TicketStatus {
+  PENDING
+  WON
+  LOST
+  REFUNDED
+  CANCELLED
+  PAID
+}
+
 // ─── Models ─────────────────────────────────────────────────────────────────
 
 model User {
@@ -136,6 +152,9 @@ model User {
   sessions            Session[]
   kyc                 Kyc?
   withdrawalRequests  WithdrawalRequest[]
+  ticketsCreated      Ticket[]            @relation("TicketCashier")
+  ticketsPaid         Ticket[]            @relation("TicketPaidBy")
+  tpeCreditAdjustments TpeCreditAdjustment[]
 
   @@index([email])
   @@index([phone])
@@ -269,20 +288,22 @@ model Market {
   isSuspended Boolean    @default(false)
   odds        Odd[]
   betItems    BetItem[]
+  ticketItems TicketItem[]
 
   @@index([eventId])
   @@index([type])
 }
 
 model Odd {
-  id        String   @id @default(cuid())
-  marketId  String
-  market    Market   @relation(fields: [marketId], references: [id])
-  label     String   // "1", "X", "2", "Over", "Under", "Yes", "No"
-  value     Decimal  @db.Decimal(8, 3) // cote décimale ex: 2.500
-  isActive  Boolean  @default(true)
-  updatedAt DateTime @updatedAt
-  betItems  BetItem[]
+  id          String   @id @default(cuid())
+  marketId    String
+  market      Market   @relation(fields: [marketId], references: [id])
+  label       String   // "1", "X", "2", "Over", "Under", "Yes", "No"
+  value       Decimal  @db.Decimal(8, 3) // cote décimale ex: 2.500
+  isActive    Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
+  betItems    BetItem[]
+  ticketItems TicketItem[]
 
   @@index([marketId])
 }
@@ -477,4 +498,94 @@ model WithdrawalRequest {
   @@index([status])
   @@index([requestCode])
   @@index([expiresAt])
+}
+
+// ─── TPE (terminaux physiques — tickets anonymes) ────────────────────────────
+
+model Tpe {
+  id               String    @id @default(cuid())
+  code             String    @unique // Ex: TPE-0001, affecté à l'appairage
+  name             String?
+  deviceSecretHash String    @unique // hash du secret généré par l'appareil
+  pairingCode      String?   @unique // affiché sur l'appareil tant qu'en attente d'appairage
+  status           TpeStatus @default(PENDING_PAIRING)
+  credit           BigInt    @default(0) // centimes XAF — plafond de paiement alimenté par le backoffice
+  lastSeenAt       DateTime?
+  pairedAt         DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  ticketsCreated    Ticket[]               @relation("TpeTicketsCreated")
+  ticketsPaid       Ticket[]               @relation("TpeTicketsPaid")
+  creditAdjustments TpeCreditAdjustment[]
+
+  @@index([status])
+  @@index([pairingCode])
+}
+
+model TpeCreditAdjustment {
+  id        String   @id @default(cuid())
+  tpeId     String
+  tpe       Tpe      @relation(fields: [tpeId], references: [id])
+  amount    BigInt   // centimes XAF — positif = recharge, négatif = retrait
+  reason    String?
+  adminId   String
+  admin     User     @relation(fields: [adminId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@index([tpeId])
+}
+
+model Ticket {
+  id               String       @id @default(cuid())
+  code             String       @unique // code imprimé sur le ticket papier
+  tpeId            String
+  tpe              Tpe          @relation("TpeTicketsCreated", fields: [tpeId], references: [id])
+  cashierId        String
+  cashier          User         @relation("TicketCashier", fields: [cashierId], references: [id])
+  stake            BigInt       // centimes XAF
+  totalOdds        Decimal      @db.Decimal(10, 3)
+  potentialWin     BigInt       // centimes XAF
+  status           TicketStatus @default(PENDING)
+  requiresApproval Boolean      @default(false)
+  approvedAt       DateTime?
+  approvedBy       String?
+  settledAt        DateTime?
+  paidAt           DateTime?
+  paidByTpeId      String?
+  paidByTpe        Tpe?         @relation("TpeTicketsPaid", fields: [paidByTpeId], references: [id])
+  paidByCashierId  String?
+  paidByCashier    User?        @relation("TicketPaidBy", fields: [paidByCashierId], references: [id])
+  createdAt        DateTime     @default(now())
+  items            TicketItem[]
+
+  @@index([tpeId])
+  @@index([status])
+  @@index([code])
+  @@index([createdAt])
+}
+
+model TicketItem {
+  id       String         @id @default(cuid())
+  ticketId String
+  ticket   Ticket         @relation(fields: [ticketId], references: [id])
+  marketId String
+  market   Market         @relation(fields: [marketId], references: [id])
+  oddId    String
+  odd      Odd            @relation(fields: [oddId], references: [id])
+  oddValue Decimal        @db.Decimal(8, 3)
+  result   BetItemResult?
+
+  @@index([ticketId])
+  @@index([marketId])
+}
+
+// ─── Configuration backoffice (clé/valeur) ───────────────────────────────────
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+  updatedBy String?
 }
