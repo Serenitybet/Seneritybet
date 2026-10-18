@@ -1,0 +1,91 @@
+version: "3.9"
+
+# Déploiement auto-hébergé (ex: Hetzner) — toutes les valeurs sensibles
+# viennent du fichier .env (non commité) à côté de ce fichier.
+#
+# Utilisation :
+#   docker compose -f docker-compose.prod.yml up -d --build
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: serenitybet_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: serenitybet_redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: serenitybet_api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      NODE_ENV: production
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      RISK_MAX_PAYOUT_XAF: ${RISK_MAX_PAYOUT_XAF:-5000000}
+    ports:
+      - "4000:4000"
+
+  pos:
+    build:
+      context: .
+      dockerfile: apps/pos/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    container_name: serenitybet_pos
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "3002:3002"
+
+  backoffice:
+    build:
+      context: .
+      dockerfile: apps/backoffice/Dockerfile
+      args:
+        NEXT_PUBLIC_BACKOFFICE_API_URL: ${NEXT_PUBLIC_API_URL}
+    container_name: serenitybet_backoffice
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "3001:3001"
+
+volumes:
+  postgres_data:
+  redis_data:
