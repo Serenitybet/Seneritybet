@@ -15,7 +15,7 @@ interface Event {
 
 interface Selection {
   eventId: string; eventLabel: string; marketId: string; marketName: string;
-  oddId: string; oddLabel: string; oddValue: number;
+  oddId: string; oddLabel: string; oddValue: number; groupKey: string;
 }
 
 interface TicketResult {
@@ -34,9 +34,7 @@ function dayKey(d: Date) { return d.toISOString().slice(0, 10); }
 const DAY_LABELS = ["Aujourd'hui", "Demain", "J+2", "J+3", "J+4", "J+5", "J+6"];
 
 const LABEL_ORDER: Record<string, string[]> = {
-  HANDICAP: ["1", "2"],
   DOUBLE_CHANCE: ["1X", "12", "X2"],
-  OVER_UNDER: ["Over", "Under"],
   BOTH_TEAMS_SCORE: ["Oui", "Non"],
   DRAW_NO_BET: ["1", "2"],
 };
@@ -44,6 +42,23 @@ function sortOddsForDisplay(market: Market): Odd[] {
   const order = LABEL_ORDER[market.type];
   if (!order) return market.odds;
   return [...market.odds].sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
+}
+
+// Fusionne un marché principal (ligne unique) avec son marché de lignes
+// alternatives, en dédoublonnant par libellé (même ligne = même bouton).
+function combinedGroupOdds(event: Event, types: string[]): { market: Market; odd: Odd }[] {
+  const seenLabels = new Set<string>();
+  const result: { market: Market; odd: Odd }[] = [];
+  for (const type of types) {
+    const market = event.markets.find((m) => m.type === type);
+    if (!market) continue;
+    for (const odd of market.odds) {
+      if (seenLabels.has(odd.label)) continue;
+      seenLabels.add(odd.label);
+      result.push({ market, odd });
+    }
+  }
+  return result;
 }
 
 export default function TpeTicketPage() {
@@ -72,24 +87,26 @@ export default function TpeTicketPage() {
     .filter((e) => dayKey(new Date(e.startTime)) === days[dayOffset]?.key)
     .filter((e) => !competitionFilter || e.competition.name === competitionFilter);
 
-  function toggleOdd(event: Event, market: Market, odd: Odd) {
+  function toggleOdd(event: Event, market: Market, odd: Odd, marketNameOverride?: string, groupKey?: string) {
+    const key = groupKey ?? market.id;
     const exists = selections.find((s) => s.oddId === odd.id);
     if (exists) {
       setSelections(selections.filter((s) => s.oddId !== odd.id));
       return;
     }
-    // Un seul choix par marché à la fois
-    const withoutSameMarket = selections.filter((s) => s.marketId !== market.id);
+    // Un seul choix par marché (ou par groupe fusionné) à la fois
+    const withoutSameGroup = selections.filter((s) => s.groupKey !== key);
     setSelections([
-      ...withoutSameMarket,
+      ...withoutSameGroup,
       {
         eventId: event.id,
         eventLabel: `${event.homeTeam} vs ${event.awayTeam}`,
         marketId: market.id,
-        marketName: market.name,
+        marketName: marketNameOverride ?? market.name,
         oddId: odd.id,
         oddLabel: odd.label,
         oddValue: Number(odd.value),
+        groupKey: key,
       },
     ]);
   }
@@ -253,16 +270,16 @@ export default function TpeTicketPage() {
                                   key={odd.id}
                                   disabled={mainMarket!.isSuspended || !odd.isActive}
                                   onClick={() => toggleOdd(event, mainMarket!, odd)}
-                                  className={`flex flex-col items-center px-2.5 py-1 rounded-lg border-2 transition-colors disabled:opacity-40 min-w-[46px] ${
+                                  className={`flex flex-col items-center px-3.5 py-2 rounded-lg border-2 transition-colors disabled:opacity-40 min-w-[58px] ${
                                     selected
                                       ? "bg-green-600 border-green-600 text-white"
                                       : "bg-gray-50 border-gray-200 text-gray-700 hover:border-green-400"
                                   }`}
                                 >
-                                  <span className={`text-[9px] font-semibold uppercase tracking-wide ${selected ? "text-green-100" : "text-gray-400"}`}>
+                                  <span className={`text-[10px] font-semibold uppercase tracking-wide ${selected ? "text-green-100" : "text-gray-400"}`}>
                                     {odd.label}
                                   </span>
-                                  <span className="text-sm font-black leading-tight">{Number(odd.value).toFixed(2)}</span>
+                                  <span className="text-base font-black leading-tight">{Number(odd.value).toFixed(2)}</span>
                                 </button>
                               );
                             }) : <span className="text-[11px] text-gray-300 px-2">—</span>}
@@ -275,169 +292,190 @@ export default function TpeTicketPage() {
                           </button>
                         </div>
 
-                        {isExpanded && (
-                          <div className="px-3 pb-3 bg-gray-50 space-y-2">
-                            {event.markets.filter((m) => m.type !== "MATCH_WINNER").length === 0 ? (
-                              <p className="text-[11px] text-gray-400 pt-1">Pas d'autres marchés disponibles pour ce match.</p>
-                            ) : (
-                              event.markets.filter((m) => m.type !== "MATCH_WINNER").map((market) => (
-                                <div key={market.id} className="pt-1">
-                                  <p className="text-xs text-gray-500 mb-1">{market.name}</p>
-                                  {market.type === "ALTERNATE_TOTALS" ? (
-                                    <div className="space-y-1">
-                                      {Object.entries(
-                                        market.odds.reduce<Record<string, Odd[]>>((acc, odd) => {
-                                          const point = odd.label.split(" ")[1] ?? "?";
-                                          (acc[point] ??= []).push(odd);
-                                          return acc;
-                                        }, {}),
-                                      )
-                                        .sort((a, b) => Number(a[0]) - Number(b[0]))
-                                        .map(([point, oddsForLine]) => (
-                                          <div key={point} className="flex items-center gap-2">
-                                            <span className="text-[11px] text-gray-400 w-14 shrink-0">{point} buts</span>
-                                            <div className="flex gap-2">
-                                              {[...oddsForLine]
-                                                .sort((a, b) => (a.label.startsWith("Moins") ? -1 : 1) - (b.label.startsWith("Moins") ? -1 : 1))
-                                                .map((odd) => {
-                                                  const selected = selections.some((s) => s.oddId === odd.id);
-                                                  const shortLabel = odd.label.split(" ")[0];
-                                                  return (
-                                                    <button
-                                                      key={odd.id}
-                                                      disabled={market.isSuspended || !odd.isActive}
-                                                      onClick={() => toggleOdd(event, market, odd)}
-                                                      className={`flex flex-col items-center px-3 py-1.5 rounded-lg border-2 transition-colors disabled:opacity-40 min-w-[56px] ${
-                                                        selected
-                                                          ? "bg-green-600 border-green-600 text-white"
-                                                          : "bg-white border-gray-200 text-gray-700 hover:border-green-400"
-                                                      }`}
-                                                    >
-                                                      <span className={`text-[9px] font-semibold uppercase tracking-wide ${selected ? "text-green-100" : "text-gray-400"}`}>
-                                                        {shortLabel}
-                                                      </span>
-                                                      <span className="text-sm font-black leading-tight">{Number(odd.value).toFixed(2)}</span>
-                                                    </button>
-                                                  );
-                                                })}
+                        {isExpanded && (() => {
+                          const handicapOdds = combinedGroupOdds(event, ["HANDICAP", "ALTERNATE_SPREADS"]);
+                          const totalsOdds = combinedGroupOdds(event, ["OVER_UNDER", "ALTERNATE_TOTALS"]);
+                          const otherMarkets = event.markets.filter(
+                            (m) => !["MATCH_WINNER", "HANDICAP", "ALTERNATE_SPREADS", "OVER_UNDER", "ALTERNATE_TOTALS"].includes(m.type),
+                          );
+                          const nothing = handicapOdds.length === 0 && totalsOdds.length === 0 && otherMarkets.length === 0;
+
+                          return (
+                            <div className="px-3 pb-3 bg-gray-50 space-y-3">
+                              {nothing ? (
+                                <p className="text-[11px] text-gray-400 pt-1">Pas d'autres marchés disponibles pour ce match.</p>
+                              ) : (
+                                <>
+                                  {handicapOdds.length > 0 && (
+                                    <div className="pt-1">
+                                      <p className="text-xs text-gray-500 mb-1">Handicap asiatique</p>
+                                      <div className="space-y-1.5">
+                                        {Object.entries(
+                                          handicapOdds.reduce<Record<string, { market: Market; odd: Odd }[]>>((acc, entry) => {
+                                            const m = entry.odd.label.match(/\(([+-]?[\d.]+)\)/);
+                                            const line = m ? Math.abs(parseFloat(m[1])).toFixed(1) : "?";
+                                            (acc[line] ??= []).push(entry);
+                                            return acc;
+                                          }, {}),
+                                        )
+                                          .sort((a, b) => Number(a[0]) - Number(b[0]))
+                                          .map(([line, entries]) => (
+                                            <div key={line} className="flex items-center gap-2">
+                                              <span className="text-[11px] text-gray-400 w-14 shrink-0">Hcap {line}</span>
+                                              <div className="flex-1 grid grid-cols-2 gap-2">
+                                                {[...entries]
+                                                  .sort((a, b) => a.odd.label.localeCompare(b.odd.label))
+                                                  .map(({ market, odd }) => {
+                                                    const selected = selections.some((s) => s.oddId === odd.id);
+                                                    return (
+                                                      <button
+                                                        key={odd.id}
+                                                        disabled={market.isSuspended || !odd.isActive}
+                                                        onClick={() => toggleOdd(event, market, odd, "Handicap asiatique", `${event.id}:HCAP`)}
+                                                        className={`flex flex-col items-center w-full py-2.5 rounded-lg border-2 transition-colors disabled:opacity-40 ${
+                                                          selected
+                                                            ? "bg-green-600 border-green-600 text-white"
+                                                            : "bg-white border-gray-200 text-gray-700 hover:border-green-400"
+                                                        }`}
+                                                      >
+                                                        <span className={`text-[10px] font-semibold uppercase tracking-wide ${selected ? "text-green-100" : "text-gray-400"}`}>
+                                                          {odd.label}
+                                                        </span>
+                                                        <span className="text-base font-black leading-tight">{Number(odd.value).toFixed(2)}</span>
+                                                      </button>
+                                                    );
+                                                  })}
+                                              </div>
                                             </div>
-                                          </div>
-                                        ))}
-                                    </div>
-                                  ) : market.type === "ALTERNATE_SPREADS" ? (
-                                    <div className="space-y-1">
-                                      {Object.entries(
-                                        market.odds.reduce<Record<string, Odd[]>>((acc, odd) => {
-                                          const m = odd.label.match(/\(([+-]?[\d.]+)\)/);
-                                          const line = m ? Math.abs(parseFloat(m[1])).toFixed(1) : "?";
-                                          (acc[line] ??= []).push(odd);
-                                          return acc;
-                                        }, {}),
-                                      )
-                                        .sort((a, b) => Number(a[0]) - Number(b[0]))
-                                        .map(([line, oddsForLine]) => (
-                                          <div key={line} className="flex items-center gap-2">
-                                            <span className="text-[11px] text-gray-400 w-14 shrink-0">Hcap {line}</span>
-                                            <div className="flex gap-2">
-                                              {[...oddsForLine]
-                                                .sort((a, b) => a.label.localeCompare(b.label))
-                                                .map((odd) => {
-                                                  const selected = selections.some((s) => s.oddId === odd.id);
-                                                  return (
-                                                    <button
-                                                      key={odd.id}
-                                                      disabled={market.isSuspended || !odd.isActive}
-                                                      onClick={() => toggleOdd(event, market, odd)}
-                                                      className={`flex flex-col items-center px-3 py-1.5 rounded-lg border-2 transition-colors disabled:opacity-40 min-w-[70px] ${
-                                                        selected
-                                                          ? "bg-green-600 border-green-600 text-white"
-                                                          : "bg-white border-gray-200 text-gray-700 hover:border-green-400"
-                                                      }`}
-                                                    >
-                                                      <span className={`text-[9px] font-semibold uppercase tracking-wide ${selected ? "text-green-100" : "text-gray-400"}`}>
-                                                        {odd.label}
-                                                      </span>
-                                                      <span className="text-sm font-black leading-tight">{Number(odd.value).toFixed(2)}</span>
-                                                    </button>
-                                                  );
-                                                })}
-                                            </div>
-                                          </div>
-                                        ))}
-                                    </div>
-                                  ) : market.type === "TEAM_TOTALS" ? (
-                                    <div className="space-y-1">
-                                      {Object.entries(
-                                        market.odds.reduce<Record<string, { team: string; point: string; odds: Odd[] }>>((acc, odd) => {
-                                          const m = odd.label.match(/^(.+) (Plus|Moins) ([\d.]+)$/);
-                                          const team = m?.[1] ?? "?";
-                                          const point = m?.[3] ?? "?";
-                                          const key = `${team}|${point}`;
-                                          (acc[key] ??= { team, point, odds: [] }).odds.push(odd);
-                                          return acc;
-                                        }, {}),
-                                      )
-                                        .sort(([, a], [, b]) => a.team.localeCompare(b.team) || Number(a.point) - Number(b.point))
-                                        .map(([key, group]) => (
-                                          <div key={key} className="flex items-center gap-2">
-                                            <span className="text-[11px] text-gray-400 w-28 shrink-0 truncate">{group.team} {group.point}</span>
-                                            <div className="flex gap-2">
-                                              {[...group.odds]
-                                                .sort((a, b) => (a.label.includes("Moins") ? -1 : 1) - (b.label.includes("Moins") ? -1 : 1))
-                                                .map((odd) => {
-                                                  const selected = selections.some((s) => s.oddId === odd.id);
-                                                  const shortLabel = odd.label.includes("Moins") ? "Moins" : "Plus";
-                                                  return (
-                                                    <button
-                                                      key={odd.id}
-                                                      disabled={market.isSuspended || !odd.isActive}
-                                                      onClick={() => toggleOdd(event, market, odd)}
-                                                      className={`flex flex-col items-center px-3 py-1.5 rounded-lg border-2 transition-colors disabled:opacity-40 min-w-[56px] ${
-                                                        selected
-                                                          ? "bg-green-600 border-green-600 text-white"
-                                                          : "bg-white border-gray-200 text-gray-700 hover:border-green-400"
-                                                      }`}
-                                                    >
-                                                      <span className={`text-[9px] font-semibold uppercase tracking-wide ${selected ? "text-green-100" : "text-gray-400"}`}>
-                                                        {shortLabel}
-                                                      </span>
-                                                      <span className="text-sm font-black leading-tight">{Number(odd.value).toFixed(2)}</span>
-                                                    </button>
-                                                  );
-                                                })}
-                                            </div>
-                                          </div>
-                                        ))}
-                                    </div>
-                                  ) : (
-                                    <div className="flex flex-wrap gap-2">
-                                      {sortOddsForDisplay(market).map((odd) => {
-                                        const selected = selections.some((s) => s.oddId === odd.id);
-                                        return (
-                                          <button
-                                            key={odd.id}
-                                            disabled={market.isSuspended || !odd.isActive}
-                                            onClick={() => toggleOdd(event, market, odd)}
-                                            className={`flex flex-col items-center px-3 py-1.5 rounded-lg border-2 transition-colors disabled:opacity-40 min-w-[56px] ${
-                                              selected
-                                                ? "bg-green-600 border-green-600 text-white"
-                                                : "bg-white border-gray-200 text-gray-700 hover:border-green-400"
-                                            }`}
-                                          >
-                                            <span className={`text-[9px] font-semibold uppercase tracking-wide ${selected ? "text-green-100" : "text-gray-400"}`}>
-                                              {odd.label}
-                                            </span>
-                                            <span className="text-sm font-black leading-tight">{Number(odd.value).toFixed(2)}</span>
-                                          </button>
-                                        );
-                                      })}
+                                          ))}
+                                      </div>
                                     </div>
                                   )}
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        )}
+
+                                  {totalsOdds.length > 0 && (
+                                    <div className="pt-1">
+                                      <p className="text-xs text-gray-500 mb-1">Plus/Moins de buts</p>
+                                      <div className="space-y-1.5">
+                                        {Object.entries(
+                                          totalsOdds.reduce<Record<string, { market: Market; odd: Odd }[]>>((acc, entry) => {
+                                            const point = entry.odd.label.split(" ")[1] ?? "?";
+                                            (acc[point] ??= []).push(entry);
+                                            return acc;
+                                          }, {}),
+                                        )
+                                          .sort((a, b) => Number(a[0]) - Number(b[0]))
+                                          .map(([point, entries]) => (
+                                            <div key={point} className="flex items-center gap-2">
+                                              <span className="text-[11px] text-gray-400 w-14 shrink-0">{point} buts</span>
+                                              <div className="flex-1 grid grid-cols-2 gap-2">
+                                                {[...entries]
+                                                  .sort((a, b) => (a.odd.label.startsWith("Moins") ? -1 : 1) - (b.odd.label.startsWith("Moins") ? -1 : 1))
+                                                  .map(({ market, odd }) => {
+                                                    const selected = selections.some((s) => s.oddId === odd.id);
+                                                    const shortLabel = odd.label.split(" ")[0];
+                                                    return (
+                                                      <button
+                                                        key={odd.id}
+                                                        disabled={market.isSuspended || !odd.isActive}
+                                                        onClick={() => toggleOdd(event, market, odd, "Plus/Moins de buts", `${event.id}:TOTALS`)}
+                                                        className={`flex flex-col items-center w-full py-2.5 rounded-lg border-2 transition-colors disabled:opacity-40 ${
+                                                          selected
+                                                            ? "bg-green-600 border-green-600 text-white"
+                                                            : "bg-white border-gray-200 text-gray-700 hover:border-green-400"
+                                                        }`}
+                                                      >
+                                                        <span className={`text-[10px] font-semibold uppercase tracking-wide ${selected ? "text-green-100" : "text-gray-400"}`}>
+                                                          {shortLabel}
+                                                        </span>
+                                                        <span className="text-base font-black leading-tight">{Number(odd.value).toFixed(2)}</span>
+                                                      </button>
+                                                    );
+                                                  })}
+                                              </div>
+                                            </div>
+                                          ))}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {otherMarkets.map((market) => (
+                                    <div key={market.id} className="pt-1">
+                                      <p className="text-xs text-gray-500 mb-1">{market.name}</p>
+                                      {market.type === "TEAM_TOTALS" ? (
+                                        <div className="space-y-1.5">
+                                          {Object.entries(
+                                            market.odds.reduce<Record<string, { team: string; point: string; odds: Odd[] }>>((acc, odd) => {
+                                              const m = odd.label.match(/^(.+) (Plus|Moins) ([\d.]+)$/);
+                                              const team = m?.[1] ?? "?";
+                                              const point = m?.[3] ?? "?";
+                                              const key = `${team}|${point}`;
+                                              (acc[key] ??= { team, point, odds: [] }).odds.push(odd);
+                                              return acc;
+                                            }, {}),
+                                          )
+                                            .sort(([, a], [, b]) => a.team.localeCompare(b.team) || Number(a.point) - Number(b.point))
+                                            .map(([key, group]) => (
+                                              <div key={key} className="flex items-center gap-2">
+                                                <span className="text-[11px] text-gray-400 w-28 shrink-0 truncate">{group.team} {group.point}</span>
+                                                <div className="flex-1 grid grid-cols-2 gap-2">
+                                                  {[...group.odds]
+                                                    .sort((a, b) => (a.label.includes("Moins") ? -1 : 1) - (b.label.includes("Moins") ? -1 : 1))
+                                                    .map((odd) => {
+                                                      const selected = selections.some((s) => s.oddId === odd.id);
+                                                      const shortLabel = odd.label.includes("Moins") ? "Moins" : "Plus";
+                                                      return (
+                                                        <button
+                                                          key={odd.id}
+                                                          disabled={market.isSuspended || !odd.isActive}
+                                                          onClick={() => toggleOdd(event, market, odd)}
+                                                          className={`flex flex-col items-center w-full py-2.5 rounded-lg border-2 transition-colors disabled:opacity-40 ${
+                                                            selected
+                                                              ? "bg-green-600 border-green-600 text-white"
+                                                              : "bg-white border-gray-200 text-gray-700 hover:border-green-400"
+                                                          }`}
+                                                        >
+                                                          <span className={`text-[10px] font-semibold uppercase tracking-wide ${selected ? "text-green-100" : "text-gray-400"}`}>
+                                                            {shortLabel}
+                                                          </span>
+                                                          <span className="text-base font-black leading-tight">{Number(odd.value).toFixed(2)}</span>
+                                                        </button>
+                                                      );
+                                                    })}
+                                                </div>
+                                              </div>
+                                            ))}
+                                        </div>
+                                      ) : (
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                          {sortOddsForDisplay(market).map((odd) => {
+                                            const selected = selections.some((s) => s.oddId === odd.id);
+                                            return (
+                                              <button
+                                                key={odd.id}
+                                                disabled={market.isSuspended || !odd.isActive}
+                                                onClick={() => toggleOdd(event, market, odd)}
+                                                className={`flex flex-col items-center w-full py-2.5 rounded-lg border-2 transition-colors disabled:opacity-40 ${
+                                                  selected
+                                                    ? "bg-green-600 border-green-600 text-white"
+                                                    : "bg-white border-gray-200 text-gray-700 hover:border-green-400"
+                                                }`}
+                                              >
+                                                <span className={`text-[10px] font-semibold uppercase tracking-wide ${selected ? "text-green-100" : "text-gray-400"}`}>
+                                                  {odd.label}
+                                                </span>
+                                                <span className="text-base font-black leading-tight">{Number(odd.value).toFixed(2)}</span>
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })}

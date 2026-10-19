@@ -167,10 +167,21 @@ async function upsertEvent(competitionId: string, game: any, sportSlug = "footba
     }
 
     for (const outcome of apiMarket.outcomes) {
-      const label = outcome.name === game.home_team ? "1"
-        : outcome.name === game.away_team ? "2"
-        : outcome.name === "Draw" ? "X"
-        : outcome.name;
+      // Format aligné sur celui des marchés alternatifs (handicap/plus-moins)
+      // pour permettre la fusion à l'affichage (même ligne = même libellé).
+      let label: string;
+      if (apiMarket.key === "spreads") {
+        const side = outcome.name === game.home_team ? "1" : outcome.name === game.away_team ? "2" : outcome.name;
+        const point = Number(outcome.point);
+        label = `${side} (${point >= 0 ? "+" : ""}${point})`;
+      } else if (apiMarket.key === "totals") {
+        label = `${outcome.name === "Over" ? "Plus" : "Moins"} ${outcome.point}`;
+      } else {
+        label = outcome.name === game.home_team ? "1"
+          : outcome.name === game.away_team ? "2"
+          : outcome.name === "Draw" ? "X"
+          : outcome.name;
+      }
 
       const existing = await prisma.odd.findFirst({ where: { marketId: market.id, label } });
       if (existing) {
