@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "MarketType" ADD VALUE 'CARDS_TOTAL';

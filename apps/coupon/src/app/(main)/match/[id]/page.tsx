@@ -8,16 +8,43 @@ import { fr } from "date-fns/locale";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 
+// Les 18 types de marché que notre sync TheOddsAPI alimente (voir
+// packages/api/src/services/odds.service.ts) — tous doivent pouvoir être
+// consultés et sélectionnés ici, pas seulement un sous-ensemble.
+// FIRST_HALF_WINNER/SECOND_HALF_WINNER/CORNERS_*/CARDS_* ne sont pas
+// réglables automatiquement (TheOddsAPI ne fournit pas ces stats via
+// /scores) — un trader saisit le résultat manuellement une fois le match
+// terminé, le ticket se règle alors normalement.
 const MARKET_LABELS: Record<string, string> = {
-  MATCH_WINNER: "🏆 Résultat du match",
-  OVER_UNDER:   "📊 Plus/Moins de buts",
-  HANDICAP:     "⚖️ Handicap asiatique",
-  DOUBLE_CHANCE: "🎯 Double chance",
-  BOTH_TEAMS_SCORE: "⚽ Les deux équipes marquent",
-  CORRECT_SCORE: "🔢 Score exact",
-  FIRST_GOAL:   "🥅 Premier buteur",
-  HALF_TIME:    "⏱ Mi-temps",
+  MATCH_WINNER:        "🏆 Résultat du match (1X2)",
+  DOUBLE_CHANCE:       "🎯 Double chance",
+  OVER_UNDER:          "📊 Plus/Moins de buts",
+  BOTH_TEAMS_SCORE:    "⚽ Les deux équipes marquent",
+  HANDICAP:            "⚖️ Handicap asiatique",
+  CORRECT_SCORE:       "🔢 Score exact",
+  TEAM_TOTALS:         "📐 Totaux par équipe",
+  DRAW_NO_BET:         "🤝 Remboursé si match nul",
+  ALTERNATE_TOTALS:    "📈 Plus/Moins (autres lignes)",
+  ALTERNATE_SPREADS:   "📉 Handicap (autres lignes)",
+  FIRST_HALF_WINNER:   "⏱ Résultat 1ère mi-temps",
+  SECOND_HALF_WINNER:  "⏱ Résultat 2nde mi-temps",
+  CORNERS_TOTAL:       "🚩 Plus/Moins de corners",
+  CORNERS_HANDICAP:    "🚩 Handicap corners",
+  CARDS_TOTAL:         "🟨 Plus/Moins de cartons",
+  CARDS_HANDICAP:      "🟨 Handicap cartons",
+  FIRST_GOAL_SCORER:   "🥅 Premier buteur",
+  HALF_TIME_RESULT:    "⏱ Résultat à la mi-temps",
 };
+
+// Ordre d'affichage des onglets — les marchés les plus pariés en premier.
+const MARKET_TAB_ORDER = [
+  "MATCH_WINNER", "DOUBLE_CHANCE", "OVER_UNDER", "BOTH_TEAMS_SCORE",
+  "HANDICAP", "CORRECT_SCORE", "TEAM_TOTALS", "DRAW_NO_BET",
+  "ALTERNATE_TOTALS", "ALTERNATE_SPREADS",
+  "FIRST_HALF_WINNER", "SECOND_HALF_WINNER",
+  "CORNERS_TOTAL", "CORNERS_HANDICAP", "CARDS_TOTAL", "CARDS_HANDICAP",
+  "FIRST_GOAL_SCORER", "HALF_TIME_RESULT",
+];
 
 export default function MatchPage() {
   const { id } = useParams<{ id: string }>();
@@ -61,6 +88,11 @@ export default function MatchPage() {
 
   const markets = event.markets ?? [];
   const totalOdds = markets.reduce((acc: number, m: any) => acc + (m.odds?.length ?? 0), 0);
+
+  // Onglets générés depuis les marchés réellement disponibles sur ce match
+  // (pas une liste figée) — tout type synchronisé par TheOddsAPI y apparaît.
+  const availableTypes = [...new Set(markets.map((m: any) => m.type as string))];
+  const tabs = ["all", ...MARKET_TAB_ORDER.filter((t) => availableTypes.includes(t))];
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -106,7 +138,7 @@ export default function MatchPage() {
       </div>
 
       <div className="flex gap-1 overflow-x-auto scrollbar-none">
-        {["all", "MATCH_WINNER", "OVER_UNDER", "HANDICAP"].map(tab => (
+        {tabs.map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
               activeTab === tab ? "bg-green-600 text-white" : "bg-bg-card border border-bg-border text-txt-muted hover:text-txt-primary"

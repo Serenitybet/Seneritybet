@@ -7,7 +7,17 @@ export type MarketType =
   | "HANDICAP"
   | "CORRECT_SCORE"
   | "FIRST_GOAL_SCORER"
-  | "HALF_TIME_RESULT";
+  | "HALF_TIME_RESULT"
+  | "DRAW_NO_BET"
+  | "ALTERNATE_TOTALS"
+  | "ALTERNATE_SPREADS"
+  | "TEAM_TOTALS"
+  | "FIRST_HALF_WINNER"
+  | "SECOND_HALF_WINNER"
+  | "CORNERS_TOTAL"
+  | "CORNERS_HANDICAP"
+  | "CARDS_TOTAL"
+  | "CARDS_HANDICAP";
 
 export interface Sport {
   id: string;

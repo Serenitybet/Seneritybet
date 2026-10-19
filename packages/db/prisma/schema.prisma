@@ -82,6 +82,17 @@ enum MarketType {
   ALTERNATE_TOTALS
   ALTERNATE_SPREADS
   TEAM_TOTALS
+  // Résultat d'une seule mi-temps (h2h_h1/h2h_h2 TheOddsAPI) et marchés
+  // statistiques (corners, cartons) — voir odds.service.ts syncPropMarkets.
+  // Non calculables automatiquement depuis /scores (TheOddsAPI ne fournit
+  // ni le score à la mi-temps ni les corners/cartons) : réglage manuel par
+  // un trader via PATCH /api/admin/tickets/:id/result.
+  FIRST_HALF_WINNER
+  SECOND_HALF_WINNER
+  CORNERS_TOTAL
+  CORNERS_HANDICAP
+  CARDS_TOTAL
+  CARDS_HANDICAP
 }
 
 enum BetType {
@@ -292,6 +303,15 @@ model Event {
   // du jeu de marchés, pour retraiter une seule fois les matchs déjà faits
   // sous une version antérieure (voir odds.service.ts EXTRA_MARKETS_VERSION).
   extraMarketsVersion Int @default(0)
+
+  // Même principe que extraMarketsVersion, mais pour un lot de marchés
+  // séparé (1ère/2nde mi-temps, corners, cartons) récupéré par son propre
+  // appel API indépendant — voir odds.service.ts PROP_MARKETS_VERSION. Lot
+  // distinct volontairement : si une des clés de marché s'avère invalide
+  // côté TheOddsAPI, seul ce lot échoue, sans jamais faire régresser la
+  // synchronisation des marchés additionnels déjà en place (BTTS, double
+  // chance...).
+  propMarketsVersion Int @default(0)
 
   @@index([competitionId])
   @@index([status])

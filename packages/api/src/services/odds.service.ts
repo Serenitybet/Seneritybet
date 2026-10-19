@@ -415,6 +415,176 @@ async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: s
   }
 }
 
+// ─── Marchés "statistiques" (mi-temps, corners, cartons) — football uniquement ─
+//
+// Clés du catalogue officiel TheOddsAPI (recherche menée le 19/10/2026,
+// https://the-odds-api.com/sports-odds-data/betting-markets.html) : h2h_h1 /
+// h2h_h2 (vainqueur d'une seule mi-temps), alternate_totals_corners /
+// alternate_spreads_corners (total/handicap corners), alternate_totals_cards
+// / alternate_spreads_cards (total/handicap cartons). Comme pour
+// syncExtraMarkets, uniquement disponibles via l'endpoint par match.
+//
+// Lot (et version) volontairement séparés de syncExtraMarkets : si une de
+// ces clés s'avère en réalité invalide ou mal couverte chez les bookmakers
+// EU suivis, seul CE lot échoue (422 → ignoré, retenté au cycle suivant)
+// sans jamais faire régresser la synchronisation des marchés additionnels
+// déjà éprouvés (BTTS, double chance, score exact...). À surveiller les
+// premiers jours : si les logs ne montrent jamais "marchés stats
+// synchronisés", revérifier ces clés avant d'investiguer plus loin.
+//
+// Non calculables automatiquement au résultat final : TheOddsAPI ne fournit
+// ni le score à la mi-temps ni le nombre de corners/cartons via /scores.
+// Ces sélections restent PENDING jusqu'à saisie manuelle d'un trader
+// (PATCH /api/admin/tickets/:id/result — déjà en place côté backoffice).
+const FOOTBALL_SPORT_KEY_BY_COMPETITION_NAME: Record<string, string> = Object.fromEntries(
+  SPORTS_CONFIG.filter((c) => c.slug === "football").map((c) => [c.name, c.key]),
+);
+const PROP_MARKETS_LIMIT = 600;
+const PROP_MARKETS_VERSION = 1;
+
+export async function syncPropMarkets() {
+  if (!API_KEY) return;
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() + 7);
+
+  const events = await prisma.event.findMany({
+    where: {
+      status: { in: ["UPCOMING", "LIVE"] },
+      startTime: { gte: new Date(), lte: cutoff },
+      competition: { name: { in: Object.keys(FOOTBALL_SPORT_KEY_BY_COMPETITION_NAME) } },
+      propMarketsVersion: { lt: PROP_MARKETS_VERSION },
+    },
+    include: { competition: true },
+    take: PROP_MARKETS_LIMIT,
+  });
+
+  let synced = 0;
+  for (const event of events) {
+    const sportKey = FOOTBALL_SPORT_KEY_BY_COMPETITION_NAME[event.competition.name];
+    if (!sportKey || !event.externalId) continue;
+
+    try {
+      const res = await axios.get(
+        `${ODDS_API_BASE}/sports/${sportKey}/events/${event.externalId}/odds`,
+        {
+          params: {
+            apiKey:     API_KEY,
+            regions:    "eu",
+            markets:    "h2h_h1,h2h_h2,alternate_totals_corners,alternate_spreads_corners,alternate_totals_cards,alternate_spreads_cards",
+            oddsFormat: "decimal",
+            dateFormat: "iso",
+          },
+          timeout: 10000,
+        },
+      );
+
+      const remaining = parseInt(res.headers["x-requests-remaining"] ?? "-1", 10);
+      if (remaining >= 0) updateCredits(remaining);
+
+      await upsertPropMarkets(event.id, event.homeTeam, event.awayTeam, res.data?.bookmakers ?? []);
+      await prisma.event.update({ where: { id: event.id }, data: { propMarketsVersion: PROP_MARKETS_VERSION } });
+      synced++;
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        console.error("ODDS_API_KEY invalide ou quota dépassé");
+        break;
+      }
+      // 422 (marché non proposé pour ce match, ou clé invalide) ou autre erreur : on ignore et on continue
+    }
+  }
+
+  if (synced > 0) console.log(`🥅 Marchés stats (1ère/2nde mi-temps, corners, cartons) : ${synced} match(s) synchronisés`);
+}
+
+const PROP_MARKET_TYPE_BY_KEY: Record<string, string> = {
+  h2h_h1:                     "FIRST_HALF_WINNER",
+  h2h_h2:                     "SECOND_HALF_WINNER",
+  alternate_totals_corners:   "CORNERS_TOTAL",
+  alternate_spreads_corners:  "CORNERS_HANDICAP",
+  alternate_totals_cards:     "CARDS_TOTAL",
+  alternate_spreads_cards:    "CARDS_HANDICAP",
+};
+
+const PROP_TOTALS_MAX_LINES  = 6;
+const PROP_SPREADS_MAX_LINES = 6;
+
+async function upsertPropMarkets(eventId: string, homeTeam: string, awayTeam: string, bookmakers: any[]) {
+  const priorityKeys = ["bet365", "unibet", "betway", "onexbet", "pinnacle"];
+  const orderedBookmakers = [
+    ...priorityKeys.map((k) => bookmakers.find((b: any) => b.key === k)).filter(Boolean),
+    ...bookmakers,
+  ];
+
+  const seenTypes = new Set<string>();
+
+  for (const bookmaker of orderedBookmakers) {
+    for (const apiMarket of bookmaker.markets ?? []) {
+      const marketType = PROP_MARKET_TYPE_BY_KEY[apiMarket.key];
+      if (!marketType || seenTypes.has(marketType)) continue;
+      seenTypes.add(marketType);
+
+      const marketName =
+        apiMarket.key === "h2h_h1"                    ? "Résultat 1ère mi-temps" :
+        apiMarket.key === "h2h_h2"                    ? "Résultat 2nde mi-temps" :
+        apiMarket.key === "alternate_totals_corners"  ? "Total corners" :
+        apiMarket.key === "alternate_spreads_corners" ? "Handicap corners" :
+        apiMarket.key === "alternate_totals_cards"    ? "Total cartons" :
+        "Handicap cartons";
+
+      let market = await prisma.market.findFirst({ where: { eventId, type: marketType as any } });
+      if (!market) {
+        market = await prisma.market.create({ data: { eventId, name: marketName, type: marketType as any } });
+      }
+
+      // Lignes totaux (corners/cartons) : on privilégie les lignes à virgule
+      // (X.5, sans push possible), comme pour le plus/moins de buts — mais à
+      // défaut (si un bookmaker ne propose que des lignes entières pour ces
+      // marchés, moins standard qu'au foot sur les buts), on retombe sur
+      // toutes les lignes disponibles plutôt que de perdre le marché entier.
+      let outcomes = apiMarket.outcomes;
+      if (apiMarket.key === "alternate_totals_corners" || apiMarket.key === "alternate_totals_cards") {
+        const allPoints = [...new Set(outcomes.map((o: any) => o.point))].filter((p): p is number => typeof p === "number");
+        const halfPoints = allPoints.filter((p) => p % 1 === 0.5).sort((a, b) => a - b);
+        const points = (halfPoints.length > 0 ? halfPoints : allPoints.sort((a, b) => a - b)).slice(0, PROP_TOTALS_MAX_LINES);
+        outcomes = outcomes.filter((o: any) => points.includes(o.point));
+      } else if (apiMarket.key === "alternate_spreads_corners" || apiMarket.key === "alternate_spreads_cards") {
+        const absPoints = [...new Set(outcomes.map((o: any) => Math.abs(o.point)))]
+          .filter((p): p is number => typeof p === "number" && p > 0)
+          .sort((a, b) => a - b)
+          .slice(0, PROP_SPREADS_MAX_LINES);
+        outcomes = outcomes.filter((o: any) => absPoints.includes(Math.abs(o.point)));
+      }
+
+      for (const outcome of outcomes) {
+        let label: string;
+        if (apiMarket.key === "h2h_h1" || apiMarket.key === "h2h_h2") {
+          label = outcome.name === homeTeam ? "1"
+            : outcome.name === awayTeam ? "2"
+            : outcome.name === "Draw" ? "X"
+            : outcome.name;
+        } else if (apiMarket.key === "alternate_totals_corners") {
+          label = `${outcome.name === "Over" ? "Plus" : "Moins"} ${outcome.point} corners`;
+        } else if (apiMarket.key === "alternate_totals_cards") {
+          label = `${outcome.name === "Over" ? "Plus" : "Moins"} ${outcome.point} cartons`;
+        } else {
+          // alternate_spreads_corners / alternate_spreads_cards
+          const side = outcome.name === homeTeam ? "1" : outcome.name === awayTeam ? "2" : outcome.name;
+          const point = Number(outcome.point);
+          label = `${side} (${point >= 0 ? "+" : ""}${point})`;
+        }
+
+        const existing = await prisma.odd.findFirst({ where: { marketId: market.id, label } });
+        if (existing) {
+          await prisma.odd.update({ where: { id: existing.id }, data: { value: outcome.price } });
+        } else {
+          await prisma.odd.create({ data: { marketId: market.id, label, value: outcome.price } });
+        }
+      }
+    }
+  }
+}
+
 function getSportLabel(slug: string): string {
   const labels: Record<string, string> = {
     "football":         "Football",
