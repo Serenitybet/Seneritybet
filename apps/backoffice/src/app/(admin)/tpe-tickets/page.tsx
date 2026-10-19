@@ -2,10 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import { useAuthAdminStore } from "@/store/auth-admin.store";
 
 const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL ?? "https://seneritybet.onrender.com/api";
 
 type Status = "PENDING" | "WON" | "LOST" | "REFUNDED" | "CANCELLED" | "PAID";
+type ItemResult = "WON" | "LOST" | "VOID" | null;
+
+interface TicketItem {
+  id: string;
+  oddValue: number;
+  result: ItemResult;
+  odd: { label: string };
+  market: { name: string; event: { homeTeam: string; awayTeam: string; startTime: string } };
+}
 
 interface Ticket {
   id: string;
@@ -19,7 +29,11 @@ interface Ticket {
   createdAt: string;
   tpe: { code: string; name: string | null };
   cashier: { firstName: string; lastName: string };
+  items: TicketItem[];
 }
+
+const RESULT_LABEL: Record<string, string> = { WON: "Gagné", LOST: "Perdu", VOID: "Annulé" };
+const RESULT_BADGE: Record<string, string> = { WON: "bo-badge-green", LOST: "bo-badge-red", VOID: "bo-badge-gray" };
 
 interface Tpe { id: string; code: string; name: string | null }
 
@@ -36,6 +50,8 @@ function fmtXAF(v: number) {
 }
 
 export default function TpeTicketsPage() {
+  const { admin } = useAuthAdminStore();
+  const canSettle = admin?.role && ["TRADER", "ADMIN", "SUPER_ADMIN"].includes(admin.role);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [tpes, setTpes] = useState<Tpe[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,9 +59,35 @@ export default function TpeTicketsPage() {
   const [tpeId, setTpeId] = useState("");
   const [dangerousOnly, setDangerousOnly] = useState(false);
   const [groupByTpe, setGroupByTpe] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   function token() { return localStorage.getItem("bo_token"); }
-  function authHeaders() { return { Authorization: `Bearer ${token()}` }; }
+  function authHeaders(extra?: Record<string, string>) { return { Authorization: `Bearer ${token()}`, ...extra }; }
+
+  async function setItemResult(ticketId: string, itemId: string, result: "WON" | "LOST" | "VOID") {
+    try {
+      const res = await fetch(`${API}/admin/tickets/${ticketId}/result`, {
+        method: "PATCH",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ itemId, result }),
+      });
+      if (!res.ok) { toast.error("Erreur"); return; }
+      await load();
+    } catch { toast.error("Erreur réseau"); }
+  }
+
+  async function settleTicket(ticketId: string) {
+    try {
+      const res = await fetch(`${API}/admin/tickets/${ticketId}/settle`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      const d = await res.json();
+      if (!res.ok) { toast.error(d.error ?? "Erreur"); return; }
+      toast.success(`Ticket réglé : ${d.data.status}`);
+      await load();
+    } catch { toast.error("Erreur réseau"); }
+  }
 
   async function load() {
     setLoading(true);
@@ -84,22 +126,74 @@ export default function TpeTicketsPage() {
   }
 
   function TicketRow({ t }: { t: Ticket }) {
+    const expanded = expandedId === t.id;
+    const allHaveResults = t.items?.length > 0 && t.items.every((i) => i.result !== null);
+
     return (
-      <div className={`flex items-center justify-between gap-4 px-4 py-3 border-b border-bo-border last:border-b-0 ${isDangerous(t) ? "bg-red-500/5" : ""}`}>
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-mono font-bold text-t-primary text-sm">{t.code}</p>
-            <span className={`${STATUS_BADGE[t.status]} text-[10px]`}>{STATUS_LABEL[t.status]}</span>
-            {isDangerous(t) && <span className="bo-badge-red text-[10px]">⚠️ Dangereux</span>}
+      <div className={isDangerous(t) ? "bg-red-500/5" : ""}>
+        <button
+          onClick={() => setExpandedId(expanded ? null : t.id)}
+          className="w-full flex items-center justify-between gap-4 px-4 py-3 border-b border-bo-border last:border-b-0 text-left hover:bg-bo-surface transition-colors"
+        >
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-mono font-bold text-t-primary text-sm">{t.code}</p>
+              <span className={`${STATUS_BADGE[t.status]} text-[10px]`}>{STATUS_LABEL[t.status]}</span>
+              {isDangerous(t) && <span className="bo-badge-red text-[10px]">⚠️ Dangereux</span>}
+            </div>
+            <p className="text-[11px] text-t-faint mt-0.5">
+              {t.tpe?.name ?? t.tpe?.code} · {t.cashier?.firstName} {t.cashier?.lastName} · {new Date(t.createdAt).toLocaleString("fr-FR")}
+            </p>
           </div>
-          <p className="text-[11px] text-t-faint mt-0.5">
-            {t.tpe?.name ?? t.tpe?.code} · {t.cashier?.firstName} {t.cashier?.lastName} · {new Date(t.createdAt).toLocaleString("fr-FR")}
-          </p>
-        </div>
-        <div className="text-right shrink-0">
-          <p className="text-[11px] text-t-faint">Mise {fmtXAF(t.stakeXAF)} · x{t.totalOdds.toFixed(2)}</p>
-          <p className="font-black text-sm text-t-primary">{fmtXAF(t.potentialWinXAF)}</p>
-        </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="text-right">
+              <p className="text-[11px] text-t-faint">Mise {fmtXAF(t.stakeXAF)} · x{t.totalOdds.toFixed(2)}</p>
+              <p className="font-black text-sm text-t-primary">{fmtXAF(t.potentialWinXAF)}</p>
+            </div>
+            <span className="text-t-faint text-xs">{expanded ? "▲" : "▼"}</span>
+          </div>
+        </button>
+
+        {expanded && (
+          <div className="px-4 pb-4 bg-bo-surface space-y-2 border-b border-bo-border">
+            {(t.items ?? []).map((item) => (
+              <div key={item.id} className="flex items-center justify-between gap-3 bg-bo-card border border-bo-border rounded-lg px-3 py-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-t-primary truncate">
+                    {item.market.event.homeTeam} vs {item.market.event.awayTeam}
+                  </p>
+                  <p className="text-[11px] text-t-faint">
+                    {item.market.name} — {item.odd.label} @ {Number(item.oddValue).toFixed(2)}
+                    {" · "}{new Date(item.market.event.startTime).toLocaleString("fr-FR")}
+                  </p>
+                </div>
+                {item.result ? (
+                  <span className={`${RESULT_BADGE[item.result]} text-[10px] shrink-0`}>{RESULT_LABEL[item.result]}</span>
+                ) : canSettle && t.status === "PENDING" ? (
+                  <div className="flex gap-1.5 shrink-0">
+                    <button className="bo-btn-secondary bo-btn-sm" onClick={() => setItemResult(t.id, item.id, "WON")}>✅ Gagné</button>
+                    <button className="bo-btn-secondary bo-btn-sm" onClick={() => setItemResult(t.id, item.id, "LOST")}>❌ Perdu</button>
+                    <button className="bo-btn-secondary bo-btn-sm" onClick={() => setItemResult(t.id, item.id, "VOID")}>➖ Annulé</button>
+                  </div>
+                ) : (
+                  <span className="text-[10px] text-t-faint shrink-0">En attente</span>
+                )}
+              </div>
+            ))}
+
+            {canSettle && t.status === "PENDING" && (
+              <div className="flex justify-end pt-1">
+                <button
+                  className="bo-btn-primary bo-btn-sm"
+                  disabled={!allHaveResults}
+                  onClick={() => settleTicket(t.id)}
+                >
+                  {allHaveResults ? "Régler le ticket" : "En attente de tous les résultats"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
