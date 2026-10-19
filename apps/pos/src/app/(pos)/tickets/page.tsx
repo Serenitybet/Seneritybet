@@ -5,6 +5,7 @@ import { useState, useRef } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import { api, formatXAF, setAuthToken } from "@/lib/api";
 import { useAuthStore } from "@/store/auth.store";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 interface Selection {
   eventName: string;
@@ -49,6 +50,7 @@ export default function TicketsPage() {
   const [placing, setPlacing] = useState(false);
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const QUICK_STAKES = [500, 1000, 2000, 5000, 10000, 25000];
 
@@ -75,7 +77,8 @@ export default function TicketsPage() {
     if (!coupon || !stakeXAF) return;
     const stake = parseFloat(stakeXAF);
     if (isNaN(stake) || stake < 100) { toast.error("Mise minimum 100 XAF"); return; }
-    if (!confirm(`Confirmer le ticket ?\nMise : ${stake.toLocaleString("fr-FR")} XAF\nGain potentiel : ${(stake * coupon.totalOdds).toLocaleString("fr-FR")} XAF`)) return;
+    const ok = await confirm(`Confirmer le ticket ?\nMise : ${stake.toLocaleString("fr-FR")} XAF\nGain potentiel : ${(stake * coupon.totalOdds).toLocaleString("fr-FR")} XAF`);
+    if (!ok) return;
 
     if (token) setAuthToken(token);
     setPlacing(true);
@@ -99,6 +102,7 @@ export default function TicketsPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-4 no-print">
       <Toaster position="top-center" />
+      {ConfirmDialog}
 
       {/* Recherche coupon */}
       {!ticket && (

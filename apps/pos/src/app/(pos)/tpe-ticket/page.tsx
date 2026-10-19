@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import toast, { Toaster } from "react-hot-toast";
 import { api } from "@/lib/api";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 interface Odd { id: string; label: string; value: string; isActive: boolean; }
 interface Market { id: string; name: string; type: string; odds: Odd[]; isSuspended: boolean; isActive: boolean; }
@@ -73,6 +74,7 @@ export default function TpeTicketPage() {
   const [dayOffset, setDayOffset] = useState(0);
   const [competitionFilter, setCompetitionFilter] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   useEffect(() => {
     api.get("/sports/events?date=week&limit=200").then((r) => setEvents(r.data.data.events))
@@ -124,7 +126,8 @@ export default function TpeTicketPage() {
     if (!selections.length || !stakeXAF) return;
     const stake = parseFloat(stakeXAF);
     if (isNaN(stake) || stake < 100) { toast.error("Mise minimum 100 XAF"); return; }
-    if (!confirm(`Confirmer le ticket ?\nMise : ${stake.toLocaleString("fr-FR")} XAF\nGain potentiel : ${(stake * totalOdds).toLocaleString("fr-FR")} XAF`)) return;
+    const ok = await confirm(`Confirmer le ticket ?\nMise : ${stake.toLocaleString("fr-FR")} XAF\nGain potentiel : ${(stake * totalOdds).toLocaleString("fr-FR")} XAF`);
+    if (!ok) return;
 
     setPlacing(true);
     try {
@@ -208,6 +211,7 @@ export default function TpeTicketPage() {
   return (
     <div className="max-w-5xl mx-auto space-y-4 no-print">
       <Toaster position="top-center" />
+      {ConfirmDialog}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Liste des événements */}
         <div className="lg:col-span-2 space-y-3">

@@ -5,6 +5,7 @@ import { useState } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import { api, formatXAF, setAuthToken } from "@/lib/api";
 import { useAuthStore } from "@/store/auth.store";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 interface PendingWithdrawal {
   id: string;
@@ -30,6 +31,7 @@ export default function WithdrawalsPage() {
   const [requests, setRequests] = useState<PendingWithdrawal[]>([]);
   const [validating, setValidating] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<any | null>(null);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   async function searchPlayer(e: React.FormEvent) {
     e.preventDefault();
@@ -55,7 +57,8 @@ export default function WithdrawalsPage() {
   }
 
   async function validateWithdrawal(requestId: string) {
-    if (!confirm("Confirmer le paiement de ce retrait ?")) return;
+    const ok = await confirm("Confirmer le paiement de ce retrait ?");
+    if (!ok) return;
     if (token) setAuthToken(token);
     setValidating(requestId);
     try {
@@ -81,6 +84,7 @@ export default function WithdrawalsPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <Toaster position="top-center" />
+      {ConfirmDialog}
 
       <div className="bg-white rounded-2xl shadow-sm p-6">
         <h2 className="text-lg font-bold text-gray-800 mb-1">💸 Valider un retrait</h2>

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import jsQR from "jsqr";
 import toast, { Toaster } from "react-hot-toast";
 import { api } from "@/lib/api";
+import { useConfirm } from "@/components/ConfirmDialog";
 
 interface TicketInfo {
   code: string;
@@ -41,6 +42,7 @@ export default function TpePayoutPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   async function doSearch(rawCode: string) {
     const trimmed = rawCode.trim().toUpperCase();
@@ -122,7 +124,8 @@ export default function TpePayoutPage() {
 
   async function payTicket() {
     if (!ticket) return;
-    if (!confirm(`Payer ${ticket.status === "WON" ? ticket.potentialWinXAF.toLocaleString("fr-FR") : ticket.stakeXAF.toLocaleString("fr-FR")} XAF pour le ticket ${ticket.code} ?`)) return;
+    const ok = await confirm(`Payer ${ticket.status === "WON" ? ticket.potentialWinXAF.toLocaleString("fr-FR") : ticket.stakeXAF.toLocaleString("fr-FR")} XAF pour le ticket ${ticket.code} ?`);
+    if (!ok) return;
     setPaying(true);
     try {
       const res = await api.post(`/tpe/tickets/${ticket.code}/pay`);
@@ -140,6 +143,7 @@ export default function TpePayoutPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-4">
       <Toaster position="top-center" />
+      {ConfirmDialog}
 
       <div className="bg-white rounded-2xl shadow-sm p-6">
         <h2 className="text-lg font-bold text-gray-800 mb-1">💵 Encaisser un ticket</h2>
