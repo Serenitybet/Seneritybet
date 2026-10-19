@@ -198,7 +198,7 @@ async function upsertEvent(competitionId: string, game: any, sportSlug = "footba
 const SPORT_KEY_BY_COMPETITION_NAME: Record<string, string> = Object.fromEntries(
   SPORTS_CONFIG.map((c) => [c.name, c.key]),
 );
-const EXTRA_MARKETS_LIMIT = 100;
+const EXTRA_MARKETS_LIMIT = 150;
 
 // À incrémenter à chaque fois que le jeu de marchés additionnels change
 // (ajout/retrait d'une clé dans l'appel ci-dessous), pour que les matchs
