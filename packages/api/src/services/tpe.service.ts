@@ -176,15 +176,19 @@ export async function getCashierSummary(tpeId: string, cashierId: string, from: 
     }),
     prisma.ticket.findMany({
       where: { paidByTpeId: tpeId, paidByCashierId: cashierId, paidAt: { gte: from, lte: to } },
-      select: { status: true, stake: true, potentialWin: true },
+      select: { stake: true, potentialWin: true, items: { select: { result: true } } },
     }),
   ]);
 
   const issuedTotal = issuedTickets.reduce((acc, t) => acc + t.stake, BigInt(0));
-  const paidTotal = paidTickets.reduce(
-    (acc, t) => acc + (t.status === "WON" ? t.potentialWin : t.stake),
-    BigInt(0),
-  );
+  // Le statut du ticket passe à PAID une fois encaissé, donc on ne peut plus
+  // s'y fier pour savoir s'il s'agissait d'un gain (payé = gain potentiel)
+  // ou d'un remboursé (payé = mise) — on se base plutôt sur les résultats
+  // de ses sélections, qui eux ne changent plus après le règlement.
+  const paidTotal = paidTickets.reduce((acc, t) => {
+    const won = t.items.length > 0 && t.items.every((i) => i.result === "WON");
+    return acc + (won ? t.potentialWin : t.stake);
+  }, BigInt(0));
 
   return {
     from: from.toISOString(),
