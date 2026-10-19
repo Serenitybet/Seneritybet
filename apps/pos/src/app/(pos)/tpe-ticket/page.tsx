@@ -191,10 +191,13 @@ export default function TpeTicketPage() {
           ) : (
             visibleEvents.map((event) => (
               <div key={event.id} className="bg-white rounded-2xl shadow-sm p-4">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-0.5">
                   <p className="font-bold text-gray-900 text-sm">{event.homeTeam} vs {event.awayTeam}</p>
                   <span className="text-[11px] text-gray-400">{event.competition.name}</span>
                 </div>
+                <p className="text-[11px] text-gray-400 mb-2">
+                  🕒 {new Date(event.startTime).toLocaleString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                </p>
                 {event.markets.map((market) => (
                   <div key={market.id} className="mb-2">
                     <p className="text-xs text-gray-500 mb-1">{market.name}</p>
