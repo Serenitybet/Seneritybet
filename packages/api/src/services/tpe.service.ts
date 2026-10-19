@@ -112,25 +112,38 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
   const totalOdds = odds.reduce((acc, o) => acc * Number(o.value), 1);
   const potentialWin = BigInt(Math.floor(Number(stake) * totalOdds));
 
+  const placingTpe = await prisma.tpe.findUnique({ where: { id: tpeId } });
+  if (!placingTpe) throw new AppError(404, "TPE introuvable");
+  if (placingTpe.credit < stake) {
+    throw new AppError(400, "Crédit TPE insuffisant pour cette mise — contactez le backoffice");
+  }
+
   let code = generateTicketCode();
   while (await prisma.ticket.findUnique({ where: { code } })) code = generateTicketCode();
 
-  const ticket = await prisma.ticket.create({
-    data: {
-      code,
-      tpeId,
-      cashierId,
-      stake,
-      totalOdds,
-      potentialWin,
-      items: {
-        create: selections.map((s) => {
-          const odd = odds.find((o) => o.id === s.oddId)!;
-          return { marketId: s.marketId, oddId: s.oddId, oddValue: Number(odd.value) };
-        }),
+  // La mise est déduite du crédit du TPE (le caissier "immobilise" ce montant
+  // en l'encaissant) ; elle y revient, majorée du gain, au moment du paiement
+  // d'un ticket gagnant (voir payTicket).
+  const ticket = await prisma.$transaction(async (tx) => {
+    const created = await tx.ticket.create({
+      data: {
+        code,
+        tpeId,
+        cashierId,
+        stake,
+        totalOdds,
+        potentialWin,
+        items: {
+          create: selections.map((s) => {
+            const odd = odds.find((o) => o.id === s.oddId)!;
+            return { marketId: s.marketId, oddId: s.oddId, oddValue: Number(odd.value) };
+          }),
+        },
       },
-    },
-    include: { items: { include: { market: { include: { event: true } }, odd: true } } },
+      include: { items: { include: { market: { include: { event: true } }, odd: true } } },
+    });
+    await tx.tpe.update({ where: { id: tpeId }, data: { credit: { decrement: stake } } });
+    return created;
   });
 
   return serializeTicket(ticket);
@@ -212,10 +225,11 @@ export async function payTicket(code: string, tpeId: string, cashierId: string) 
 
   const payingTpe = await prisma.tpe.findUnique({ where: { id: tpeId } });
   if (!payingTpe) throw new AppError(404, "TPE payeur introuvable");
-  if (payingTpe.credit < amountToPay) {
-    throw new AppError(400, "Crédit TPE insuffisant pour ce paiement — contactez le backoffice");
-  }
 
+  // Le paiement d'un ticket (gagnant ou remboursé) ravitaille le crédit du
+  // TPE payeur — c'est l'inverse de la mise déduite à la création du ticket
+  // (voir placeTicket) : le caissier récupère sa mise immobilisée, majorée
+  // du gain le cas échéant.
   const updated = await prisma.$transaction(async (tx) => {
     const paid = await tx.ticket.update({
       where: { id: ticket.id },
@@ -226,7 +240,7 @@ export async function payTicket(code: string, tpeId: string, cashierId: string) 
         paidByCashierId: cashierId,
       },
     });
-    await tx.tpe.update({ where: { id: tpeId }, data: { credit: { decrement: amountToPay } } });
+    await tx.tpe.update({ where: { id: tpeId }, data: { credit: { increment: amountToPay } } });
     return paid;
   });
 
