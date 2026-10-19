@@ -324,6 +324,47 @@ export default function TpeTicketPage() {
                                           </div>
                                         ))}
                                     </div>
+                                  ) : market.type === "ALTERNATE_SPREADS" ? (
+                                    <div className="space-y-1">
+                                      {Object.entries(
+                                        market.odds.reduce<Record<string, Odd[]>>((acc, odd) => {
+                                          const m = odd.label.match(/\(([+-]?[\d.]+)\)/);
+                                          const line = m ? Math.abs(parseFloat(m[1])).toFixed(1) : "?";
+                                          (acc[line] ??= []).push(odd);
+                                          return acc;
+                                        }, {}),
+                                      )
+                                        .sort((a, b) => Number(a[0]) - Number(b[0]))
+                                        .map(([line, oddsForLine]) => (
+                                          <div key={line} className="flex items-center gap-2">
+                                            <span className="text-[11px] text-gray-400 w-14 shrink-0">Hcap {line}</span>
+                                            <div className="flex gap-2">
+                                              {[...oddsForLine]
+                                                .sort((a, b) => a.label.localeCompare(b.label))
+                                                .map((odd) => {
+                                                  const selected = selections.some((s) => s.oddId === odd.id);
+                                                  return (
+                                                    <button
+                                                      key={odd.id}
+                                                      disabled={market.isSuspended || !odd.isActive}
+                                                      onClick={() => toggleOdd(event, market, odd)}
+                                                      className={`flex flex-col items-center px-3 py-1.5 rounded-lg border-2 transition-colors disabled:opacity-40 min-w-[70px] ${
+                                                        selected
+                                                          ? "bg-green-600 border-green-600 text-white"
+                                                          : "bg-white border-gray-200 text-gray-700 hover:border-green-400"
+                                                      }`}
+                                                    >
+                                                      <span className={`text-[9px] font-semibold uppercase tracking-wide ${selected ? "text-green-100" : "text-gray-400"}`}>
+                                                        {odd.label}
+                                                      </span>
+                                                      <span className="text-sm font-black leading-tight">{Number(odd.value).toFixed(2)}</span>
+                                                    </button>
+                                                  );
+                                                })}
+                                            </div>
+                                          </div>
+                                        ))}
+                                    </div>
                                   ) : (
                                     <div className="flex flex-wrap gap-2">
                                       {sortOddsForDisplay(market).map((odd) => {

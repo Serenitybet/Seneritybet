@@ -5,13 +5,13 @@ import { isSyncPaused, getCreditsStatus } from "../lib/credits.state";
 // Plan 100K/mois → ~3 300 crédits/jour disponibles
 // 17 championnats × 3 syncs/heure × 24h × 30j = ~36 700 crédits/mois (cotes principales)
 // + marchés additionnels (BTTS, double chance, score exact, remboursé si nul,
-//   plus/moins alternatif (6 lignes max) — 5 marchés × 1 région = 5 crédits/match,
-//   tous les championnats, matchs des 7 prochains jours, plafonné à 150
-//   matchs/exécution, 1 seule fois par match tant que EXTRA_MARKETS_VERSION
-//   ne change pas) toutes les 30 min. Le volume total de matchs ne change pas
-//   avec la fréquence — accélérer l'intervalle ne coûte quasi rien en crédits
-//   une fois le rattrapage initial terminé, ça réduit juste le temps pour
-//   couvrir tout le calendrier. À SURVEILLER sur le dashboard TheOddsAPI les
+//   plus/moins alternatif, handicap alternatif (6 lignes max chacun) — 6
+//   marchés × 1 région = 6 crédits/match, tous les championnats, matchs des
+//   7 prochains jours, plafonné à 600 matchs/exécution, 1 seule fois par
+//   match tant que EXTRA_MARKETS_VERSION ne change pas) toutes les 30 min.
+//   Le volume total de matchs ne change pas avec la fréquence ou le plafond
+//   — ça réduit juste le temps pour couvrir tout le calendrier.
+//   À SURVEILLER sur le dashboard TheOddsAPI les
 //   premières semaines — augmenter le plan si besoin.
 // Marge de sécurité confortable sur le plan 100K.
 

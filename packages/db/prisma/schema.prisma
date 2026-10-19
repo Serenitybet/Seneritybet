@@ -80,6 +80,7 @@ enum MarketType {
   HALF_TIME_RESULT
   DRAW_NO_BET
   ALTERNATE_TOTALS
+  ALTERNATE_SPREADS
 }
 
 enum BetType {
