@@ -79,6 +79,7 @@ enum MarketType {
   FIRST_GOAL_SCORER
   HALF_TIME_RESULT
   DRAW_NO_BET
+  ALTERNATE_TOTALS
 }
 
 enum BetType {

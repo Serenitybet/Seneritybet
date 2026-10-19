@@ -226,7 +226,7 @@ export async function syncExtraMarkets() {
           params: {
             apiKey:     API_KEY,
             regions:    "eu",
-            markets:    "btts,double_chance,correct_score,draw_no_bet",
+            markets:    "btts,double_chance,correct_score,draw_no_bet,alternate_totals",
             oddsFormat: "decimal",
             dateFormat: "iso",
           },
@@ -248,18 +248,25 @@ export async function syncExtraMarkets() {
     }
   }
 
-  if (synced > 0) console.log(`🎯 Marchés additionnels (BTTS, double chance, score exact, remboursé si nul) : ${synced} match(s) synchronisés`);
+  if (synced > 0) console.log(`🎯 Marchés additionnels (BTTS, double chance, score exact, remboursé si nul, plus/moins alternatif) : ${synced} match(s) synchronisés`);
 }
 
 // Pas un seul bookmaker n'offre systématiquement les 4 marchés (vérifié
 // empiriquement) : on fusionne plusieurs bookmakers, le premier qui propose
 // chaque marché étant retenu pour ce marché, en suivant l'ordre de priorité.
 const EXTRA_MARKET_TYPE_BY_KEY: Record<string, string> = {
-  btts:          "BOTH_TEAMS_SCORE",
-  double_chance: "DOUBLE_CHANCE",
-  correct_score: "CORRECT_SCORE",
-  draw_no_bet:   "DRAW_NO_BET",
+  btts:             "BOTH_TEAMS_SCORE",
+  double_chance:    "DOUBLE_CHANCE",
+  correct_score:    "CORRECT_SCORE",
+  draw_no_bet:      "DRAW_NO_BET",
+  alternate_totals: "ALTERNATE_TOTALS",
 };
+
+// Plus/moins alternatif : l'API renvoie souvent 8-10 lignes (0.5 à 5.5+
+// buts) — on se limite aux 5 lignes les plus basses (les plus pertinentes
+// pour le football, la plupart des scores se situant dans cette plage)
+// pour garder l'écran de caisse lisible.
+const ALTERNATE_TOTALS_MAX_LINES = 5;
 
 async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: string, bookmakers: any[]) {
   const priorityKeys = ["bet365", "unibet", "betway", "onexbet", "pinnacle"];
@@ -277,9 +284,10 @@ async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: s
       seenTypes.add(marketType);
 
       const marketName =
-        apiMarket.key === "btts"          ? "Les deux équipes marquent" :
-        apiMarket.key === "double_chance" ? `Double chance : ${homeTeam} vs ${awayTeam}` :
-        apiMarket.key === "correct_score" ? "Score exact" :
+        apiMarket.key === "btts"             ? "Les deux équipes marquent" :
+        apiMarket.key === "double_chance"    ? `Double chance : ${homeTeam} vs ${awayTeam}` :
+        apiMarket.key === "correct_score"    ? "Score exact" :
+        apiMarket.key === "alternate_totals" ? "Plus/Moins (autres lignes)" :
         "Remboursé si match nul";
 
       let market = await prisma.market.findFirst({ where: { eventId, type: marketType as any } });
@@ -287,7 +295,18 @@ async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: s
         market = await prisma.market.create({ data: { eventId, name: marketName, type: marketType as any } });
       }
 
-      for (const outcome of apiMarket.outcomes) {
+      // Plus/moins alternatif : on garde seulement les lignes les plus basses
+      // (les plus pertinentes pour un match de foot), plafonné à 5.
+      let outcomes = apiMarket.outcomes;
+      if (apiMarket.key === "alternate_totals") {
+        const points = [...new Set(outcomes.map((o: any) => o.point))]
+          .filter((p): p is number => typeof p === "number")
+          .sort((a, b) => a - b)
+          .slice(0, ALTERNATE_TOTALS_MAX_LINES);
+        outcomes = outcomes.filter((o: any) => points.includes(o.point));
+      }
+
+      for (const outcome of outcomes) {
         let label: string;
         if (apiMarket.key === "btts") {
           label = outcome.name === "Yes" ? "Oui" : "Non";
@@ -303,6 +322,8 @@ async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: s
           const homeGoals = homePart?.split(":").pop()?.trim();
           const awayGoals = awayPart?.split(":").pop()?.trim();
           label = homeGoals !== undefined && awayGoals !== undefined ? `${homeGoals}-${awayGoals}` : outcome.name;
+        } else if (apiMarket.key === "alternate_totals") {
+          label = `${outcome.name === "Over" ? "Plus" : "Moins"} ${outcome.point}`;
         } else {
           // draw_no_bet : une issue par équipe, pas de match nul
           label =
