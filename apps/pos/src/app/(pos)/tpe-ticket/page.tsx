@@ -26,6 +26,7 @@ interface TicketResult {
   totalOdds: number;
   potentialWinXAF: number;
   createdAt: string;
+  tpe?: { code: string; name: string | null };
   items: { oddValue: number; market: { name: string; event: { homeTeam: string; awayTeam: string } }; odd: { label: string } }[];
 }
 
@@ -138,7 +139,8 @@ export default function TpeTicketPage() {
       setTicket(res.data.data);
       setSelections([]);
       setStakeXAF("");
-      toast.success("Ticket créé ! 🎫");
+      // Pas de toast ici — il reste visible à l'écran pendant l'impression
+      // et se superpose à l'aperçu du ticket.
       setTimeout(() => window.print(), 500);
     } catch (err: any) {
       toast.error(err.response?.data?.error ?? "Erreur lors de la création du ticket");
@@ -176,11 +178,11 @@ export default function TpeTicketPage() {
             <div style={{ textAlign: "center", borderBottom: "1px solid #000", paddingBottom: 4, marginBottom: 4 }}>
               <p style={{ fontSize: 14, fontWeight: "bold" }}>SERENITYBET</p>
               <p style={{ fontSize: 9 }}>Ticket de pari sportif</p>
-              <p style={{ fontSize: 8, color: "#444" }}>Licence de jeux — République du Tchad</p>
             </div>
             <div style={{ marginBottom: 4 }}>
               <p><strong>Code:</strong> {ticket.code}</p>
-              <p><strong>Date:</strong> {new Date(ticket.createdAt).toLocaleString("fr-FR")}</p>
+              <p><strong>TPE:</strong> {ticket.tpe?.name ?? ticket.tpe?.code ?? "—"}</p>
+              <p><strong>Imprimé le:</strong> {new Date(ticket.createdAt).toLocaleString("fr-FR")}</p>
             </div>
             <div style={{ borderTop: "1px dashed #000", borderBottom: "1px dashed #000", padding: "4px 0", marginBottom: 4 }}>
               <p style={{ fontWeight: "bold", marginBottom: 3 }}>SÉLECTIONS ({ticket.items.length})</p>

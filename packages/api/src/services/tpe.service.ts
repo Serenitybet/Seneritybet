@@ -140,7 +140,10 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
           }),
         },
       },
-      include: { items: { include: { market: { include: { event: true } }, odd: true } } },
+      include: {
+        items: { include: { market: { include: { event: true } }, odd: true } },
+        tpe: { select: { code: true, name: true } },
+      },
     });
     await tx.tpe.update({ where: { id: tpeId }, data: { credit: { decrement: stake } } });
     return created;
