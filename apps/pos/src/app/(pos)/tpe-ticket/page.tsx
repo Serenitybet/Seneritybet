@@ -2,7 +2,7 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
-import QRCode from "qrcode";
+import JsBarcode from "jsbarcode";
 import toast, { Toaster } from "react-hot-toast";
 import { api } from "@/lib/api";
 import { useConfirm } from "@/components/ConfirmDialog";
@@ -72,7 +72,7 @@ export default function TpeTicketPage() {
   const [stakeXAF, setStakeXAF] = useState("");
   const [placing, setPlacing] = useState(false);
   const [ticket, setTicket] = useState<TicketResult | null>(null);
-  const [ticketQr, setTicketQr] = useState<string | null>(null);
+  const [ticketBarcode, setTicketBarcode] = useState<string | null>(null);
   // Le code de validation ne doit figurer que sur l'impression ORIGINALE —
   // dès que la première impression se termine (window.onafterprint), il
   // disparaît du rendu : un clic sur "Ré-imprimer" n'imprime plus le code.
@@ -89,8 +89,27 @@ export default function TpeTicketPage() {
   }, []);
 
   useEffect(() => {
-    if (!ticket) { setTicketQr(null); return; }
-    QRCode.toDataURL(ticket.code, { margin: 1, width: 160 }).then(setTicketQr).catch(() => setTicketQr(null));
+    if (!ticket) { setTicketBarcode(null); return; }
+    // Code-barres (CODE128) plutôt qu'un QR carré — une bande fine économise
+    // nettement plus de papier thermique sur un rouleau 58mm.
+    try {
+      const canvas = document.createElement("canvas");
+      // Largeur de module réglée pour que le code-barres tienne nativement
+      // dans les ~50mm imprimables (~190px à 96dpi) sans avoir besoin de le
+      // redimensionner en CSS à l'affichage — un redimensionnement qui ne
+      // préserve pas exactement le ratio risquerait de le rendre illisible
+      // au scan.
+      JsBarcode(canvas, ticket.code, {
+        format: "CODE128",
+        width: 1.1,
+        height: 30,
+        displayValue: false,
+        margin: 0,
+      });
+      setTicketBarcode(canvas.toDataURL("image/png"));
+    } catch {
+      setTicketBarcode(null);
+    }
   }, [ticket]);
 
   useEffect(() => {
@@ -221,8 +240,8 @@ export default function TpeTicketPage() {
             <div style={{ textAlign: "center", borderTop: "1px solid #000", paddingTop: 4, fontSize: 8 }}>
               <p>Jouez responsablement. +18 ans uniquement.</p>
               <p>Conservez ce ticket — il est nécessaire pour encaisser tout gain.</p>
-              {ticketQr && (
-                <img src={ticketQr} alt={ticket.code} style={{ width: 100, height: 100, margin: "6px auto 3px", display: "block" }} />
+              {ticketBarcode && (
+                <img src={ticketBarcode} alt={ticket.code} style={{ maxWidth: "100%", margin: "6px auto 3px", display: "block" }} />
               )}
               <p style={{ fontFamily: "monospace", fontSize: 11, fontWeight: "bold" }}>{ticket.code}</p>
             </div>

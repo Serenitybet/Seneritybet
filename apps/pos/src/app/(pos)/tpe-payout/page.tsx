@@ -2,7 +2,8 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect, useRef, useState } from "react";
-import jsQR from "jsqr";
+import { BrowserMultiFormatReader } from "@zxing/browser";
+import type { IScannerControls } from "@zxing/browser";
 import toast, { Toaster } from "react-hot-toast";
 import { api } from "@/lib/api";
 import { useConfirm } from "@/components/ConfirmDialog";
@@ -32,8 +33,9 @@ const STATUS_LABEL: Record<TicketInfo["status"], string> = {
   PAID: "💵 Déjà payé",
 };
 
-// Un code ticket ressemble à "ABX-739-KLP" — sert à valider le contenu du QR
-// avant de lancer la recherche, pour ignorer tout QR non lié à un ticket.
+// Un code ticket ressemble à "ABX-739-KLP" — sert à valider le contenu
+// décodé avant de lancer la recherche, pour ignorer tout code non lié à
+// un ticket (le ticket est imprimé avec un code-barres CODE128).
 const TICKET_CODE_RE = /^[A-Z0-9]{2,6}-[A-Z0-9]{2,6}-[A-Z0-9]{2,6}$/;
 
 export default function TpePayoutPage() {
@@ -48,9 +50,7 @@ export default function TpePayoutPage() {
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const rafRef = useRef<number | null>(null);
+  const controlsRef = useRef<IScannerControls | null>(null);
   const { confirm, ConfirmDialog } = useConfirm();
 
   async function doSearch(rawCode: string) {
@@ -87,10 +87,8 @@ export default function TpePayoutPage() {
   }
 
   function stopCamera() {
-    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-    rafRef.current = null;
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
+    controlsRef.current?.stop();
+    controlsRef.current = null;
     setCameraActive(false);
   }
 
@@ -100,47 +98,33 @@ export default function TpePayoutPage() {
       setCameraError("Caméra non disponible sur cet appareil — utilisez la saisie manuelle du code.");
       return;
     }
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-      setCameraActive(true);
-      tick();
-    } catch {
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-      setCameraError("Impossible d'accéder à la caméra — vérifiez les autorisations de l'appareil.");
+    // Le <video> n'existe dans le DOM que lorsqu'aucun ticket n'est affiché
+    // (voir le rendu plus bas) — s'il n'est pas encore monté (ex. juste après
+    // avoir cliqué "Scanner un autre ticket"), on réessaie à la frame suivante.
+    if (!videoRef.current) {
+      requestAnimationFrame(startCamera);
+      return;
     }
-  }
-
-  function tick() {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (video && canvas && video.readyState === video.HAVE_ENOUGH_DATA) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const result = jsQR(imageData.data, imageData.width, imageData.height);
-        if (result?.data) {
-          const value = result.data.trim().toUpperCase();
+    try {
+      const reader = new BrowserMultiFormatReader();
+      const controls = await reader.decodeFromConstraints(
+        { video: { facingMode: "environment" } },
+        videoRef.current,
+        (result) => {
+          if (!result) return;
+          const value = result.getText().trim().toUpperCase();
           if (TICKET_CODE_RE.test(value)) {
             stopCamera();
             setCode(value);
             doSearch(value);
-            return;
           }
-        }
-      }
+        },
+      );
+      controlsRef.current = controls;
+      setCameraActive(true);
+    } catch {
+      setCameraError("Impossible d'accéder à la caméra — vérifiez les autorisations de l'appareil.");
     }
-    rafRef.current = requestAnimationFrame(tick);
   }
 
   useEffect(() => {
@@ -189,16 +173,15 @@ export default function TpePayoutPage() {
       <div className="bg-white rounded-2xl shadow-sm p-6 no-print">
         <h2 className="text-lg font-bold text-gray-800 mb-1">💵 Encaisser un ticket</h2>
         <p className="text-sm text-gray-500 mb-4">
-          {ticket ? "Ticket trouvé — vérifiez les détails ci-dessous." : "Visez le QR code du ticket, ou entrez le code manuellement."}
+          {ticket ? "Ticket trouvé — vérifiez les détails ci-dessous." : "Visez le code-barres du ticket, ou entrez le code manuellement."}
         </p>
 
         {!ticket && (
           <div className="relative rounded-xl overflow-hidden bg-black aspect-video mb-4">
             <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
-            <canvas ref={canvasRef} className="hidden" />
             {cameraActive && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-2/3 aspect-square border-4 border-green-400 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
+                <div className="w-4/5 h-16 border-4 border-green-400 rounded-xl shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
               </div>
             )}
             {!cameraActive && (
