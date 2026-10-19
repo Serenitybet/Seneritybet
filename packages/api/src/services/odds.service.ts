@@ -200,6 +200,11 @@ const SPORT_KEY_BY_COMPETITION_NAME: Record<string, string> = Object.fromEntries
 );
 const EXTRA_MARKETS_LIMIT = 100;
 
+// À incrémenter à chaque fois que le jeu de marchés additionnels change
+// (ajout/retrait d'une clé dans l'appel ci-dessous), pour que les matchs
+// déjà traités sous une version antérieure soient retraités une fois.
+const EXTRA_MARKETS_VERSION = 2; // v1: btts+double_chance ; v2: + correct_score, draw_no_bet, alternate_totals
+
 export async function syncExtraMarkets() {
   if (!API_KEY) return;
 
@@ -211,7 +216,7 @@ export async function syncExtraMarkets() {
       status: { in: ["UPCOMING", "LIVE"] },
       startTime: { gte: new Date(), lte: cutoff },
       competition: { name: { in: Object.keys(SPORT_KEY_BY_COMPETITION_NAME) } },
-      markets: { none: { type: "BOTH_TEAMS_SCORE" } },
+      extraMarketsVersion: { lt: EXTRA_MARKETS_VERSION },
     },
     include: { competition: true },
     take: EXTRA_MARKETS_LIMIT,
@@ -241,6 +246,7 @@ export async function syncExtraMarkets() {
       if (remaining >= 0) updateCredits(remaining);
 
       await upsertExtraMarkets(event.id, event.homeTeam, event.awayTeam, res.data?.bookmakers ?? []);
+      await prisma.event.update({ where: { id: event.id }, data: { extraMarketsVersion: EXTRA_MARKETS_VERSION } });
       synced++;
     } catch (err: any) {
       if (err.response?.status === 401) {

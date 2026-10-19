@@ -275,6 +275,12 @@ model Event {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
+  // Version du jeu de marchés additionnels (BTTS, score exact...) déjà
+  // récupéré pour ce match — incrémentée côté code à chaque élargissement
+  // du jeu de marchés, pour retraiter une seule fois les matchs déjà faits
+  // sous une version antérieure (voir odds.service.ts EXTRA_MARKETS_VERSION).
+  extraMarketsVersion Int @default(0)
+
   @@index([competitionId])
   @@index([status])
   @@index([startTime])
