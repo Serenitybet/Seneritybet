@@ -293,8 +293,13 @@ export default function TpeTicketPage() {
                         </div>
 
                         {isExpanded && (() => {
-                          const handicapOdds = combinedGroupOdds(event, ["HANDICAP", "ALTERNATE_SPREADS"]);
-                          const totalsOdds = combinedGroupOdds(event, ["OVER_UNDER", "ALTERNATE_TOTALS"]);
+                          // Exclut les libellés historiques ("1"/"2"/"Over"/"Under", sans
+                          // point) conservés en base pour l'intégrité des tickets déjà
+                          // émis avec l'ancien format — ils ne doivent plus être proposés.
+                          const handicapOdds = combinedGroupOdds(event, ["HANDICAP", "ALTERNATE_SPREADS"])
+                            .filter((e) => /^[12] \([+-]?[\d.]+\)$/.test(e.odd.label));
+                          const totalsOdds = combinedGroupOdds(event, ["OVER_UNDER", "ALTERNATE_TOTALS"])
+                            .filter((e) => /^(Plus|Moins) [\d.]+$/.test(e.odd.label));
                           const otherMarkets = event.markets.filter(
                             (m) => !["MATCH_WINNER", "HANDICAP", "ALTERNATE_SPREADS", "OVER_UNDER", "ALTERNATE_TOTALS"].includes(m.type),
                           );
@@ -312,15 +317,22 @@ export default function TpeTicketPage() {
                                       <div className="space-y-1.5">
                                         {Object.entries(
                                           handicapOdds.reduce<Record<string, { market: Market; odd: Odd }[]>>((acc, entry) => {
-                                            const m = entry.odd.label.match(/\(([+-]?[\d.]+)\)/);
-                                            const line = m ? Math.abs(parseFloat(m[1])).toFixed(1) : "?";
-                                            (acc[line] ??= []).push(entry);
+                                            // Clé = point côté équipe 1 (équipe 2 = l'opposé) : deux
+                                            // lignes de même ampleur mais de favori opposé (ex. "1 (-1)"
+                                            // et "1 (+1)") sont deux lignes distinctes, pas la même.
+                                            const m = entry.odd.label.match(/^([12]) \(([+-]?[\d.]+)\)$/)!;
+                                            const point = parseFloat(m[2]);
+                                            const key = (m[1] === "1" ? point : -point).toFixed(2);
+                                            (acc[key] ??= []).push(entry);
                                             return acc;
                                           }, {}),
                                         )
                                           .sort((a, b) => Number(a[0]) - Number(b[0]))
-                                          .map(([line, entries]) => (
-                                            <div key={line} className="flex items-center gap-2">
+                                          .map(([key, entries]) => {
+                                            const niceKey = parseFloat(key);
+                                            const line = `${niceKey > 0 ? "+" : ""}${niceKey}`;
+                                            return (
+                                            <div key={key} className="flex items-center gap-2">
                                               <span className="text-[11px] text-gray-400 w-14 shrink-0">Hcap {line}</span>
                                               <div className="flex-1 grid grid-cols-2 gap-2">
                                                 {[...entries]
@@ -347,7 +359,8 @@ export default function TpeTicketPage() {
                                                   })}
                                               </div>
                                             </div>
-                                          ))}
+                                            );
+                                          })}
                                       </div>
                                     </div>
                                   )}
