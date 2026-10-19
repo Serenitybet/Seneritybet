@@ -183,8 +183,10 @@ async function upsertEvent(competitionId: string, game: any, sportSlug = "footba
 //
 // Ces marchés ne sont disponibles que via l'endpoint par match (pas par
 // championnat), donc 1 appel = 1 match au lieu de 1 appel = 1 championnat.
-// Pour maîtriser les crédits : limité aux matchs des 48 prochaines heures,
-// plafonné à 60 matchs par exécution (toutes les 2h), récupéré une seule
+// Fenêtre alignée sur le sync principal (J0 à J+7) : les parieurs doivent
+// pouvoir composer des combinés sur toute la semaine avec les mêmes options,
+// pas seulement sur les matchs des 48h à venir. Pour maîtriser les crédits :
+// plafonné à 100 matchs par exécution (toutes les 2h), récupéré une seule
 // fois par match (pas de rafraîchissement répété comme pour les marchés
 // principaux). Les crédits utilisés/restants sont loggés à chaque sync
 // (voir lib/credits.state) — à surveiller : si la couverture des 17
@@ -193,13 +195,13 @@ async function upsertEvent(competitionId: string, game: any, sportSlug = "footba
 const SPORT_KEY_BY_COMPETITION_NAME: Record<string, string> = Object.fromEntries(
   SPORTS_CONFIG.map((c) => [c.name, c.key]),
 );
-const EXTRA_MARKETS_LIMIT = 60;
+const EXTRA_MARKETS_LIMIT = 100;
 
 export async function syncExtraMarkets() {
   if (!API_KEY) return;
 
   const cutoff = new Date();
-  cutoff.setHours(cutoff.getHours() + 48);
+  cutoff.setDate(cutoff.getDate() + 7);
 
   const events = await prisma.event.findMany({
     where: {
