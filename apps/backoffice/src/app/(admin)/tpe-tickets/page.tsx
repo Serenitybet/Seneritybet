@@ -52,6 +52,7 @@ function fmtXAF(v: number) {
 export default function TpeTicketsPage() {
   const { admin } = useAuthAdminStore();
   const canSettle = admin?.role && ["TRADER", "ADMIN", "SUPER_ADMIN"].includes(admin.role);
+  const canApprove = admin?.role && ["ADMIN", "SUPER_ADMIN", "FINANCE"].includes(admin.role);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [tpes, setTpes] = useState<Tpe[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,6 +86,19 @@ export default function TpeTicketsPage() {
       const d = await res.json();
       if (!res.ok) { toast.error(d.error ?? "Erreur"); return; }
       toast.success(`Ticket réglé : ${d.data.status}`);
+      await load();
+    } catch { toast.error("Erreur réseau"); }
+  }
+
+  async function approveTicket(ticketId: string) {
+    try {
+      const res = await fetch(`${API}/admin/tickets/${ticketId}/approve`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
+      const d = await res.json();
+      if (!res.ok) { toast.error(d.error ?? "Erreur"); return; }
+      toast.success("Ticket approuvé — payable au guichet");
       await load();
     } catch { toast.error("Erreur réseau"); }
   }
@@ -156,6 +170,18 @@ export default function TpeTicketsPage() {
 
         {expanded && (
           <div className="px-4 pb-4 bg-bo-surface space-y-2 border-b border-bo-border">
+            {isDangerous(t) && (
+              <div className="flex items-center justify-between gap-3 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+                <p className="text-xs text-red-300">
+                  ⚠️ Gain de {fmtXAF(t.potentialWinXAF)} au-dessus du seuil — approbation requise avant paiement.
+                </p>
+                {canApprove && (
+                  <button className="bo-btn-primary bo-btn-sm shrink-0" onClick={() => approveTicket(t.id)}>
+                    Approuver le paiement
+                  </button>
+                )}
+              </div>
+            )}
             {(t.items ?? []).map((item) => (
               <div key={item.id} className="flex items-center justify-between gap-3 bg-bo-card border border-bo-border rounded-lg px-3 py-2">
                 <div className="min-w-0">

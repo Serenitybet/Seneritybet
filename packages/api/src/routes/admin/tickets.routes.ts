@@ -54,7 +54,19 @@ adminTicketsRouter.patch("/:id/result", requireRole("TRADER", "ADMIN", "SUPER_AD
       throw new AppError(400, "Résultat invalide");
     }
     await prisma.ticketItem.update({ where: { id: itemId }, data: { result } });
-    res.json({ success: true });
+
+    // Règle automatiquement le ticket dès que le dernier résultat manquant
+    // vient d'être saisi — évite qu'un ticket reste bloqué "en cours" parce
+    // que l'étape séparée "Régler le ticket" a été oubliée.
+    const ticket = await prisma.ticket.findUnique({
+      where: { id: req.params.id },
+      include: { items: true },
+    });
+    let settled: Awaited<ReturnType<typeof tpeService.settleTicket>> | null = null;
+    if (ticket && ticket.status === "PENDING" && ticket.items.every((i) => i.result !== null)) {
+      settled = await tpeService.settleTicket(ticket.id);
+    }
+    res.json({ success: true, data: { settled } });
   }),
 );
 
@@ -62,6 +74,14 @@ adminTicketsRouter.patch("/:id/result", requireRole("TRADER", "ADMIN", "SUPER_AD
 adminTicketsRouter.post("/:id/settle", requireRole("TRADER", "ADMIN", "SUPER_ADMIN"),
   asyncHandler(async (req: Request, res: Response) => {
     const result = await tpeService.settleTicket(req.params.id);
+    res.json({ success: true, data: result });
+  }),
+);
+
+// POST /api/admin/tickets/:id/approve — débloque le paiement d'un gros gain
+adminTicketsRouter.post("/:id/approve", requireRole("ADMIN", "SUPER_ADMIN", "FINANCE"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const result = await tpeService.approveTicket(req.params.id);
     res.json({ success: true, data: result });
   }),
 );

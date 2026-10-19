@@ -280,3 +280,14 @@ export async function payTicket(code: string, tpeId: string, cashierId: string) 
 
   return { ticketId: updated.id, code: updated.code, amountPaidXAF: Number(amountToPay) / 100 };
 }
+
+/** Approuve un ticket gagnant dont le gain dépasse le seuil — débloque son paiement au guichet. */
+export async function approveTicket(ticketId: string) {
+  const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+  if (!ticket) throw new AppError(404, "Ticket introuvable");
+  if (ticket.status !== "WON") throw new AppError(400, "Seul un ticket gagnant peut être approuvé");
+  if (ticket.approvedAt) throw new AppError(400, "Ce ticket est déjà approuvé");
+
+  const updated = await prisma.ticket.update({ where: { id: ticketId }, data: { approvedAt: new Date() } });
+  return { ticketId: updated.id, approvedAt: updated.approvedAt };
+}
