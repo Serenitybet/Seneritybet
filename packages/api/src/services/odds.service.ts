@@ -205,7 +205,7 @@ const EXTRA_MARKETS_LIMIT = 600;
 // À incrémenter à chaque fois que le jeu de marchés additionnels change
 // (ajout/retrait d'une clé dans l'appel ci-dessous), pour que les matchs
 // déjà traités sous une version antérieure soient retraités une fois.
-const EXTRA_MARKETS_VERSION = 6; // v1: btts+double_chance ; v2: + correct_score, draw_no_bet, alternate_totals ; v3: fix libellé double chance + plus/moins à 6 lignes ; v4: plus/moins alternatif limité aux lignes X.5 ; v5: + handicap alternatif ; v6: + totaux par équipe
+const EXTRA_MARKETS_VERSION = 7; // v1: btts+double_chance ; v2: + correct_score, draw_no_bet, alternate_totals ; v3: fix libellé double chance + plus/moins à 6 lignes ; v4: plus/moins alternatif limité aux lignes X.5 ; v5: + handicap alternatif ; v6: + totaux par équipe ; v7: fix plus/moins alternatif laissait passer les lignes au quart (3.75, 4.25)
 
 export async function syncExtraMarkets() {
   if (!API_KEY) return;
@@ -327,7 +327,7 @@ async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: s
       let outcomes = apiMarket.outcomes;
       if (apiMarket.key === "alternate_totals") {
         const points = [...new Set(outcomes.map((o: any) => o.point))]
-          .filter((p): p is number => typeof p === "number" && !Number.isInteger(p))
+          .filter((p): p is number => typeof p === "number" && p % 1 === 0.5)
           .sort((a, b) => a - b)
           .slice(0, ALTERNATE_TOTALS_MAX_LINES);
         outcomes = outcomes.filter((o: any) => points.includes(o.point));
