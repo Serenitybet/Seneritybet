@@ -203,7 +203,7 @@ const EXTRA_MARKETS_LIMIT = 100;
 // À incrémenter à chaque fois que le jeu de marchés additionnels change
 // (ajout/retrait d'une clé dans l'appel ci-dessous), pour que les matchs
 // déjà traités sous une version antérieure soient retraités une fois.
-const EXTRA_MARKETS_VERSION = 2; // v1: btts+double_chance ; v2: + correct_score, draw_no_bet, alternate_totals
+const EXTRA_MARKETS_VERSION = 3; // v1: btts+double_chance ; v2: + correct_score, draw_no_bet, alternate_totals ; v3: fix libellé double chance + plus/moins à 6 lignes
 
 export async function syncExtraMarkets() {
   if (!API_KEY) return;
@@ -320,11 +320,13 @@ async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: s
         if (apiMarket.key === "btts") {
           label = outcome.name === "Yes" ? "Oui" : "Non";
         } else if (apiMarket.key === "double_chance") {
-          label =
-            outcome.name === `${homeTeam} or Draw`        ? "1X" :
-            outcome.name === `${awayTeam} or Draw`        ? "X2" :
-            outcome.name === `${homeTeam} or ${awayTeam}` ? "12" :
-            outcome.name;
+          // TheOddsAPI n'ordonne pas toujours "home or away" dans le même
+          // sens ("Al-Ahli or Al-Fayha" au lieu de "Al-Fayha or Al-Ahli") —
+          // on détecte par présence de "Draw" plutôt que par égalité stricte.
+          const name = String(outcome.name);
+          label = name.includes("Draw")
+            ? (name.startsWith(homeTeam) ? "1X" : "X2")
+            : "12";
         } else if (apiMarket.key === "correct_score") {
           // Format TheOddsAPI : "Équipe1:0|Équipe2:0" → "0-0"
           const [homePart, awayPart] = String(outcome.name).split("|");
