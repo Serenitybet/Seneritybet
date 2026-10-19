@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { requireRole } from "../../middleware/auth.middleware";
+import { requireRole, AuthRequest } from "../../middleware/auth.middleware";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../lib/asyncHandler";
 import { AppError } from "../../middleware/error.middleware";
@@ -80,8 +80,8 @@ adminTicketsRouter.post("/:id/settle", requireRole("TRADER", "ADMIN", "SUPER_ADM
 
 // POST /api/admin/tickets/:id/approve — débloque le paiement d'un gros gain
 adminTicketsRouter.post("/:id/approve", requireRole("ADMIN", "SUPER_ADMIN", "FINANCE"),
-  asyncHandler(async (req: Request, res: Response) => {
-    const result = await tpeService.approveTicket(req.params.id);
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const result = await tpeService.approveTicket(req.params.id, req.user!.id);
     res.json({ success: true, data: result });
   }),
 );

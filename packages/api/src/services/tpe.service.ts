@@ -129,9 +129,22 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
 
   // La mise est déduite du crédit du TPE (le caissier "immobilise" ce montant
   // en l'encaissant) ; elle y revient, majorée du gain, au moment du paiement
-  // d'un ticket gagnant (voir payTicket).
+  // d'un ticket gagnant (voir payTicket). La vérification plus haut est une
+  // lecture faite avant la transaction — sous forte concurrence (plusieurs
+  // tickets créés presque simultanément sur le même TPE), elle peut être
+  // périmée au moment où la transaction s'exécute. La déduction ci-dessous
+  // est donc conditionnée (WHERE credit >= stake) et revérifiée : c'est elle,
+  // pas le contrôle initial, qui garantit que le crédit ne passe jamais sous
+  // zéro.
   const ticket = await prisma.$transaction(async (tx) => {
-    const created = await tx.ticket.create({
+    const deducted = await tx.tpe.updateMany({
+      where: { id: tpeId, credit: { gte: stake } },
+      data: { credit: { decrement: stake } },
+    });
+    if (deducted.count === 0) {
+      throw new AppError(400, "Crédit TPE insuffisant pour cette mise — contactez le backoffice");
+    }
+    return tx.ticket.create({
       data: {
         code,
         payoutCode,
@@ -152,8 +165,6 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
         tpe: { select: { code: true, name: true } },
       },
     });
-    await tx.tpe.update({ where: { id: tpeId }, data: { credit: { decrement: stake } } });
-    return created;
   });
 
   // Le code de validation n'est renvoyé qu'ici, une seule fois, pour être
@@ -289,25 +300,36 @@ export async function payTicket(code: string, tpeId: string, cashierId: string, 
   // TPE payeur — c'est l'inverse de la mise déduite à la création du ticket
   // (voir placeTicket) : le caissier récupère sa mise immobilisée, majorée
   // du gain le cas échéant.
-  const updated = await prisma.$transaction(async (tx) => {
-    const paid = await tx.ticket.update({
-      where: { id: ticket.id },
+  //
+  // La mise à jour du statut est conditionnée (WHERE status = <statut lu
+  // ci-dessus>) plutôt qu'inconditionnelle : sans ça, deux paiements envoyés
+  // presque simultanément pour le même ticket passent tous les deux les
+  // vérifications ci-dessus (toutes deux lues avant que l'une des deux
+  // n'ait validé le paiement), et créditeraient le TPE deux fois pour un
+  // seul gain. Seule la première des deux transactions à s'exécuter trouve
+  // encore le statut attendu ; la seconde touche 0 ligne et échoue proprement.
+  const paidAt = new Date();
+  await prisma.$transaction(async (tx) => {
+    const result = await tx.ticket.updateMany({
+      where: { id: ticket.id, status: ticket.status },
       data: {
         status: "PAID",
-        paidAt: new Date(),
+        paidAt,
         paidByTpeId: tpeId,
         paidByCashierId: cashierId,
       },
     });
+    if (result.count === 0) {
+      throw new AppError(409, "Ce ticket vient d'être payé par une autre opération");
+    }
     await tx.tpe.update({ where: { id: tpeId }, data: { credit: { increment: amountToPay } } });
-    return paid;
   });
 
   return {
-    ticketId: updated.id,
-    code: updated.code,
+    ticketId: ticket.id,
+    code: ticket.code,
     amountPaidXAF: Number(amountToPay) / 100,
-    paidAt: updated.paidAt,
+    paidAt,
     tpe: { code: payingTpe.code, name: payingTpe.name },
   };
 }
@@ -320,12 +342,18 @@ export async function getTicketPayoutCode(ticketId: string) {
 }
 
 /** Approuve un ticket gagnant dont le gain dépasse le seuil — débloque son paiement au guichet. */
-export async function approveTicket(ticketId: string) {
+export async function approveTicket(ticketId: string, approvedBy: string) {
   const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
   if (!ticket) throw new AppError(404, "Ticket introuvable");
   if (ticket.status !== "WON") throw new AppError(400, "Seul un ticket gagnant peut être approuvé");
   if (ticket.approvedAt) throw new AppError(400, "Ce ticket est déjà approuvé");
 
-  const updated = await prisma.ticket.update({ where: { id: ticketId }, data: { approvedAt: new Date() } });
+  // approvedBy est obligatoire — un gros gain approuvé sans trace de qui l'a
+  // approuvé rend ce contrôle inutile contre l'auto-approbation par un
+  // compte qui aurait aussi créé/réglé/encaissé le même ticket.
+  const updated = await prisma.ticket.update({
+    where: { id: ticketId },
+    data: { approvedAt: new Date(), approvedBy },
+  });
   return { ticketId: updated.id, approvedAt: updated.approvedAt };
 }
