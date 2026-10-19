@@ -4,10 +4,11 @@ import { isSyncPaused, getCreditsStatus } from "../lib/credits.state";
 // ─── Budget crédits TheOddsAPI ────────────────────────────────────────────────
 // Plan 100K/mois → ~3 300 crédits/jour disponibles
 // 17 championnats × 3 syncs/heure × 24h × 30j = ~36 700 crédits/mois (cotes principales)
-// + marchés additionnels (BTTS, double chance — tous les championnats, matchs des
-//   48h à venir, plafonné à 60 matchs/exécution, 1 seule fois par match) toutes
-//   les 2h : coût estimé modeste vu le volume hebdo, mais À SURVEILLER sur le
-//   dashboard TheOddsAPI les premières semaines — augmenter le plan si besoin.
+// + marchés additionnels (BTTS, double chance, score exact, remboursé si nul —
+//   4 marchés × 1 région = 4 crédits/match, tous les championnats, matchs des
+//   7 prochains jours, plafonné à 100 matchs/exécution, 1 seule fois par match)
+//   toutes les 2h : coût estimé modeste vu le volume hebdo, mais À SURVEILLER
+//   sur le dashboard TheOddsAPI les premières semaines — augmenter le plan si besoin.
 // Marge de sécurité confortable sur le plan 100K.
 
 const ODDS_INTERVAL_MS       = 20 * 60 * 1000;      // 20 minutes — cotes principales

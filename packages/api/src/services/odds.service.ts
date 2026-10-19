@@ -226,7 +226,7 @@ export async function syncExtraMarkets() {
           params: {
             apiKey:     API_KEY,
             regions:    "eu",
-            markets:    "btts,double_chance",
+            markets:    "btts,double_chance,correct_score,draw_no_bet",
             oddsFormat: "decimal",
             dateFormat: "iso",
           },
@@ -248,44 +248,75 @@ export async function syncExtraMarkets() {
     }
   }
 
-  if (synced > 0) console.log(`🎯 Marchés additionnels (BTTS, double chance) : ${synced} match(s) synchronisés`);
+  if (synced > 0) console.log(`🎯 Marchés additionnels (BTTS, double chance, score exact, remboursé si nul) : ${synced} match(s) synchronisés`);
 }
 
+// Pas un seul bookmaker n'offre systématiquement les 4 marchés (vérifié
+// empiriquement) : on fusionne plusieurs bookmakers, le premier qui propose
+// chaque marché étant retenu pour ce marché, en suivant l'ordre de priorité.
+const EXTRA_MARKET_TYPE_BY_KEY: Record<string, string> = {
+  btts:          "BOTH_TEAMS_SCORE",
+  double_chance: "DOUBLE_CHANCE",
+  correct_score: "CORRECT_SCORE",
+  draw_no_bet:   "DRAW_NO_BET",
+};
+
 async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: string, bookmakers: any[]) {
-  const bookmaker = bookmakers?.find((b: any) =>
-    ["bet365", "unibet", "betway", "onexbet", "pinnacle"].includes(b.key)
-  ) ?? bookmakers?.[0];
-  if (!bookmaker) return;
+  const priorityKeys = ["bet365", "unibet", "betway", "onexbet", "pinnacle"];
+  const orderedBookmakers = [
+    ...priorityKeys.map((k) => bookmakers.find((b: any) => b.key === k)).filter(Boolean),
+    ...bookmakers,
+  ];
 
-  for (const apiMarket of bookmaker.markets) {
-    const marketType =
-      apiMarket.key === "btts"          ? "BOTH_TEAMS_SCORE" :
-      apiMarket.key === "double_chance" ? "DOUBLE_CHANCE"    : null;
-    if (!marketType) continue;
+  const seenTypes = new Set<string>();
 
-    const marketName =
-      apiMarket.key === "btts" ? "Les deux équipes marquent"
-        : `Double chance : ${homeTeam} vs ${awayTeam}`;
+  for (const bookmaker of orderedBookmakers) {
+    for (const apiMarket of bookmaker.markets ?? []) {
+      const marketType = EXTRA_MARKET_TYPE_BY_KEY[apiMarket.key];
+      if (!marketType || seenTypes.has(marketType)) continue;
+      seenTypes.add(marketType);
 
-    let market = await prisma.market.findFirst({ where: { eventId, type: marketType as any } });
-    if (!market) {
-      market = await prisma.market.create({ data: { eventId, name: marketName, type: marketType as any } });
-    }
+      const marketName =
+        apiMarket.key === "btts"          ? "Les deux équipes marquent" :
+        apiMarket.key === "double_chance" ? `Double chance : ${homeTeam} vs ${awayTeam}` :
+        apiMarket.key === "correct_score" ? "Score exact" :
+        "Remboursé si match nul";
 
-    for (const outcome of apiMarket.outcomes) {
-      const label =
-        apiMarket.key === "btts"
-          ? (outcome.name === "Yes" ? "Oui" : "Non")
-          : outcome.name === `${homeTeam} or Draw`      ? "1X"
-          : outcome.name === `${awayTeam} or Draw`      ? "X2"
-          : outcome.name === `${homeTeam} or ${awayTeam}` ? "12"
-          : outcome.name;
+      let market = await prisma.market.findFirst({ where: { eventId, type: marketType as any } });
+      if (!market) {
+        market = await prisma.market.create({ data: { eventId, name: marketName, type: marketType as any } });
+      }
 
-      const existing = await prisma.odd.findFirst({ where: { marketId: market.id, label } });
-      if (existing) {
-        await prisma.odd.update({ where: { id: existing.id }, data: { value: outcome.price } });
-      } else {
-        await prisma.odd.create({ data: { marketId: market.id, label, value: outcome.price } });
+      for (const outcome of apiMarket.outcomes) {
+        let label: string;
+        if (apiMarket.key === "btts") {
+          label = outcome.name === "Yes" ? "Oui" : "Non";
+        } else if (apiMarket.key === "double_chance") {
+          label =
+            outcome.name === `${homeTeam} or Draw`        ? "1X" :
+            outcome.name === `${awayTeam} or Draw`        ? "X2" :
+            outcome.name === `${homeTeam} or ${awayTeam}` ? "12" :
+            outcome.name;
+        } else if (apiMarket.key === "correct_score") {
+          // Format TheOddsAPI : "Équipe1:0|Équipe2:0" → "0-0"
+          const [homePart, awayPart] = String(outcome.name).split("|");
+          const homeGoals = homePart?.split(":").pop()?.trim();
+          const awayGoals = awayPart?.split(":").pop()?.trim();
+          label = homeGoals !== undefined && awayGoals !== undefined ? `${homeGoals}-${awayGoals}` : outcome.name;
+        } else {
+          // draw_no_bet : une issue par équipe, pas de match nul
+          label =
+            outcome.name === homeTeam ? "1" :
+            outcome.name === awayTeam ? "2" :
+            outcome.name;
+        }
+
+        const existing = await prisma.odd.findFirst({ where: { marketId: market.id, label } });
+        if (existing) {
+          await prisma.odd.update({ where: { id: existing.id }, data: { value: outcome.price } });
+        } else {
+          await prisma.odd.create({ data: { marketId: market.id, label, value: outcome.price } });
+        }
       }
     }
   }
