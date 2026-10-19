@@ -17,5 +17,8 @@ packages/db/generated/
 .DS_Store
 Thumbs.db
 
+# Artefacts de build TypeScript
+*.tsbuildinfo
+
 # Fichiers de travail temporaires (jamais destinés à ce dépôt)
 .scratchpad/
