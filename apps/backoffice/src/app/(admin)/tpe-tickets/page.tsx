@@ -103,6 +103,18 @@ export default function TpeTicketsPage() {
     } catch { toast.error("Erreur réseau"); }
   }
 
+  // Accès exceptionnel (ticket original illisible/perdu, bourrage papier) —
+  // affiche le code de validation normalement réservé au ticket imprimé.
+  async function revealPayoutCode(ticketId: string) {
+    try {
+      const res = await fetch(`${API}/admin/tickets/${ticketId}/payout-code`, { headers: authHeaders() });
+      const d = await res.json();
+      if (!res.ok) { toast.error(d.error ?? "Erreur"); return; }
+      if (!d.data.payoutCode) { toast("Aucun code pour ce ticket (émis avant ce contrôle)", { icon: "ℹ️" }); return; }
+      toast.success(`Code de validation : ${d.data.payoutCode}`, { duration: 8000 });
+    } catch { toast.error("Erreur réseau"); }
+  }
+
   async function load() {
     setLoading(true);
     try {
@@ -180,6 +192,17 @@ export default function TpeTicketsPage() {
                     Approuver le paiement
                   </button>
                 )}
+              </div>
+            )}
+
+            {canApprove && (t.status === "WON" || t.status === "REFUNDED") && (
+              <div className="flex items-center justify-between gap-3 bg-bo-card border border-bo-border rounded-lg px-3 py-2">
+                <p className="text-[11px] text-t-faint">
+                  🔑 Accès exceptionnel — ticket original illisible, perdu ou bourrage papier
+                </p>
+                <button className="bo-btn-secondary bo-btn-sm shrink-0" onClick={() => revealPayoutCode(t.id)}>
+                  Voir le code de validation
+                </button>
               </div>
             )}
             {(t.items ?? []).map((item) => (

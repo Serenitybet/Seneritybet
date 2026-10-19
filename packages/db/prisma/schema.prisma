@@ -549,6 +549,11 @@ model TpeCreditAdjustment {
 model Ticket {
   id               String       @id @default(cuid())
   code             String       @unique // code imprimé sur le ticket papier
+  // Code de validation à 4 chiffres, imprimé une seule fois sur le ticket
+  // ORIGINAL (jamais sur une réimpression) et exigé pour encaisser — empêche
+  // qu'une réimpression du même ticket soit présentée frauduleusement au
+  // paiement par quelqu'un qui n'a pas l'original en main.
+  payoutCode       String? // null pour les tickets émis avant l'introduction de ce contrôle
   tpeId            String
   tpe              Tpe          @relation("TpeTicketsCreated", fields: [tpeId], references: [id])
   cashierId        String

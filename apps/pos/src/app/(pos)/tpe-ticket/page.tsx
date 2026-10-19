@@ -27,6 +27,7 @@ interface TicketResult {
   potentialWinXAF: number;
   createdAt: string;
   tpe?: { code: string; name: string | null };
+  payoutCode?: string;
   items: { oddValue: number; market: { name: string; event: { homeTeam: string; awayTeam: string } }; odd: { label: string } }[];
 }
 
@@ -72,6 +73,10 @@ export default function TpeTicketPage() {
   const [placing, setPlacing] = useState(false);
   const [ticket, setTicket] = useState<TicketResult | null>(null);
   const [ticketQr, setTicketQr] = useState<string | null>(null);
+  // Le code de validation ne doit figurer que sur l'impression ORIGINALE —
+  // dès que la première impression se termine (window.onafterprint), il
+  // disparaît du rendu : un clic sur "Ré-imprimer" n'imprime plus le code.
+  const [codePrinted, setCodePrinted] = useState(false);
   const [dayOffset, setDayOffset] = useState(0);
   const [competitionFilter, setCompetitionFilter] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -87,6 +92,12 @@ export default function TpeTicketPage() {
     if (!ticket) { setTicketQr(null); return; }
     QRCode.toDataURL(ticket.code, { margin: 1, width: 160 }).then(setTicketQr).catch(() => setTicketQr(null));
   }, [ticket]);
+
+  useEffect(() => {
+    const onAfterPrint = () => setCodePrinted(true);
+    window.addEventListener("afterprint", onAfterPrint);
+    return () => window.removeEventListener("afterprint", onAfterPrint);
+  }, []);
 
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(); d.setDate(d.getDate() + i);
@@ -137,6 +148,7 @@ export default function TpeTicketPage() {
         stakeXAF: stake,
       });
       setTicket(res.data.data);
+      setCodePrinted(false);
       setSelections([]);
       setStakeXAF("");
       // Pas de toast ici — il reste visible à l'écran pendant l'impression
@@ -200,6 +212,12 @@ export default function TpeTicketPage() {
                 Gain potentiel : {ticket.potentialWinXAF.toLocaleString("fr-FR")} XAF
               </p>
             </div>
+            {ticket.payoutCode && !codePrinted && (
+              <div style={{ textAlign: "center", border: "1px solid #000", padding: 4, marginBottom: 4 }}>
+                <p style={{ fontSize: 8 }}>CODE DE VALIDATION (à fournir pour le paiement)</p>
+                <p style={{ fontSize: 18, fontWeight: "bold", letterSpacing: 2 }}>{ticket.payoutCode}</p>
+              </div>
+            )}
             <div style={{ textAlign: "center", borderTop: "1px solid #000", paddingTop: 4, fontSize: 8 }}>
               <p>Jouez responsablement. +18 ans uniquement.</p>
               <p>Conservez ce ticket — il est nécessaire pour encaisser tout gain.</p>

@@ -85,3 +85,11 @@ adminTicketsRouter.post("/:id/approve", requireRole("ADMIN", "SUPER_ADMIN", "FIN
     res.json({ success: true, data: result });
   }),
 );
+
+// GET /api/admin/tickets/:id/payout-code — accès exceptionnel (ticket original illisible/perdu, bourrage papier)
+adminTicketsRouter.get("/:id/payout-code", requireRole("ADMIN", "SUPER_ADMIN", "FINANCE"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const result = await tpeService.getTicketPayoutCode(req.params.id);
+    res.json({ success: true, data: result });
+  }),
+);

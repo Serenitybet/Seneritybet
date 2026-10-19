@@ -16,6 +16,13 @@ interface TicketInfo {
   items: { oddValue: number; result: string | null; market: { name: string; event: { homeTeam: string; awayTeam: string } }; odd: { label: string } }[];
 }
 
+interface PaymentReceipt {
+  code: string;
+  amountPaidXAF: number;
+  paidAt: string;
+  tpe?: { code: string; name: string | null };
+}
+
 const STATUS_LABEL: Record<TicketInfo["status"], string> = {
   PENDING: "⏳ Non encore réglé",
   WON: "✅ Gagnant",
@@ -35,6 +42,8 @@ export default function TpePayoutPage() {
   const [ticket, setTicket] = useState<TicketInfo | null>(null);
   const [paying, setPaying] = useState(false);
   const [paidAmount, setPaidAmount] = useState<number | null>(null);
+  const [payoutCodeInput, setPayoutCodeInput] = useState("");
+  const [receipt, setReceipt] = useState<PaymentReceipt | null>(null);
 
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -50,6 +59,8 @@ export default function TpePayoutPage() {
     setLoading(true);
     setTicket(null);
     setPaidAmount(null);
+    setReceipt(null);
+    setPayoutCodeInput("");
     try {
       const res = await api.get(`/tpe/tickets/${trimmed}`);
       setTicket(res.data.data);
@@ -64,6 +75,8 @@ export default function TpePayoutPage() {
   function scanAnother() {
     setTicket(null);
     setPaidAmount(null);
+    setReceipt(null);
+    setPayoutCodeInput("");
     setCode("");
     startCamera();
   }
@@ -149,13 +162,16 @@ export default function TpePayoutPage() {
 
   async function payTicket() {
     if (!ticket) return;
+    if (!/^\d{4}$/.test(payoutCodeInput)) { toast.error("Entrez le code de validation à 4 chiffres (imprimé sur le ticket original)"); return; }
     const ok = await confirm(`Payer ${ticket.status === "WON" ? ticket.potentialWinXAF.toLocaleString("fr-FR") : ticket.stakeXAF.toLocaleString("fr-FR")} XAF pour le ticket ${ticket.code} ?`);
     if (!ok) return;
     setPaying(true);
     try {
-      const res = await api.post(`/tpe/tickets/${ticket.code}/pay`);
+      const res = await api.post(`/tpe/tickets/${ticket.code}/pay`, { payoutCode: payoutCodeInput });
       setPaidAmount(res.data.data.amountPaidXAF);
+      setReceipt(res.data.data);
       toast.success("Paiement effectué ✅");
+      setTimeout(() => window.print(), 500);
     } catch (err: any) {
       toast.error(err.response?.data?.error ?? "Erreur lors du paiement");
     } finally {
@@ -170,7 +186,7 @@ export default function TpePayoutPage() {
       <Toaster position="top-center" />
       {ConfirmDialog}
 
-      <div className="bg-white rounded-2xl shadow-sm p-6">
+      <div className="bg-white rounded-2xl shadow-sm p-6 no-print">
         <h2 className="text-lg font-bold text-gray-800 mb-1">💵 Encaisser un ticket</h2>
         <p className="text-sm text-gray-500 mb-4">
           {ticket ? "Ticket trouvé — vérifiez les détails ci-dessous." : "Visez le QR code du ticket, ou entrez le code manuellement."}
@@ -227,7 +243,7 @@ export default function TpePayoutPage() {
       </div>
 
       {ticket && (
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden no-print">
           <div className="bg-slate-800 text-white px-6 py-4 flex items-center justify-between">
             <div>
               <p className="font-mono text-xl font-black">{ticket.code}</p>
@@ -276,13 +292,51 @@ export default function TpePayoutPage() {
                 <p className="text-green-700 font-black text-xl">✅ Payé : {paidAmount.toLocaleString("fr-FR")} XAF</p>
               </div>
             ) : canPay ? (
-              <button onClick={payTicket} disabled={paying}
-                className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl disabled:opacity-50 text-lg">
-                {paying ? "Paiement en cours…" : "💵 Payer en espèces"}
-              </button>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">
+                    Code de validation (imprimé sur le ticket original)
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={4}
+                    value={payoutCodeInput}
+                    onChange={(e) => setPayoutCodeInput(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                    placeholder="0000"
+                    className="w-full px-4 py-3 text-2xl font-mono font-bold tracking-[0.5em] text-center border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none"
+                  />
+                </div>
+                <button onClick={payTicket} disabled={paying}
+                  className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl disabled:opacity-50 text-lg">
+                  {paying ? "Paiement en cours…" : "💵 Payer en espèces"}
+                </button>
+              </div>
             ) : (
               <p className="text-center text-sm text-gray-400">Rien à payer pour ce ticket.</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {receipt && (
+        <div className="print-only">
+          <div style={{ fontFamily: "monospace", width: "100%", padding: "4px 6px", fontSize: 10, lineHeight: 1.3 }}>
+            <div style={{ textAlign: "center", borderBottom: "1px solid #000", paddingBottom: 4, marginBottom: 4 }}>
+              <p style={{ fontSize: 14, fontWeight: "bold" }}>SERENITYBET</p>
+              <p style={{ fontSize: 9 }}>Reçu de paiement</p>
+            </div>
+            <div style={{ marginBottom: 4 }}>
+              <p><strong>Ticket:</strong> {receipt.code}</p>
+              <p><strong>TPE:</strong> {receipt.tpe?.name ?? receipt.tpe?.code ?? "—"}</p>
+              <p><strong>Payé le:</strong> {new Date(receipt.paidAt).toLocaleString("fr-FR")}</p>
+            </div>
+            <div style={{ borderTop: "1px dashed #000", paddingTop: 4, textAlign: "center" }}>
+              <p style={{ fontSize: 16, fontWeight: "bold" }}>
+                {receipt.amountPaidXAF.toLocaleString("fr-FR")} XAF
+              </p>
+              <p style={{ fontSize: 8, marginTop: 4 }}>Montant versé en espèces</p>
+            </div>
           </div>
         </div>
       )}

@@ -10,8 +10,9 @@ export function serializeTpe(tpe: Tpe) {
   return { ...rest, creditXAF: Number(credit) / 100 };
 }
 
+/** Ne jamais renvoyer payoutCode ici — c'est le secret qui protège contre le paiement d'une réimpression (voir placeTicket, qui le renvoie une seule fois, à part). */
 export function serializeTicket(ticket: Ticket & { items?: TicketItem[] }) {
-  const { stake, totalOdds, potentialWin, items, ...rest } = ticket;
+  const { stake, totalOdds, potentialWin, items, payoutCode: _omit, ...rest } = ticket;
   return {
     ...rest,
     stakeXAF: Number(stake) / 100,
@@ -42,6 +43,10 @@ function generateTicketCode(): string {
     if (i < 2) code += "-";
   }
   return code;
+}
+
+function generatePayoutCode(): string {
+  return String(Math.floor(1000 + Math.random() * 9000));
 }
 
 /** Appelé par un nouvel appareil au premier démarrage — idempotent sur le même secret. */
@@ -120,6 +125,7 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
 
   let code = generateTicketCode();
   while (await prisma.ticket.findUnique({ where: { code } })) code = generateTicketCode();
+  const payoutCode = generatePayoutCode();
 
   // La mise est déduite du crédit du TPE (le caissier "immobilise" ce montant
   // en l'encaissant) ; elle y revient, majorée du gain, au moment du paiement
@@ -128,6 +134,7 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
     const created = await tx.ticket.create({
       data: {
         code,
+        payoutCode,
         tpeId,
         cashierId,
         stake,
@@ -149,7 +156,10 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
     return created;
   });
 
-  return serializeTicket(ticket);
+  // Le code de validation n'est renvoyé qu'ici, une seule fois, pour être
+  // imprimé sur le ticket ORIGINAL — serializeTicket l'exclut partout
+  // ailleurs (recherche, historique, encaissement).
+  return { ...serializeTicket(ticket), payoutCode };
 }
 
 export async function listTicketsForTpe(tpeId: string, page: number, limit: number) {
@@ -245,7 +255,7 @@ export async function settleTicket(ticketId: string) {
 }
 
 /** Encaissement — paie un ticket GAGNÉ/REMBOURSÉ au guichet, débite le crédit du TPE payeur. */
-export async function payTicket(code: string, tpeId: string, cashierId: string) {
+export async function payTicket(code: string, tpeId: string, cashierId: string, payoutCode?: string) {
   const ticket = await prisma.ticket.findUnique({ where: { code: code.toUpperCase() } });
   if (!ticket) throw new AppError(404, "Code ticket introuvable");
 
@@ -253,6 +263,14 @@ export async function payTicket(code: string, tpeId: string, cashierId: string) 
   if (ticket.status === "CANCELLED") throw new AppError(400, "Ce ticket a été annulé");
   if (ticket.status === "PENDING") throw new AppError(400, "Ce ticket n'est pas encore réglé");
   if (ticket.status === "LOST") throw new AppError(400, "Ce ticket est perdant — rien à payer");
+
+  // Le code de validation n'est imprimé que sur le ticket ORIGINAL (jamais
+  // sur une réimpression) — l'exiger ici empêche qu'une réimpression soit
+  // présentée frauduleusement au paiement. Absent pour les tickets émis
+  // avant l'introduction de ce contrôle (payoutCode null en base).
+  if (ticket.payoutCode && ticket.payoutCode !== payoutCode) {
+    throw new AppError(403, "Code de validation incorrect");
+  }
 
   const amountToPay = ticket.status === "WON" ? ticket.potentialWin : ticket.stake;
 
@@ -285,7 +303,20 @@ export async function payTicket(code: string, tpeId: string, cashierId: string) 
     return paid;
   });
 
-  return { ticketId: updated.id, code: updated.code, amountPaidXAF: Number(amountToPay) / 100 };
+  return {
+    ticketId: updated.id,
+    code: updated.code,
+    amountPaidXAF: Number(amountToPay) / 100,
+    paidAt: updated.paidAt,
+    tpe: { code: payingTpe.code, name: payingTpe.name },
+  };
+}
+
+/** Accès exceptionnel réservé au backoffice (ex. premier ticket imprimé illisible/perdu, bourrage papier) — à utiliser avec parcimonie, ça contourne la protection anti-réimpression. */
+export async function getTicketPayoutCode(ticketId: string) {
+  const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { payoutCode: true } });
+  if (!ticket) throw new AppError(404, "Ticket introuvable");
+  return { payoutCode: ticket.payoutCode };
 }
 
 /** Approuve un ticket gagnant dont le gain dépasse le seuil — débloque son paiement au guichet. */
