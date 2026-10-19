@@ -59,10 +59,7 @@ export function DeviceGate({ children }: { children: React.ReactNode }) {
         {status === "PENDING_PAIRING" && (
           <>
             <div className="text-4xl mb-4">🔗</div>
-            <h1 className="text-xl font-bold text-gray-900 mb-2">Appairage requis</h1>
-            <p className="text-gray-500 mb-5 text-sm">
-              Communiquez ce code à un administrateur pour activer ce TPE depuis le backoffice.
-            </p>
+            <h1 className="text-xl font-bold text-gray-900 mb-5">Appairage requis</h1>
             {tpeCode && <p className="text-xs text-gray-400 mb-1">Appareil {tpeCode}</p>}
             <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-xl py-6 mb-5">
               <p className="font-mono text-4xl font-black tracking-[0.3em] text-slate-800">
