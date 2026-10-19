@@ -83,56 +83,51 @@ export default function HistoryPage() {
         </button>
       </div>
 
-      {/* Synthèse tickets TPE */}
-      {tpeSummary && (
+      {/* Synthèse tickets TPE + dépôts/retraits + solde net combiné */}
+      {(tpeSummary || stats) && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 no-print">
-          <div className="bg-white rounded-2xl p-5 shadow-sm">
-            <div className="text-gray-500 text-sm mb-1">Tickets émis</div>
-            <div className="text-2xl font-black text-green-600">{formatXAF(tpeSummary.issuedTotalXAF * 100)}</div>
-            <div className="text-xs text-gray-400 mt-1">{tpeSummary.issuedCount} ticket(s)</div>
-          </div>
-          <div className="bg-white rounded-2xl p-5 shadow-sm">
-            <div className="text-gray-500 text-sm mb-1">Tickets payés</div>
-            <div className="text-2xl font-black text-red-600">{formatXAF(tpeSummary.paidTotalXAF * 100)}</div>
-            <div className="text-xs text-gray-400 mt-1">{tpeSummary.paidCount} ticket(s)</div>
-          </div>
-          <div className="bg-white rounded-2xl p-5 shadow-sm sm:col-span-2">
-            <div className="text-gray-500 text-sm mb-1">Solde net tickets TPE</div>
-            <div className={clsx("text-3xl font-black", tpeSummary.netXAF >= 0 ? "text-green-600" : "text-red-600")}>
-              {tpeSummary.netXAF >= 0 ? "+" : ""}{formatXAF(tpeSummary.netXAF * 100)}
-            </div>
-            <div className="text-xs text-gray-400 mt-1">
-              {tpeSummary.issuedCount + tpeSummary.paidCount} opération(s) au total
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Statistiques */}
-      {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 no-print">
-          <div className="bg-white rounded-2xl p-5 shadow-sm">
-            <div className="text-gray-500 text-sm mb-1">Dépôts</div>
-            <div className="text-2xl font-black text-green-600">{formatXAF(stats.totalDepositsXAF * 100)}</div>
-            <div className="text-xs text-gray-400 mt-1">{stats.countDeposits} transaction(s)</div>
-          </div>
-          <div className="bg-white rounded-2xl p-5 shadow-sm">
-            <div className="text-gray-500 text-sm mb-1">Retraits</div>
-            <div className="text-2xl font-black text-red-600">{formatXAF(stats.totalWithdrawalsXAF * 100)}</div>
-            <div className="text-xs text-gray-400 mt-1">{stats.countWithdrawals} transaction(s)</div>
-          </div>
-          <div className="bg-white rounded-2xl p-5 shadow-sm sm:col-span-2">
-            <div className="text-gray-500 text-sm mb-1">Solde net de caisse</div>
-            <div className={clsx(
-              "text-3xl font-black",
-              stats.netXAF >= 0 ? "text-green-600" : "text-red-600"
-            )}>
-              {stats.netXAF >= 0 ? "+" : ""}{formatXAF(stats.netXAF * 100)}
-            </div>
-            <div className="text-xs text-gray-400 mt-1">
-              {stats.countDeposits + stats.countWithdrawals} opération(s) au total
-            </div>
-          </div>
+          {tpeSummary && (
+            <>
+              <div className="bg-white rounded-2xl p-5 shadow-sm">
+                <div className="text-gray-500 text-sm mb-1">Tickets émis</div>
+                <div className="text-2xl font-black text-green-600">{formatXAF(tpeSummary.issuedTotalXAF * 100)}</div>
+                <div className="text-xs text-gray-400 mt-1">{tpeSummary.issuedCount} ticket(s)</div>
+              </div>
+              <div className="bg-white rounded-2xl p-5 shadow-sm">
+                <div className="text-gray-500 text-sm mb-1">Tickets payés</div>
+                <div className="text-2xl font-black text-red-600">{formatXAF(tpeSummary.paidTotalXAF * 100)}</div>
+                <div className="text-xs text-gray-400 mt-1">{tpeSummary.paidCount} ticket(s)</div>
+              </div>
+            </>
+          )}
+          {stats && (
+            <>
+              <div className="bg-white rounded-2xl p-5 shadow-sm">
+                <div className="text-gray-500 text-sm mb-1">Dépôts</div>
+                <div className="text-2xl font-black text-green-600">{formatXAF(stats.totalDepositsXAF * 100)}</div>
+                <div className="text-xs text-gray-400 mt-1">{stats.countDeposits} transaction(s)</div>
+              </div>
+              <div className="bg-white rounded-2xl p-5 shadow-sm">
+                <div className="text-gray-500 text-sm mb-1">Retraits</div>
+                <div className="text-2xl font-black text-red-600">{formatXAF(stats.totalWithdrawalsXAF * 100)}</div>
+                <div className="text-xs text-gray-400 mt-1">{stats.countWithdrawals} transaction(s)</div>
+              </div>
+            </>
+          )}
+          {(() => {
+            const combinedNetXAF = (tpeSummary?.netXAF ?? 0) + (stats?.netXAF ?? 0);
+            const combinedOps = (tpeSummary ? tpeSummary.issuedCount + tpeSummary.paidCount : 0)
+              + (stats ? stats.countDeposits + stats.countWithdrawals : 0);
+            return (
+              <div className="bg-white rounded-2xl p-5 shadow-sm col-span-2 sm:col-span-4">
+                <div className="text-gray-500 text-sm mb-1">Solde net de caisse</div>
+                <div className={clsx("text-3xl font-black", combinedNetXAF >= 0 ? "text-green-600" : "text-red-600")}>
+                  {combinedNetXAF >= 0 ? "+" : ""}{formatXAF(combinedNetXAF * 100)}
+                </div>
+                <div className="text-xs text-gray-400 mt-1">{combinedOps} opération(s) au total</div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
