@@ -114,21 +114,21 @@ export default function CaissePage() {
 
       {/* ─── Reçu imprimable ─── */}
       {receipt && (
-        <div className="print-only p-8 font-mono text-sm">
-          <div className="text-center border-b pb-4 mb-4">
-            <div className="text-xl font-bold">SERENITYBET</div>
+        <div className="print-only font-mono text-[10px] leading-snug" style={{ width: "100%", padding: "4px 6px" }}>
+          <div className="text-center border-b pb-1 mb-2">
+            <div className="text-sm font-bold">SERENITYBET</div>
             <div>Reçu de {receipt.type === "DEPOT" ? "Dépôt" : "Retrait"}</div>
             <div>{new Date(receipt.createdAt).toLocaleString("fr-FR")}</div>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             <div>Réf: {receipt.transactionId.slice(-8).toUpperCase()}</div>
             <div>Client: {receipt.playerName}</div>
             <div>Téléphone: {receipt.phone}</div>
-            <div className="border-t pt-2 mt-2 font-bold text-lg">
+            <div className="border-t pt-1 mt-1 font-bold text-xs">
               {receipt.type === "DEPOT" ? "+" : "-"}{receipt.amountXAF.toLocaleString("fr-FR")} XAF
             </div>
           </div>
-          <div className="text-center mt-4 border-t pt-4 text-xs">Merci de jouer responsable</div>
+          <div className="text-center mt-2 border-t pt-2 text-[8px]">Merci de jouer responsable</div>
         </div>
       )}
 

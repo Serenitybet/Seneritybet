@@ -168,39 +168,43 @@ export default function TpeTicketPage() {
         </div>
 
         <div className="print-only">
-          <div style={{ fontFamily: "monospace", maxWidth: 320, margin: "0 auto", padding: 16, border: "1px solid #000" }}>
-            <div style={{ textAlign: "center", borderBottom: "2px solid #000", paddingBottom: 8, marginBottom: 8 }}>
-              <p style={{ fontSize: 20, fontWeight: "bold" }}>SERENITYBET</p>
-              <p style={{ fontSize: 12 }}>Ticket de pari sportif</p>
-              <p style={{ fontSize: 10, color: "#666" }}>Licence de jeux — République du Tchad</p>
+          {/* Rouleau thermique 58mm (~48mm imprimable) — largeur fluide sur
+              toute la page plutôt qu'une largeur fixe pensée pour du 80mm,
+              qui forçait un redécoupage imprévisible du ticket en plusieurs
+              pages côté impression Android. */}
+          <div style={{ fontFamily: "monospace", width: "100%", padding: "4px 6px", fontSize: 10, lineHeight: 1.3 }}>
+            <div style={{ textAlign: "center", borderBottom: "1px solid #000", paddingBottom: 4, marginBottom: 4 }}>
+              <p style={{ fontSize: 14, fontWeight: "bold" }}>SERENITYBET</p>
+              <p style={{ fontSize: 9 }}>Ticket de pari sportif</p>
+              <p style={{ fontSize: 8, color: "#444" }}>Licence de jeux — République du Tchad</p>
             </div>
-            <div style={{ marginBottom: 8 }}>
+            <div style={{ marginBottom: 4 }}>
               <p><strong>Code:</strong> {ticket.code}</p>
               <p><strong>Date:</strong> {new Date(ticket.createdAt).toLocaleString("fr-FR")}</p>
             </div>
-            <div style={{ borderTop: "1px dashed #000", borderBottom: "1px dashed #000", padding: "8px 0", marginBottom: 8 }}>
-              <p style={{ fontWeight: "bold", marginBottom: 4 }}>SÉLECTIONS ({ticket.items.length})</p>
+            <div style={{ borderTop: "1px dashed #000", borderBottom: "1px dashed #000", padding: "4px 0", marginBottom: 4 }}>
+              <p style={{ fontWeight: "bold", marginBottom: 3 }}>SÉLECTIONS ({ticket.items.length})</p>
               {ticket.items.map((it, i) => (
-                <div key={i} style={{ marginBottom: 6, fontSize: 11 }}>
+                <div key={i} style={{ marginBottom: 4, fontSize: 9 }}>
                   <p>{i + 1}. {it.market.event.homeTeam} vs {it.market.event.awayTeam}</p>
-                  <p style={{ paddingLeft: 12 }}>→ {it.odd.label} @ <strong>{it.oddValue.toFixed(2)}</strong></p>
+                  <p style={{ paddingLeft: 8 }}>→ {it.odd.label} @ <strong>{it.oddValue.toFixed(2)}</strong></p>
                 </div>
               ))}
             </div>
-            <div style={{ marginBottom: 8, fontSize: 13 }}>
+            <div style={{ marginBottom: 4, fontSize: 10 }}>
               <p>Cote totale : <strong>{ticket.totalOdds.toFixed(2)}</strong></p>
               <p>Mise : <strong>{ticket.stakeXAF.toLocaleString("fr-FR")} XAF</strong></p>
-              <p style={{ fontSize: 16, fontWeight: "bold" }}>
+              <p style={{ fontSize: 12, fontWeight: "bold" }}>
                 Gain potentiel : {ticket.potentialWinXAF.toLocaleString("fr-FR")} XAF
               </p>
             </div>
-            <div style={{ textAlign: "center", borderTop: "2px solid #000", paddingTop: 8, fontSize: 10 }}>
+            <div style={{ textAlign: "center", borderTop: "1px solid #000", paddingTop: 4, fontSize: 8 }}>
               <p>Jouez responsablement. +18 ans uniquement.</p>
               <p>Conservez ce ticket — il est nécessaire pour encaisser tout gain.</p>
               {ticketQr && (
-                <img src={ticketQr} alt={ticket.code} style={{ width: 120, height: 120, margin: "8px auto 4px" }} />
+                <img src={ticketQr} alt={ticket.code} style={{ width: 100, height: 100, margin: "6px auto 3px", display: "block" }} />
               )}
-              <p style={{ fontFamily: "monospace", fontSize: 14, fontWeight: "bold" }}>{ticket.code}</p>
+              <p style={{ fontFamily: "monospace", fontSize: 11, fontWeight: "bold" }}>{ticket.code}</p>
             </div>
           </div>
         </div>

@@ -10,6 +10,10 @@ body { font-family: 'Inter', sans-serif; background: #f1f5f9; }
 @media print {
   .no-print { display: none !important; }
   .print-only { display: block !important; }
-  body { background: white; }
+  body { background: white; margin: 0; }
+  /* Rouleau thermique 58mm — hauteur automatique pour imprimer en une seule
+     bande continue, sans quoi le navigateur retombe sur un format de page
+     standard (Letter/A4) et découpe le ticket en plusieurs pages. */
+  @page { size: 58mm auto; margin: 0; }
 }
 .print-only { display: none; }
