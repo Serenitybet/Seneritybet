@@ -163,6 +163,40 @@ export async function listTicketsForTpe(tpeId: string, page: number, limit: numb
   return { tickets: tickets.map(serializeTicket), total, page, limit, totalPages: Math.ceil(total / limit) };
 }
 
+/**
+ * Synthèse caissier sur une période : total des tickets émis (mises collectées)
+ * et total des tickets payés (gains/remboursements versés) par ce caissier sur
+ * ce TPE — pour la clôture de caisse.
+ */
+export async function getCashierSummary(tpeId: string, cashierId: string, from: Date, to: Date) {
+  const [issuedTickets, paidTickets] = await Promise.all([
+    prisma.ticket.findMany({
+      where: { tpeId, cashierId, createdAt: { gte: from, lte: to } },
+      select: { stake: true },
+    }),
+    prisma.ticket.findMany({
+      where: { paidByTpeId: tpeId, paidByCashierId: cashierId, paidAt: { gte: from, lte: to } },
+      select: { status: true, stake: true, potentialWin: true },
+    }),
+  ]);
+
+  const issuedTotal = issuedTickets.reduce((acc, t) => acc + t.stake, BigInt(0));
+  const paidTotal = paidTickets.reduce(
+    (acc, t) => acc + (t.status === "WON" ? t.potentialWin : t.stake),
+    BigInt(0),
+  );
+
+  return {
+    from: from.toISOString(),
+    to: to.toISOString(),
+    issuedCount: issuedTickets.length,
+    issuedTotalXAF: Number(issuedTotal) / 100,
+    paidCount: paidTickets.length,
+    paidTotalXAF: Number(paidTotal) / 100,
+    netXAF: Number(issuedTotal - paidTotal) / 100,
+  };
+}
+
 export async function getTicketByCode(code: string) {
   const ticket = await prisma.ticket.findUnique({
     where: { code: code.toUpperCase() },

@@ -22,6 +22,17 @@ tpeRouter.post("/tickets", asyncHandler(async (req: TpeRequest, res: Response) =
   res.status(201).json({ success: true, data: ticket });
 }));
 
+// GET /api/tpe/summary — synthèse du caissier (tickets émis/payés) sur une période, pour la clôture de caisse
+tpeRouter.get("/summary", asyncHandler(async (req: TpeRequest, res: Response) => {
+  const now = new Date();
+  const defaultFrom = new Date(now);
+  defaultFrom.setHours(0, 0, 0, 0);
+  const from = req.query.from ? new Date(req.query.from as string) : defaultFrom;
+  const to = req.query.to ? new Date(req.query.to as string) : now;
+  const result = await tpeService.getCashierSummary(req.tpe!.id, req.user!.id, from, to);
+  res.json({ success: true, data: result });
+}));
+
 // GET /api/tpe/tickets — historique des tickets créés sur ce TPE
 tpeRouter.get("/tickets", asyncHandler(async (req: TpeRequest, res: Response) => {
   const page  = parseInt((req.query.page  as string) ?? "1",  10);

@@ -24,10 +24,19 @@ interface Stats {
   netXAF: number;
 }
 
+interface TpeSummary {
+  issuedCount: number;
+  issuedTotalXAF: number;
+  paidCount: number;
+  paidTotalXAF: number;
+  netXAF: number;
+}
+
 export default function HistoryPage() {
   const { token } = useAuthStore();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [tpeSummary, setTpeSummary] = useState<TpeSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,7 +54,16 @@ export default function HistoryPage() {
         setLoading(false);
       }
     }
+    async function loadTpeSummary() {
+      try {
+        const res = await api.get("/tpe/summary");
+        setTpeSummary(res.data.data);
+      } catch {
+        console.error("Erreur chargement synthèse tickets TPE");
+      }
+    }
     load();
+    loadTpeSummary();
   }, [token]);
 
   const today = format(new Date(), "EEEE d MMMM yyyy", { locale: fr });
@@ -64,6 +82,31 @@ export default function HistoryPage() {
           🖨️ Imprimer la clôture
         </button>
       </div>
+
+      {/* Synthèse tickets TPE */}
+      {tpeSummary && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 no-print">
+          <div className="bg-white rounded-2xl p-5 shadow-sm">
+            <div className="text-gray-500 text-sm mb-1">Tickets émis</div>
+            <div className="text-2xl font-black text-green-600">{formatXAF(tpeSummary.issuedTotalXAF * 100)}</div>
+            <div className="text-xs text-gray-400 mt-1">{tpeSummary.issuedCount} ticket(s)</div>
+          </div>
+          <div className="bg-white rounded-2xl p-5 shadow-sm">
+            <div className="text-gray-500 text-sm mb-1">Tickets payés</div>
+            <div className="text-2xl font-black text-red-600">{formatXAF(tpeSummary.paidTotalXAF * 100)}</div>
+            <div className="text-xs text-gray-400 mt-1">{tpeSummary.paidCount} ticket(s)</div>
+          </div>
+          <div className="bg-white rounded-2xl p-5 shadow-sm sm:col-span-2">
+            <div className="text-gray-500 text-sm mb-1">Solde net tickets TPE</div>
+            <div className={clsx("text-3xl font-black", tpeSummary.netXAF >= 0 ? "text-green-600" : "text-red-600")}>
+              {tpeSummary.netXAF >= 0 ? "+" : ""}{formatXAF(tpeSummary.netXAF * 100)}
+            </div>
+            <div className="text-xs text-gray-400 mt-1">
+              {tpeSummary.issuedCount + tpeSummary.paidCount} opération(s) au total
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Statistiques */}
       {stats && (
