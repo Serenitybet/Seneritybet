@@ -6,7 +6,7 @@ import toast, { Toaster } from "react-hot-toast";
 import { api } from "@/lib/api";
 
 interface Odd { id: string; label: string; value: string; isActive: boolean; }
-interface Market { id: string; name: string; odds: Odd[]; isSuspended: boolean; isActive: boolean; }
+interface Market { id: string; name: string; type: string; odds: Odd[]; isSuspended: boolean; isActive: boolean; }
 interface Event {
   id: string; homeTeam: string; awayTeam: string; startTime: string;
   competition: { name: string };
@@ -42,6 +42,7 @@ export default function TpeTicketPage() {
   const [ticket, setTicket] = useState<TicketResult | null>(null);
   const [dayOffset, setDayOffset] = useState(0);
   const [competitionFilter, setCompetitionFilter] = useState("");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     api.get("/sports/events?date=week&limit=200").then((r) => setEvents(r.data.data.events))
@@ -204,39 +205,96 @@ export default function TpeTicketPage() {
           ) : visibleEvents.length === 0 ? (
             <div className="bg-white rounded-2xl p-8 text-center text-gray-400">Aucun match pour ce filtre</div>
           ) : (
-            visibleEvents.map((event) => (
-              <div key={event.id} className="bg-white rounded-2xl shadow-sm p-4">
-                <div className="flex items-center justify-between mb-0.5">
-                  <p className="font-bold text-gray-900 text-sm">{event.homeTeam} vs {event.awayTeam}</p>
-                  <span className="text-[11px] text-gray-400">{event.competition.name}</span>
-                </div>
-                <p className="text-[11px] text-gray-400 mb-2">
-                  🕒 {new Date(event.startTime).toLocaleString("fr-FR", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                </p>
-                {event.markets.map((market) => (
-                  <div key={market.id} className="mb-2">
-                    <p className="text-xs text-gray-500 mb-1">{market.name}</p>
-                    <div className="flex flex-wrap gap-2">
-                      {market.odds.map((odd) => {
-                        const selected = selections.some((s) => s.oddId === odd.id);
-                        return (
+            Object.entries(
+              visibleEvents.reduce<Record<string, Event[]>>((acc, e) => {
+                (acc[e.competition.name] ??= []).push(e);
+                return acc;
+              }, {}),
+            ).map(([compName, evs]) => (
+              <div key={compName} className="rounded-2xl overflow-hidden shadow-sm">
+                <div className="bg-gray-800 text-white text-xs font-bold px-3 py-2">{compName}</div>
+                <div className="divide-y divide-gray-100 bg-white">
+                  {evs.map((event) => {
+                    const mainMarket = event.markets.find((m) => m.type === "MATCH_WINNER");
+                    const mainOdds = mainMarket
+                      ? [...mainMarket.odds].sort((a, b) => "1X2".indexOf(a.label) - "1X2".indexOf(b.label))
+                      : [];
+                    const isExpanded = expandedId === event.id;
+                    return (
+                      <div key={event.id}>
+                        <div className="flex items-center gap-2 p-3">
                           <button
-                            key={odd.id}
-                            disabled={market.isSuspended || !odd.isActive}
-                            onClick={() => toggleOdd(event, market, odd)}
-                            className={`px-3 py-1.5 rounded-lg text-sm font-bold border-2 transition-colors disabled:opacity-40 ${
-                              selected
-                                ? "bg-green-600 border-green-600 text-white"
-                                : "bg-gray-50 border-gray-200 text-gray-700 hover:border-green-400"
-                            }`}
+                            onClick={() => setExpandedId(isExpanded ? null : event.id)}
+                            className="flex-1 min-w-0 text-left"
                           >
-                            {odd.label} · {Number(odd.value).toFixed(2)}
+                            <p className="font-bold text-gray-900 text-sm truncate">{event.homeTeam} vs {event.awayTeam}</p>
+                            <p className="text-[11px] text-gray-400">
+                              🕒 {new Date(event.startTime).toLocaleString("fr-FR", { weekday: "short", hour: "2-digit", minute: "2-digit" })}
+                            </p>
                           </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
+                          <div className="flex gap-1 shrink-0">
+                            {mainOdds.length > 0 ? mainOdds.map((odd) => {
+                              const selected = selections.some((s) => s.oddId === odd.id);
+                              return (
+                                <button
+                                  key={odd.id}
+                                  disabled={mainMarket!.isSuspended || !odd.isActive}
+                                  onClick={() => toggleOdd(event, mainMarket!, odd)}
+                                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border-2 transition-colors disabled:opacity-40 ${
+                                    selected
+                                      ? "bg-green-600 border-green-600 text-white"
+                                      : "bg-gray-50 border-gray-200 text-gray-700 hover:border-green-400"
+                                  }`}
+                                >
+                                  {odd.label} · {Number(odd.value).toFixed(2)}
+                                </button>
+                              );
+                            }) : <span className="text-[11px] text-gray-300 px-2">—</span>}
+                          </div>
+                          <button
+                            onClick={() => setExpandedId(isExpanded ? null : event.id)}
+                            className="text-gray-400 text-xs shrink-0 w-5"
+                          >
+                            {isExpanded ? "▲" : "▼"}
+                          </button>
+                        </div>
+
+                        {isExpanded && (
+                          <div className="px-3 pb-3 bg-gray-50 space-y-2">
+                            {event.markets.filter((m) => m.type !== "MATCH_WINNER").length === 0 ? (
+                              <p className="text-[11px] text-gray-400 pt-1">Pas d'autres marchés disponibles pour ce match.</p>
+                            ) : (
+                              event.markets.filter((m) => m.type !== "MATCH_WINNER").map((market) => (
+                                <div key={market.id} className="pt-1">
+                                  <p className="text-xs text-gray-500 mb-1">{market.name}</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {market.odds.map((odd) => {
+                                      const selected = selections.some((s) => s.oddId === odd.id);
+                                      return (
+                                        <button
+                                          key={odd.id}
+                                          disabled={market.isSuspended || !odd.isActive}
+                                          onClick={() => toggleOdd(event, market, odd)}
+                                          className={`px-3 py-1.5 rounded-lg text-sm font-bold border-2 transition-colors disabled:opacity-40 ${
+                                            selected
+                                              ? "bg-green-600 border-green-600 text-white"
+                                              : "bg-white border-gray-200 text-gray-700 hover:border-green-400"
+                                          }`}
+                                        >
+                                          {odd.label} · {Number(odd.value).toFixed(2)}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ))
           )}
