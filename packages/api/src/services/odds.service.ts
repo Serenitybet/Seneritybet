@@ -7,30 +7,29 @@ const API_KEY = process.env.ODDS_API_KEY;
 
 // Sports TheOddsAPI → slug interne + métadonnées
 //
-// ⚠️ Les 19 championnats ci-dessous sont ceux ciblés par Serenitybet (Tchad).
-// Les clés marquées "à vérifier" sont des sport_key probables mais non
-// confirmés — dès que ODDS_API_KEY est actif, comparer avec un GET
-// https://api.the-odds-api.com/v4/sports?apiKey=... et corriger si besoin.
+// Les 17 championnats ci-dessous sont ceux ciblés par Serenitybet (Tchad),
+// confirmés disponibles via GET https://api.the-odds-api.com/v4/sports
+// (vérifié le 19/10/2026). Deux championnats visés ne sont PAS couverts par
+// TheOddsAPI et ne peuvent donc pas être synchronisés : République Tchèque
+// et Égypte (aucune clé correspondante dans leur catalogue).
 const SPORTS_CONFIG = [
-  // ⚽ Football — les 19 championnats ciblés
-  { key: "soccer_epl",                              slug: "football", name: "Premier League",          country: "England",      icon: "⚽", sortOrder: 1 }, // 1. Angleterre
-  { key: "soccer_france_ligue_one",                 slug: "football", name: "Ligue 1",                 country: "France",       icon: "⚽", sortOrder: 1 }, // 2. France
-  { key: "soccer_italy_serie_a",                    slug: "football", name: "Serie A",                 country: "Italy",        icon: "⚽", sortOrder: 1 }, // 3. Italie
-  { key: "soccer_germany_bundesliga",               slug: "football", name: "Bundesliga",              country: "Germany",      icon: "⚽", sortOrder: 1 }, // 4. Allemagne
-  { key: "soccer_netherlands_eredivisie",           slug: "football", name: "Eredivisie",              country: "Netherlands",  icon: "⚽", sortOrder: 1 }, // 5. Pays-Bas
-  { key: "soccer_spl",                              slug: "football", name: "Scottish Premiership",    country: "Scotland",     icon: "⚽", sortOrder: 1 }, // 6. Écosse — à vérifier
-  { key: "soccer_norway_eliteserien",               slug: "football", name: "Eliteserien",             country: "Norway",       icon: "⚽", sortOrder: 1 }, // 7. Norvège — à vérifier
-  { key: "soccer_czech_republic_first_league",      slug: "football", name: "Chance Liga",             country: "Czechia",      icon: "⚽", sortOrder: 1 }, // 8. Rép. Tchèque — à vérifier
-  { key: "soccer_saudi_arabia_pro_league",          slug: "football", name: "Saudi Pro League",        country: "Saudi Arabia", icon: "⚽", sortOrder: 1 }, // 9. Arabie Saoudite — à vérifier
-  { key: "soccer_egypt_premier_league",             slug: "football", name: "Egyptian Premier League", country: "Egypt",        icon: "⚽", sortOrder: 1 }, // 10. Égypte — à vérifier
-  { key: "soccer_turkey_super_league",              slug: "football", name: "Süper Lig",               country: "Turkey",       icon: "⚽", sortOrder: 1 }, // 11. Turquie
-  { key: "soccer_belgium_first_div",                slug: "football", name: "Jupiler Pro League",      country: "Belgium",      icon: "⚽", sortOrder: 1 }, // 12. Belgique — à vérifier
-  { key: "soccer_switzerland_superleague",          slug: "football", name: "Super League",            country: "Switzerland",  icon: "⚽", sortOrder: 1 }, // 13. Suisse — à vérifier
-  { key: "soccer_portugal_primeira_liga",           slug: "football", name: "Primeira Liga",           country: "Portugal",     icon: "⚽", sortOrder: 1 }, // 14. Portugal
-  { key: "soccer_russia_premier_league",            slug: "football", name: "Premier Liga",            country: "Russia",       icon: "⚽", sortOrder: 1 }, // 15. Russie — à vérifier
-  { key: "soccer_uefa_champs_league",               slug: "football", name: "Champions League",        country: "Europe",       icon: "⚽", sortOrder: 1 }, // 17. Ligue des Champions
-  { key: "soccer_uefa_europa_league",                slug: "football", name: "Europa League",           country: "Europe",       icon: "⚽", sortOrder: 1 }, // 18. Europa League
-  { key: "soccer_uefa_europa_conference_league",    slug: "football", name: "Conference League",       country: "Europe",       icon: "⚽", sortOrder: 1 }, // 19. Conference League — à vérifier
+  // ⚽ Football — les 17 championnats ciblés disponibles chez TheOddsAPI
+  { key: "soccer_epl",                           slug: "football", name: "Premier League",       country: "England",      icon: "⚽", sortOrder: 1 }, // 1. Angleterre
+  { key: "soccer_france_ligue_one",              slug: "football", name: "Ligue 1",              country: "France",       icon: "⚽", sortOrder: 1 }, // 2. France
+  { key: "soccer_italy_serie_a",                 slug: "football", name: "Serie A",              country: "Italy",        icon: "⚽", sortOrder: 1 }, // 3. Italie
+  { key: "soccer_germany_bundesliga",            slug: "football", name: "Bundesliga",           country: "Germany",      icon: "⚽", sortOrder: 1 }, // 4. Allemagne
+  { key: "soccer_netherlands_eredivisie",        slug: "football", name: "Eredivisie",           country: "Netherlands",  icon: "⚽", sortOrder: 1 }, // 5. Pays-Bas
+  { key: "soccer_spl",                           slug: "football", name: "Scottish Premiership",  country: "Scotland",     icon: "⚽", sortOrder: 1 }, // 6. Écosse
+  { key: "soccer_norway_eliteserien",            slug: "football", name: "Eliteserien",          country: "Norway",       icon: "⚽", sortOrder: 1 }, // 7. Norvège
+  { key: "soccer_saudi_arabia_pro_league",       slug: "football", name: "Saudi Pro League",     country: "Saudi Arabia", icon: "⚽", sortOrder: 1 }, // 9. Arabie Saoudite
+  { key: "soccer_turkey_super_league",           slug: "football", name: "Süper Lig",            country: "Turkey",       icon: "⚽", sortOrder: 1 }, // 11. Turquie
+  { key: "soccer_belgium_first_div",             slug: "football", name: "Jupiler Pro League",   country: "Belgium",      icon: "⚽", sortOrder: 1 }, // 12. Belgique
+  { key: "soccer_switzerland_superleague",       slug: "football", name: "Super League",         country: "Switzerland",  icon: "⚽", sortOrder: 1 }, // 13. Suisse
+  { key: "soccer_portugal_primeira_liga",        slug: "football", name: "Primeira Liga",        country: "Portugal",     icon: "⚽", sortOrder: 1 }, // 14. Portugal
+  { key: "soccer_russia_premier_league",         slug: "football", name: "Premier Liga",         country: "Russia",       icon: "⚽", sortOrder: 1 }, // 15. Russie
+  { key: "soccer_uefa_champs_league",            slug: "football", name: "Champions League",     country: "Europe",       icon: "⚽", sortOrder: 1 }, // 17. Ligue des Champions
+  { key: "soccer_uefa_europa_league",            slug: "football", name: "Europa League",        country: "Europe",       icon: "⚽", sortOrder: 1 }, // 18. Europa League
+  { key: "soccer_uefa_europa_conference_league", slug: "football", name: "Conference League",    country: "Europe",       icon: "⚽", sortOrder: 1 }, // 19. Conference League
   // 🏀 Basketball
   { key: "basketball_nba",               slug: "basketball", name: "NBA",                   country: "USA",      icon: "🏀", sortOrder: 2 },
   { key: "basketball_euroleague",        slug: "basketball", name: "Euroleague",             country: "Europe",   icon: "🏀", sortOrder: 2 },
