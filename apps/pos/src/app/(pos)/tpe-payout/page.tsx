@@ -37,6 +37,13 @@ const STATUS_LABEL: Record<TicketInfo["status"], string> = {
 // décodé avant de lancer la recherche, pour ignorer tout code non lié à
 // un ticket (le ticket est imprimé avec un code-barres CODE128).
 const TICKET_CODE_RE = /^[A-Z0-9]{2,6}-[A-Z0-9]{2,6}-[A-Z0-9]{2,6}$/;
+// Le code-barres encode le code sans les tirets (3+3+3 caractères, voir
+// tpe-ticket) pour rester aussi court/épais que possible — on les
+// réinsère ici avant de chercher le ticket.
+const RAW_BARCODE_RE = /^[A-Z0-9]{9}$/;
+function reinsertDashes(raw: string) {
+  return `${raw.slice(0, 3)}-${raw.slice(3, 6)}-${raw.slice(6, 9)}`;
+}
 
 export default function TpePayoutPage() {
   const [code, setCode] = useState("");
@@ -112,8 +119,11 @@ export default function TpePayoutPage() {
         videoRef.current,
         (result) => {
           if (!result) return;
-          const value = result.getText().trim().toUpperCase();
-          if (TICKET_CODE_RE.test(value)) {
+          const raw = result.getText().trim().toUpperCase();
+          const value = TICKET_CODE_RE.test(raw) ? raw
+            : RAW_BARCODE_RE.test(raw) ? reinsertDashes(raw)
+            : null;
+          if (value) {
             stopCamera();
             setCode(value);
             doSearch(value);

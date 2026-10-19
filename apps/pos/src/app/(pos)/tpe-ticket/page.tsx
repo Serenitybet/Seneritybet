@@ -91,18 +91,16 @@ export default function TpeTicketPage() {
   useEffect(() => {
     if (!ticket) { setTicketBarcode(null); return; }
     // Code-barres (CODE128) plutôt qu'un QR carré — une bande fine économise
-    // nettement plus de papier thermique sur un rouleau 58mm.
+    // nettement plus de papier thermique sur un rouleau 58mm. On encode le
+    // code SANS les tirets (réinsérés au décodage, voir tpe-payout) : à
+    // largeur de module égale, moins de modules = barres plus épaisses donc
+    // plus fiables à lire par une caméra sur l'espace imprimable réduit.
     try {
       const canvas = document.createElement("canvas");
-      // Largeur de module réglée pour que le code-barres tienne nativement
-      // dans les ~50mm imprimables (~190px à 96dpi) sans avoir besoin de le
-      // redimensionner en CSS à l'affichage — un redimensionnement qui ne
-      // préserve pas exactement le ratio risquerait de le rendre illisible
-      // au scan.
-      JsBarcode(canvas, ticket.code, {
+      JsBarcode(canvas, ticket.code.replace(/-/g, ""), {
         format: "CODE128",
-        width: 1.1,
-        height: 30,
+        width: 1.3,
+        height: 34,
         displayValue: false,
         margin: 0,
       });
