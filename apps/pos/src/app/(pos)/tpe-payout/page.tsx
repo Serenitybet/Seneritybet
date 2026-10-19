@@ -53,11 +53,19 @@ export default function TpePayoutPage() {
     try {
       const res = await api.get(`/tpe/tickets/${trimmed}`);
       setTicket(res.data.data);
+      stopCamera(); // le ticket est trouvé (scan ou saisie manuelle) — plus besoin de la caméra
     } catch (err: any) {
       toast.error(err.response?.data?.error ?? "Code ticket introuvable");
     } finally {
       setLoading(false);
     }
+  }
+
+  function scanAnother() {
+    setTicket(null);
+    setPaidAmount(null);
+    setCode("");
+    startCamera();
   }
 
   function searchTicket(e: React.FormEvent) {
@@ -164,31 +172,44 @@ export default function TpePayoutPage() {
 
       <div className="bg-white rounded-2xl shadow-sm p-6">
         <h2 className="text-lg font-bold text-gray-800 mb-1">💵 Encaisser un ticket</h2>
-        <p className="text-sm text-gray-500 mb-4">Visez le QR code du ticket, ou entrez le code manuellement.</p>
+        <p className="text-sm text-gray-500 mb-4">
+          {ticket ? "Ticket trouvé — vérifiez les détails ci-dessous." : "Visez le QR code du ticket, ou entrez le code manuellement."}
+        </p>
 
-        <div className="relative rounded-xl overflow-hidden bg-black aspect-video mb-4">
-          <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
-          <canvas ref={canvasRef} className="hidden" />
-          {cameraActive && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-2/3 aspect-square border-4 border-green-400 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
-            </div>
-          )}
-          {!cameraActive && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center px-4">
-              {cameraError ? (
-                <>
-                  <p className="text-red-300 text-sm font-semibold">{cameraError}</p>
-                  <button onClick={startCamera} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold">
-                    Réessayer
-                  </button>
-                </>
-              ) : (
-                <p className="text-gray-300 text-sm">Activation de la caméra…</p>
-              )}
-            </div>
-          )}
-        </div>
+        {!ticket && (
+          <div className="relative rounded-xl overflow-hidden bg-black aspect-video mb-4">
+            <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
+            <canvas ref={canvasRef} className="hidden" />
+            {cameraActive && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-2/3 aspect-square border-4 border-green-400 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
+              </div>
+            )}
+            {!cameraActive && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center px-4">
+                {cameraError ? (
+                  <>
+                    <p className="text-red-300 text-sm font-semibold">{cameraError}</p>
+                    <button onClick={startCamera} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-bold">
+                      Réessayer
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-gray-300 text-sm">Activation de la caméra…</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {ticket && (
+          <button
+            onClick={scanAnother}
+            className="w-full mb-4 py-2.5 border-2 border-gray-200 hover:border-green-400 text-gray-600 font-semibold rounded-xl text-sm"
+          >
+            📷 Scanner un autre ticket
+          </button>
+        )}
 
         <form onSubmit={searchTicket} className="flex gap-3">
           <input
