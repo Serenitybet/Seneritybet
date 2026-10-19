@@ -75,6 +75,10 @@ export default function TpePayoutPage() {
 
   async function startCamera() {
     setCameraError(null);
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Caméra non disponible sur cet appareil — utilisez la saisie manuelle du code.");
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" },
@@ -87,6 +91,8 @@ export default function TpePayoutPage() {
       setCameraActive(true);
       tick();
     } catch {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
       setCameraError("Impossible d'accéder à la caméra — vérifiez les autorisations de l'appareil.");
     }
   }
@@ -118,7 +124,18 @@ export default function TpePayoutPage() {
 
   useEffect(() => {
     startCamera();
-    return () => stopCamera();
+    // Garde-fou : sur certains appareils, la demande d'autorisation caméra
+    // ne se résout jamais (ni succès ni erreur) — sans ça l'écran reste
+    // bloqué indéfiniment sur "Activation de la caméra…".
+    const watchdog = setTimeout(() => {
+      setCameraActive((active) => {
+        if (!active) {
+          setCameraError("La caméra met trop de temps à démarrer. Réessayez ou saisissez le code manuellement.");
+        }
+        return active;
+      });
+    }, 7000);
+    return () => { stopCamera(); clearTimeout(watchdog); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
