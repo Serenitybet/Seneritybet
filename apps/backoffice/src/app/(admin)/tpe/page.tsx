@@ -87,10 +87,7 @@ export default function TpePage() {
   useEffect(() => { loadAll(); }, []);
 
   async function approvePairing(tpe: Tpe) {
-    const name = prompt(
-      `Donne un nom à ce terminal (ex: "Caisse Marché Central"). Laisse vide pour garder "${tpe.code}".\n(Ne pas saisir le code d'appairage ${tpe.pairingCode} — ce n'est pas un nom.)`,
-      tpe.name ?? "",
-    );
+    const name = prompt("Nom du terminal :", tpe.name ?? "");
     if (name === null) return;
     try {
       const res = await fetch(`${API}/admin/tpe/${tpe.id}/approve`, {
