@@ -22,6 +22,12 @@ import { errorHandler } from "./middleware/error.middleware";
 
 export const app = express();
 
+// Caddy (reverse proxy HTTPS) est le seul point d'entrée public — on lui fait
+// confiance pour un seul niveau de X-Forwarded-For afin que req.ip reflète la
+// vraie IP du visiteur (sinon tout le trafic apparaît comme venant de Caddy,
+// ce qui fausse le rate limiting pour tout le monde).
+app.set("trust proxy", 1);
+
 // ─── Sécurité headers (helmet) ────────────────────────────────────────────────
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },

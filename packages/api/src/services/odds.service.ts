@@ -88,13 +88,16 @@ export async function syncOddsFromAPI() {
         create: { slug: config.slug, name: getSportLabel(config.slug), icon: config.icon, sortOrder: config.sortOrder },
       });
 
-      // Upsert compétition
+      // Upsert compétition — le slug est calculé une seule fois pour que la
+      // recherche (where) et la création (create) utilisent toujours la même
+      // valeur, même pour les noms avec caractères spéciaux (ex. "Süper Lig").
+      const competitionSlug = config.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
       const competition = await prisma.competition.upsert({
-        where:  { slug: config.name.toLowerCase().replace(/\s+/g, "-") },
+        where:  { slug: competitionSlug },
         update: { name: config.name },
         create: {
           name:    config.name,
-          slug:    config.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
+          slug:    competitionSlug,
           country: config.country,
           sportId: sport.id,
         },
