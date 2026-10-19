@@ -1,6 +1,7 @@
 import axios from "axios";
 import { prisma } from "../lib/prisma";
 import { updateCredits } from "../lib/credits.state";
+import { settleTicket } from "./tpe.service";
 
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
 const API_KEY = process.env.ODDS_API_KEY;
@@ -474,4 +475,158 @@ export async function getUpcomingEvents(sportSlug?: string, page = 1, limit = 50
   ]);
 
   return { events, total, page, limit, totalPages: Math.ceil(total / limit) };
+}
+
+// ─── Résultats finaux & règlement automatique des tickets ─────────────────
+//
+// TheOddsAPI expose un endpoint /scores par championnat qui renvoie, pour
+// les matchs terminés des `daysFrom` derniers jours, le score final. On
+// l'interroge pour chaque championnat suivi, on marque l'événement comme
+// FINISHED avec son score, puis on en déduit le résultat (gagné/perdu/
+// remboursé) de chaque sélection de ticket liée à ce match — le ticket se
+// règle alors automatiquement dès que toutes ses sélections ont un résultat
+// (voir settleTicket dans tpe.service.ts).
+const DAYS_FROM_SCORES = 3;
+
+export async function syncScoresAndSettle() {
+  if (!API_KEY) return;
+
+  let settledCount = 0;
+
+  for (const config of SPORTS_CONFIG) {
+    try {
+      const res = await axios.get(`${ODDS_API_BASE}/sports/${config.key}/scores`, {
+        params: { apiKey: API_KEY, daysFrom: DAYS_FROM_SCORES, dateFormat: "iso" },
+        timeout: 10000,
+      });
+
+      const remaining = parseInt(res.headers["x-requests-remaining"] ?? "-1", 10);
+      if (remaining >= 0) updateCredits(remaining);
+
+      for (const game of res.data ?? []) {
+        if (!game.completed || !Array.isArray(game.scores)) continue;
+
+        const homeRaw = game.scores.find((s: any) => s.name === game.home_team)?.score;
+        const awayRaw = game.scores.find((s: any) => s.name === game.away_team)?.score;
+        if (homeRaw == null || awayRaw == null) continue;
+        const homeScore = parseInt(homeRaw, 10);
+        const awayScore = parseInt(awayRaw, 10);
+        if (Number.isNaN(homeScore) || Number.isNaN(awayScore)) continue;
+
+        const event = await prisma.event.findUnique({ where: { externalId: game.id } });
+        if (!event) continue;
+        // Déjà traité avec le même score lors d'un cycle précédent.
+        if (event.status === "FINISHED" && event.homeScore === homeScore && event.awayScore === awayScore) continue;
+
+        await prisma.event.update({
+          where: { id: event.id },
+          data: { status: "FINISHED", homeScore, awayScore, result: `${homeScore}-${awayScore}` },
+        });
+
+        settledCount += await settleEventTickets(event.id, event.homeTeam, event.awayTeam, homeScore, awayScore);
+      }
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        console.error("ODDS_API_KEY invalide ou quota dépassé");
+        break;
+      }
+      // 422/404 (pas de scores pour ce championnat) ou autre erreur : on ignore et on continue
+    }
+  }
+
+  if (settledCount > 0) console.log(`🏁 Résultats automatiques : ${settledCount} ticket(s) réglé(s)`);
+}
+
+/** Déduit et enregistre le résultat de chaque sélection de ticket encore en attente liée à ce match, puis règle les tickets devenus complets. */
+async function settleEventTickets(
+  eventId: string, homeTeam: string, awayTeam: string, homeScore: number, awayScore: number,
+): Promise<number> {
+  const items = await prisma.ticketItem.findMany({
+    where: { result: null, market: { eventId } },
+    include: { odd: true, market: true, ticket: true },
+  });
+
+  const touchedTicketIds = new Set<string>();
+  for (const item of items) {
+    if (item.ticket.status !== "PENDING") continue;
+    const result = computeItemResult(item.market.type, item.odd.label, homeTeam, awayTeam, homeScore, awayScore);
+    if (!result) continue; // type de marché ou libellé non calculable automatiquement — laissé pour saisie manuelle
+    await prisma.ticketItem.update({ where: { id: item.id }, data: { result } });
+    touchedTicketIds.add(item.ticketId);
+  }
+
+  let settledCount = 0;
+  for (const ticketId of touchedTicketIds) {
+    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, include: { items: true } });
+    if (ticket && ticket.status === "PENDING" && ticket.items.every((i) => i.result !== null)) {
+      await settleTicket(ticketId);
+      settledCount++;
+    }
+  }
+  return settledCount;
+}
+
+/** Calcule le résultat d'une sélection à partir du score final — null si le marché/libellé n'est pas reconnu (saisie manuelle requise). */
+function computeItemResult(
+  marketType: string, label: string, homeTeam: string, awayTeam: string, homeScore: number, awayScore: number,
+): "WON" | "LOST" | "VOID" | null {
+  switch (marketType) {
+    case "MATCH_WINNER": {
+      const winner = homeScore > awayScore ? "1" : awayScore > homeScore ? "2" : "X";
+      return label === winner ? "WON" : "LOST";
+    }
+    case "DRAW_NO_BET": {
+      if (homeScore === awayScore) return "VOID"; // remboursé en cas de match nul
+      const winner = homeScore > awayScore ? "1" : "2";
+      return label === winner ? "WON" : "LOST";
+    }
+    case "DOUBLE_CHANCE": {
+      const homeOrDraw = homeScore >= awayScore;
+      const awayOrDraw = awayScore >= homeScore;
+      const notDraw    = homeScore !== awayScore;
+      const won = label === "1X" ? homeOrDraw : label === "X2" ? awayOrDraw : label === "12" ? notDraw : null;
+      return won === null ? null : won ? "WON" : "LOST";
+    }
+    case "BOTH_TEAMS_SCORE": {
+      if (label !== "Oui" && label !== "Non") return null;
+      const bothScored = homeScore > 0 && awayScore > 0;
+      return (label === "Oui") === bothScored ? "WON" : "LOST";
+    }
+    case "CORRECT_SCORE": {
+      return label === `${homeScore}-${awayScore}` ? "WON" : "LOST";
+    }
+    case "OVER_UNDER":
+    case "ALTERNATE_TOTALS": {
+      const m = label.match(/^(Plus|Moins)\s+([\d.]+)$/);
+      if (!m) return null;
+      const line = parseFloat(m[2]);
+      const total = homeScore + awayScore;
+      if (total === line) return "VOID"; // ligne entière atteinte pile — remboursé
+      return (m[1] === "Plus") === (total > line) ? "WON" : "LOST";
+    }
+    case "HANDICAP":
+    case "ALTERNATE_SPREADS": {
+      const m = label.match(/^([12])\s*\(([+-]?[\d.]+)\)$/);
+      if (!m) return null;
+      const side = m[1];
+      const point = parseFloat(m[2]);
+      const ownScore = side === "1" ? homeScore : awayScore;
+      const oppScore = side === "1" ? awayScore : homeScore;
+      const adjusted = ownScore + point;
+      if (adjusted === oppScore) return "VOID"; // push — remboursé
+      return adjusted > oppScore ? "WON" : "LOST";
+    }
+    case "TEAM_TOTALS": {
+      const m = label.match(/^(.+) (Plus|Moins) ([\d.]+)$/);
+      if (!m) return null;
+      const [, team, dir, pointStr] = m;
+      const line = parseFloat(pointStr);
+      const teamScore = team === homeTeam ? homeScore : team === awayTeam ? awayScore : null;
+      if (teamScore === null) return null;
+      if (teamScore === line) return "VOID";
+      return (dir === "Plus") === (teamScore > line) ? "WON" : "LOST";
+    }
+    default:
+      return null; // FIRST_GOAL_SCORER, HALF_TIME_RESULT : non proposés à la vente, pas de calcul
+  }
 }
