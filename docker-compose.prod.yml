@@ -96,6 +96,22 @@ services:
     ports:
       - "127.0.0.1:3001:3001"
 
+  coupon:
+    build:
+      context: .
+      dockerfile: apps/coupon/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}
+    container_name: serenitybet_coupon
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      PORT: 3003
+      HOSTNAME: 0.0.0.0
+    ports:
+      - "127.0.0.1:3003:3003"
+
 volumes:
   postgres_data:
   redis_data:
