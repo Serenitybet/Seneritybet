@@ -10,6 +10,7 @@ import { sportsRouter } from "./routes/sports.routes";
 import { bettingRouter } from "./routes/betting.routes";
 import { walletRouter } from "./routes/wallet.routes";
 import { webhookRouter } from "./routes/webhook.routes";
+import { webCouponRouter } from "./routes/web-coupon.routes";
 import { adminRouter } from "./routes/admin/index.routes";
 import { cashierRouter } from "./routes/cashier.routes";
 import { withdrawalRequestRouter } from "./routes/withdrawal-request.routes";
@@ -106,6 +107,7 @@ app.use("/api/auth/login",    authLimiter);
 app.use("/api/auth/register", registerLimiter);
 app.use("/api/auth",    authRouter);
 app.use("/api/sports",  sportsRouter);
+app.use("/api/web-coupons", webCouponRouter);
 
 // ─── Routes authentifiées ────────────────────────────────────────────────────
 app.use("/api/bets",     bettingRouter);

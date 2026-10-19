@@ -5,6 +5,7 @@ import { asyncHandler } from "../lib/asyncHandler";
 import { AppError } from "../middleware/error.middleware";
 import { Router } from "express";
 import * as tpeService from "../services/tpe.service";
+import * as webCouponService from "../services/web-coupon.service";
 
 export const tpeRouter = Router();
 
@@ -16,10 +17,16 @@ tpeRouter.use(requireRole("CASHIER", "ADMIN", "SUPER_ADMIN"));
 
 // POST /api/tpe/tickets — créer un ticket physique anonyme
 tpeRouter.post("/tickets", asyncHandler(async (req: TpeRequest, res: Response) => {
-  const { selections, stakeXAF } = req.body;
+  const { selections, stakeXAF, webCouponCode } = req.body;
   if (!stakeXAF) throw new AppError(400, "Mise requise");
-  const ticket = await tpeService.placeTicket(req.tpe!.id, req.user!.id, selections, Number(stakeXAF));
+  const ticket = await tpeService.placeTicket(req.tpe!.id, req.user!.id, selections, Number(stakeXAF), webCouponCode);
   res.status(201).json({ success: true, data: ticket });
+}));
+
+// GET /api/tpe/web-coupons/:code — caissier récupère un coupon composé sur le site public
+tpeRouter.get("/web-coupons/:code", asyncHandler(async (req: TpeRequest, res: Response) => {
+  const result = await webCouponService.getWebCouponForCashier(req.params.code);
+  res.json({ success: true, data: result });
 }));
 
 // GET /api/tpe/summary — synthèse du caissier (tickets émis/payés) sur une période, pour la clôture de caisse

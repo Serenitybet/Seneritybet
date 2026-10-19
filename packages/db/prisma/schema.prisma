@@ -583,6 +583,7 @@ model Ticket {
   paidByCashier    User?        @relation("TicketPaidBy", fields: [paidByCashierId], references: [id])
   createdAt        DateTime     @default(now())
   items            TicketItem[]
+  webCoupon        WebCoupon?
 
   @@index([tpeId])
   @@index([status])
@@ -603,6 +604,31 @@ model TicketItem {
 
   @@index([ticketId])
   @@index([marketId])
+}
+
+// Coupon composé depuis le site public (sans compte — contrairement à
+// SavedCoupon, qui suppose un joueur authentifié avec portefeuille). Ne
+// contient que les sélections ; la mise est décidée en espèces en boutique,
+// où le caissier le convertit en Ticket (voir placeTicket/webCouponCode).
+model WebCoupon {
+  id         String          @id @default(cuid())
+  code       String          @unique
+  selections Json            // snapshot [{ eventId, eventLabel, marketId, marketName, oddId, oddLabel, oddValue }]
+  status     WebCouponStatus @default(PENDING)
+  ticketId   String?         @unique
+  ticket     Ticket?         @relation(fields: [ticketId], references: [id])
+  createdAt  DateTime        @default(now())
+  expiresAt  DateTime
+
+  @@index([status])
+  @@index([expiresAt])
+}
+
+enum WebCouponStatus {
+  PENDING
+  USED
+  EXPIRED
+  CANCELLED
 }
 
 // ─── Configuration backoffice (clé/valeur) ───────────────────────────────────

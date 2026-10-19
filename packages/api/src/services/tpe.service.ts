@@ -80,7 +80,7 @@ interface TicketSelection {
   oddValue: number;
 }
 
-export async function placeTicket(tpeId: string, cashierId: string, selections: TicketSelection[], stakeXAF: number) {
+export async function placeTicket(tpeId: string, cashierId: string, selections: TicketSelection[], stakeXAF: number, webCouponCode?: string) {
   if (!selections?.length) throw new AppError(400, "Aucune sélection");
   if (selections.length > 15) throw new AppError(400, "Maximum 15 événements par ticket");
 
@@ -144,7 +144,7 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
     if (deducted.count === 0) {
       throw new AppError(400, "Crédit TPE insuffisant pour cette mise — contactez le backoffice");
     }
-    return tx.ticket.create({
+    const created = await tx.ticket.create({
       data: {
         code,
         payoutCode,
@@ -165,6 +165,23 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
         tpe: { select: { code: true, name: true } },
       },
     });
+
+    // Lie et consomme le coupon web d'origine, le cas échéant — conditionné
+    // (WHERE status = PENDING) pour qu'un même coupon ne puisse jamais être
+    // retiré deux fois si deux caissiers tentent de le faire en même temps :
+    // la seconde tentative touche 0 ligne, ce qui annule toute la transaction
+    // (ticket + déduction de crédit inclus).
+    if (webCouponCode) {
+      const consumed = await tx.webCoupon.updateMany({
+        where: { code: webCouponCode.toUpperCase(), status: "PENDING", expiresAt: { gt: new Date() } },
+        data: { status: "USED", ticketId: created.id },
+      });
+      if (consumed.count === 0) {
+        throw new AppError(400, "Ce coupon web a déjà été retiré, annulé ou a expiré");
+      }
+    }
+
+    return created;
   });
 
   // Le code de validation n'est renvoyé qu'ici, une seule fois, pour être
