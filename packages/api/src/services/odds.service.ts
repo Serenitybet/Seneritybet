@@ -272,10 +272,10 @@ const EXTRA_MARKET_TYPE_BY_KEY: Record<string, string> = {
 };
 
 // Plus/moins alternatif : l'API renvoie souvent 8-10 lignes (0.5 à 5.5+
-// buts) — on se limite aux 5 lignes les plus basses (les plus pertinentes
-// pour le football, la plupart des scores se situant dans cette plage)
-// pour garder l'écran de caisse lisible.
-const ALTERNATE_TOTALS_MAX_LINES = 5;
+// buts) — on se limite aux 6 lignes les plus basses (0.5 à 5.5, la plage
+// standard chez la plupart des bookmakers) pour garder l'écran de caisse
+// lisible tout en couvrant tous les scores réalistes d'un match de foot.
+const ALTERNATE_TOTALS_MAX_LINES = 6;
 
 async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: string, bookmakers: any[]) {
   const priorityKeys = ["bet365", "unibet", "betway", "onexbet", "pinnacle"];

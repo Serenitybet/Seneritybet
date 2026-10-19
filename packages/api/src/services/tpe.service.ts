@@ -98,6 +98,13 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
     if (odd.market.event.status !== "UPCOMING" && odd.market.event.status !== "LIVE") {
       throw new AppError(400, `Événement non disponible : ${odd.market.event.homeTeam} vs ${odd.market.event.awayTeam}`);
     }
+    // Le pari en direct n'est pas pris en charge (les cotes ne sont pas mises à
+    // jour en temps réel pendant un match) : on refuse tout pari sur un match
+    // dont le coup d'envoi est déjà passé, même si l'écran du caissier
+    // affichait encore le match avant (données non rafraîchies).
+    if (odd.market.event.status === "UPCOMING" && odd.market.event.startTime <= new Date()) {
+      throw new AppError(400, `Ce match a déjà débuté, les paris sont fermés : ${odd.market.event.homeTeam} vs ${odd.market.event.awayTeam}`);
+    }
     const diff = Math.abs(Number(odd.value) - selection.oddValue);
     if (diff > 0.05) throw new AppError(400, "La cote a changé, veuillez revalider le ticket");
   }
