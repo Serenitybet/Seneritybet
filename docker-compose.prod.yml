@@ -59,6 +59,7 @@ services:
       NODE_ENV: production
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       RISK_MAX_PAYOUT_XAF: ${RISK_MAX_PAYOUT_XAF:-5000000}
+      ODDS_API_KEY: ${ODDS_API_KEY}
     ports:
       - "127.0.0.1:4000:4000"
 
