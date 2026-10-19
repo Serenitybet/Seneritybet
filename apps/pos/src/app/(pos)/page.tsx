@@ -1,7 +1,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, setAuthToken } from "@/lib/api";
@@ -18,7 +18,7 @@ interface DeviceInfo {
 
 function Tile({
   href, icon, label, primary, onClick,
-}: { href?: string; icon: string; label: string; primary?: boolean; onClick?: () => void }) {
+}: { href?: string; icon: ReactNode; label: string; primary?: boolean; onClick?: () => void }) {
   const content = (
     <div
       className={`flex flex-col items-center justify-center gap-2 rounded-2xl p-5 h-28 text-center transition-colors active:scale-[0.98] ${
@@ -27,12 +27,20 @@ function Tile({
           : "bg-slate-800/70 border border-slate-700 text-slate-100 hover:border-green-500/40"
       }`}
     >
-      <span className="text-3xl">{icon}</span>
+      <span className="text-3xl leading-none">{icon}</span>
       <span className="font-bold text-sm leading-tight">{label}</span>
     </div>
   );
   if (onClick) return <button onClick={onClick} className="contents">{content}</button>;
   return <Link href={href!} className="contents">{content}</Link>;
+}
+
+function QrIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor" aria-hidden="true">
+      <path d="M3 3h7v7H3V3zm2 2v3h3V5H5zM3 14h7v7H3v-7zm2 2v3h3v-3H5zM14 3h7v7h-7V3zm2 2v3h3V5h-3zM14 14h2v2h-2v-2zM18 14h3v2h-3v-2zM14 18h2v3h-2v-3zM18 17h3v4h-3v-4z" />
+    </svg>
+  );
 }
 
 export default function PosHomePage() {
@@ -87,7 +95,7 @@ export default function PosHomePage() {
         {/* Actions principales */}
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
-            <Tile href="/tpe-payout" icon="📷" label="Scanner un ticket" primary />
+            <Tile href="/tpe-payout" icon={<QrIcon />} label="Scanner un ticket" primary />
           </div>
           <Tile href="/tpe-ticket" icon="🆕" label="Nouveau ticket" />
           <Tile href="/tpe-history" icon="🧾" label="Historique de paris" />

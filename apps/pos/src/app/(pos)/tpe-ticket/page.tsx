@@ -2,6 +2,7 @@
 export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
+import QRCode from "qrcode";
 import toast, { Toaster } from "react-hot-toast";
 import { api } from "@/lib/api";
 
@@ -68,6 +69,7 @@ export default function TpeTicketPage() {
   const [stakeXAF, setStakeXAF] = useState("");
   const [placing, setPlacing] = useState(false);
   const [ticket, setTicket] = useState<TicketResult | null>(null);
+  const [ticketQr, setTicketQr] = useState<string | null>(null);
   const [dayOffset, setDayOffset] = useState(0);
   const [competitionFilter, setCompetitionFilter] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -77,6 +79,11 @@ export default function TpeTicketPage() {
       .catch(() => toast.error("Erreur de chargement des matchs"))
       .finally(() => setLoadingEvents(false));
   }, []);
+
+  useEffect(() => {
+    if (!ticket) { setTicketQr(null); return; }
+    QRCode.toDataURL(ticket.code, { margin: 1, width: 160 }).then(setTicketQr).catch(() => setTicketQr(null));
+  }, [ticket]);
 
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(); d.setDate(d.getDate() + i);
@@ -187,7 +194,10 @@ export default function TpeTicketPage() {
             <div style={{ textAlign: "center", borderTop: "2px solid #000", paddingTop: 8, fontSize: 10 }}>
               <p>Jouez responsablement. +18 ans uniquement.</p>
               <p>Conservez ce ticket — il est nécessaire pour encaisser tout gain.</p>
-              <p style={{ fontFamily: "monospace", fontSize: 14, fontWeight: "bold", marginTop: 4 }}>████ {ticket.code} ████</p>
+              {ticketQr && (
+                <img src={ticketQr} alt={ticket.code} style={{ width: 120, height: 120, margin: "8px auto 4px" }} />
+              )}
+              <p style={{ fontFamily: "monospace", fontSize: 14, fontWeight: "bold" }}>{ticket.code}</p>
             </div>
           </div>
         </div>
