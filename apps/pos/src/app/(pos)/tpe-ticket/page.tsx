@@ -213,7 +213,12 @@ export default function TpeTicketPage() {
             <div style={{ marginBottom: 4 }}>
               <p><strong>Code:</strong> {ticket.code}</p>
               <p><strong>TPE:</strong> {ticket.tpe?.name ?? ticket.tpe?.code ?? "—"}</p>
-              <p><strong>Imprimé le:</strong> {new Date(ticket.createdAt).toLocaleString("fr-FR")}</p>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span><strong>Imprimé le:</strong> {new Date(ticket.createdAt).toLocaleDateString("fr-FR")}</span>
+                {ticket.payoutCode && !codePrinted && (
+                  <span><strong>Code:</strong> {ticket.payoutCode}</span>
+                )}
+              </div>
             </div>
             <div style={{ borderTop: "1px dashed #000", borderBottom: "1px dashed #000", padding: "4px 0", marginBottom: 4 }}>
               <p style={{ fontWeight: "bold", marginBottom: 3 }}>SÉLECTIONS ({ticket.items.length})</p>
@@ -231,12 +236,6 @@ export default function TpeTicketPage() {
                 Gain potentiel : {ticket.potentialWinXAF.toLocaleString("fr-FR")} XAF
               </p>
             </div>
-            {ticket.payoutCode && !codePrinted && (
-              <div style={{ textAlign: "center", border: "1px solid #000", padding: 4, marginBottom: 4 }}>
-                <p style={{ fontSize: 8 }}>CODE DE VALIDATION (à fournir pour le paiement)</p>
-                <p style={{ fontSize: 18, fontWeight: "bold", letterSpacing: 2 }}>{ticket.payoutCode}</p>
-              </div>
-            )}
             <div style={{ textAlign: "center", borderTop: "1px solid #000", paddingTop: 4, fontSize: 8 }}>
               <p>Jouez responsablement. +18 ans uniquement.</p>
               <p>Conservez ce ticket — il est nécessaire pour encaisser tout gain.</p>
