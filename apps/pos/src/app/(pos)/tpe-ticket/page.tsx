@@ -29,6 +29,10 @@ interface TicketResult {
 
 const QUICK_STAKES = [500, 1000, 2000, 5000, 10000, 25000];
 
+function dayKey(d: Date) { return d.toISOString().slice(0, 10); }
+
+const DAY_LABELS = ["Aujourd'hui", "Demain", "J+2", "J+3", "J+4", "J+5", "J+6"];
+
 export default function TpeTicketPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
@@ -36,12 +40,19 @@ export default function TpeTicketPage() {
   const [stakeXAF, setStakeXAF] = useState("");
   const [placing, setPlacing] = useState(false);
   const [ticket, setTicket] = useState<TicketResult | null>(null);
+  const [dayOffset, setDayOffset] = useState(0);
 
   useEffect(() => {
-    api.get("/sports/events?limit=30").then((r) => setEvents(r.data.data.events))
+    api.get("/sports/events?date=week&limit=200").then((r) => setEvents(r.data.data.events))
       .catch(() => toast.error("Erreur de chargement des matchs"))
       .finally(() => setLoadingEvents(false));
   }, []);
+
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() + i);
+    return { offset: i, key: dayKey(d), label: DAY_LABELS[i] };
+  });
+  const visibleEvents = events.filter((e) => dayKey(new Date(e.startTime)) === days[dayOffset]?.key);
 
   function toggleOdd(event: Event, market: Market, odd: Odd) {
     const exists = selections.find((s) => s.oddId === odd.id);
@@ -156,12 +167,29 @@ export default function TpeTicketPage() {
         {/* Liste des événements */}
         <div className="lg:col-span-2 space-y-3">
           <h2 className="text-lg font-bold text-gray-800">🆕 Nouveau ticket physique</h2>
+
+          <div className="flex gap-1.5 overflow-x-auto pb-1">
+            {days.map((d) => (
+              <button
+                key={d.offset}
+                onClick={() => setDayOffset(d.offset)}
+                className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition-colors ${
+                  dayOffset === d.offset
+                    ? "bg-green-600 border-green-600 text-white"
+                    : "bg-white border-gray-200 text-gray-600 hover:border-green-400"
+                }`}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+
           {loadingEvents ? (
             <div className="bg-white rounded-2xl p-8 text-center text-gray-400">Chargement des matchs…</div>
-          ) : events.length === 0 ? (
-            <div className="bg-white rounded-2xl p-8 text-center text-gray-400">Aucun match disponible</div>
+          ) : visibleEvents.length === 0 ? (
+            <div className="bg-white rounded-2xl p-8 text-center text-gray-400">Aucun match ce jour-là</div>
           ) : (
-            events.map((event) => (
+            visibleEvents.map((event) => (
               <div key={event.id} className="bg-white rounded-2xl shadow-sm p-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="font-bold text-gray-900 text-sm">{event.homeTeam} vs {event.awayTeam}</p>
