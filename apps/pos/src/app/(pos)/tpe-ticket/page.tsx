@@ -33,6 +33,19 @@ function dayKey(d: Date) { return d.toISOString().slice(0, 10); }
 
 const DAY_LABELS = ["Aujourd'hui", "Demain", "J+2", "J+3", "J+4", "J+5", "J+6"];
 
+const LABEL_ORDER: Record<string, string[]> = {
+  HANDICAP: ["1", "2"],
+  DOUBLE_CHANCE: ["1X", "12", "X2"],
+  OVER_UNDER: ["Over", "Under"],
+  BOTH_TEAMS_SCORE: ["Oui", "Non"],
+  DRAW_NO_BET: ["1", "2"],
+};
+function sortOddsForDisplay(market: Market): Odd[] {
+  const order = LABEL_ORDER[market.type];
+  if (!order) return market.odds;
+  return [...market.odds].sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
+}
+
 export default function TpeTicketPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
@@ -271,7 +284,7 @@ export default function TpeTicketPage() {
                                 <div key={market.id} className="pt-1">
                                   <p className="text-xs text-gray-500 mb-1">{market.name}</p>
                                   <div className="flex flex-wrap gap-2">
-                                    {market.odds.map((odd) => {
+                                    {sortOddsForDisplay(market).map((odd) => {
                                       const selected = selections.some((s) => s.oddId === odd.id);
                                       return (
                                         <button
