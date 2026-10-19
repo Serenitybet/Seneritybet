@@ -20,5 +20,12 @@ Thumbs.db
 # Artefacts de build TypeScript
 *.tsbuildinfo
 
+# Service worker PWA généré au build (apps/pos)
+apps/pos/public/sw.js
+apps/pos/public/sw.js.map
+apps/pos/public/workbox-*.js
+apps/pos/public/workbox-*.js.map
+apps/pos/public/swe-worker-*.js
+
 # Fichiers de travail temporaires (jamais destinés à ce dépôt)
 .scratchpad/
