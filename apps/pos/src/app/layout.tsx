@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { DeviceGate } from "@/components/DeviceGate";
+import { SwAutoReload } from "@/components/SwAutoReload";
 
 export const metadata: Metadata = {
   title: "Serenitybet — Caisse",
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="fr">
       <body>
+        <SwAutoReload />
         <DeviceGate>{children}</DeviceGate>
       </body>
     </html>
