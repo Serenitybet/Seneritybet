@@ -179,23 +179,23 @@ async function upsertEvent(competitionId: string, game: any, sportSlug = "footba
   }
 }
 
-// ─── Marchés additionnels (BTTS, double chance) — 5 grands championnats ───────
+// ─── Marchés additionnels (BTTS, double chance) — tous les championnats ───────
 //
 // Ces marchés ne sont disponibles que via l'endpoint par match (pas par
 // championnat), donc 1 appel = 1 match au lieu de 1 appel = 1 championnat.
-// Pour maîtriser les crédits, on les limite aux 5 plus gros championnats,
-// aux matchs des 48 prochaines heures, plafonnés à 30 matchs par exécution,
-// et on ne les récupère qu'une seule fois par match (pas de rafraîchissement
-// répété comme pour les marchés principaux).
-const BIG_LEAGUE_SPORT_KEY_BY_NAME: Record<string, string> = {
-  "Premier League":   "soccer_epl",
-  "Ligue 1":          "soccer_france_ligue_one",
-  "Serie A":          "soccer_italy_serie_a",
-  "Bundesliga":       "soccer_germany_bundesliga",
-  "Champions League": "soccer_uefa_champs_league",
-};
+// Pour maîtriser les crédits : limité aux matchs des 48 prochaines heures,
+// plafonné à 60 matchs par exécution (toutes les 2h), récupéré une seule
+// fois par match (pas de rafraîchissement répété comme pour les marchés
+// principaux). Les crédits utilisés/restants sont loggés à chaque sync
+// (voir lib/credits.state) — à surveiller : si la couverture des 17
+// championnats devient trop lente ou que le budget mensuel est dépassé,
+// augmenter EXTRA_MARKETS_LIMIT ou passer sur un palier TheOddsAPI supérieur.
+const SPORT_KEY_BY_COMPETITION_NAME: Record<string, string> = Object.fromEntries(
+  SPORTS_CONFIG.map((c) => [c.name, c.key]),
+);
+const EXTRA_MARKETS_LIMIT = 60;
 
-export async function syncExtraMarketsForBigLeagues() {
+export async function syncExtraMarkets() {
   if (!API_KEY) return;
 
   const cutoff = new Date();
@@ -205,16 +205,16 @@ export async function syncExtraMarketsForBigLeagues() {
     where: {
       status: { in: ["UPCOMING", "LIVE"] },
       startTime: { gte: new Date(), lte: cutoff },
-      competition: { name: { in: Object.keys(BIG_LEAGUE_SPORT_KEY_BY_NAME) } },
+      competition: { name: { in: Object.keys(SPORT_KEY_BY_COMPETITION_NAME) } },
       markets: { none: { type: "BOTH_TEAMS_SCORE" } },
     },
     include: { competition: true },
-    take: 30,
+    take: EXTRA_MARKETS_LIMIT,
   });
 
   let synced = 0;
   for (const event of events) {
-    const sportKey = BIG_LEAGUE_SPORT_KEY_BY_NAME[event.competition.name];
+    const sportKey = SPORT_KEY_BY_COMPETITION_NAME[event.competition.name];
     if (!sportKey || !event.externalId) continue;
 
     try {
