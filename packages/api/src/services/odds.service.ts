@@ -205,7 +205,7 @@ const EXTRA_MARKETS_LIMIT = 600;
 // À incrémenter à chaque fois que le jeu de marchés additionnels change
 // (ajout/retrait d'une clé dans l'appel ci-dessous), pour que les matchs
 // déjà traités sous une version antérieure soient retraités une fois.
-const EXTRA_MARKETS_VERSION = 5; // v1: btts+double_chance ; v2: + correct_score, draw_no_bet, alternate_totals ; v3: fix libellé double chance + plus/moins à 6 lignes ; v4: plus/moins alternatif limité aux lignes X.5 ; v5: + handicap alternatif
+const EXTRA_MARKETS_VERSION = 6; // v1: btts+double_chance ; v2: + correct_score, draw_no_bet, alternate_totals ; v3: fix libellé double chance + plus/moins à 6 lignes ; v4: plus/moins alternatif limité aux lignes X.5 ; v5: + handicap alternatif ; v6: + totaux par équipe
 
 export async function syncExtraMarkets() {
   if (!API_KEY) return;
@@ -236,7 +236,7 @@ export async function syncExtraMarkets() {
           params: {
             apiKey:     API_KEY,
             regions:    "eu",
-            markets:    "btts,double_chance,correct_score,draw_no_bet,alternate_totals,alternate_spreads",
+            markets:    "btts,double_chance,correct_score,draw_no_bet,alternate_totals,alternate_spreads,team_totals",
             oddsFormat: "decimal",
             dateFormat: "iso",
           },
@@ -259,7 +259,7 @@ export async function syncExtraMarkets() {
     }
   }
 
-  if (synced > 0) console.log(`🎯 Marchés additionnels (BTTS, double chance, score exact, remboursé si nul, plus/moins alternatif, handicap alternatif) : ${synced} match(s) synchronisés`);
+  if (synced > 0) console.log(`🎯 Marchés additionnels (BTTS, double chance, score exact, remboursé si nul, plus/moins alternatif, handicap alternatif, totaux par équipe) : ${synced} match(s) synchronisés`);
 }
 
 // Pas un seul bookmaker n'offre systématiquement les 4 marchés (vérifié
@@ -272,6 +272,7 @@ const EXTRA_MARKET_TYPE_BY_KEY: Record<string, string> = {
   draw_no_bet:        "DRAW_NO_BET",
   alternate_totals:   "ALTERNATE_TOTALS",
   alternate_spreads:  "ALTERNATE_SPREADS",
+  team_totals:        "TEAM_TOTALS",
 };
 
 // Plus/moins alternatif : l'API renvoie souvent 8-10 lignes (0.5 à 5.5+
@@ -283,6 +284,10 @@ const ALTERNATE_TOTALS_MAX_LINES = 6;
 // Handicap alternatif : on garde les lignes les plus proches de zéro (les
 // plus pertinentes — un handicap de ±5 buts est rarement joué).
 const ALTERNATE_SPREADS_MAX_LINES = 6;
+
+// Totaux par équipe : plafond de lignes par équipe (observé en pratique :
+// souvent une seule ligne par équipe chez la plupart des bookmakers).
+const TEAM_TOTALS_MAX_LINES_PER_TEAM = 3;
 
 async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: string, bookmakers: any[]) {
   const priorityKeys = ["bet365", "unibet", "betway", "onexbet", "pinnacle"];
@@ -305,6 +310,7 @@ async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: s
         apiMarket.key === "correct_score"      ? "Score exact" :
         apiMarket.key === "alternate_totals"   ? "Plus/Moins (autres lignes)" :
         apiMarket.key === "alternate_spreads"  ? "Handicap (autres lignes)" :
+        apiMarket.key === "team_totals"        ? "Totaux par équipe" :
         "Remboursé si match nul";
 
       let market = await prisma.market.findFirst({ where: { eventId, type: marketType as any } });
@@ -333,6 +339,23 @@ async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: s
           .sort((a, b) => a - b)
           .slice(0, ALTERNATE_SPREADS_MAX_LINES);
         outcomes = outcomes.filter((o: any) => absPoints.includes(Math.abs(o.point)));
+      } else if (apiMarket.key === "team_totals") {
+        // Une ligne par équipe (identifiée par outcome.description), plafonnée
+        // aux plus basses par équipe.
+        const pointsByTeam = new Map<string, number[]>();
+        for (const o of outcomes) {
+          if (typeof o.point !== "number") continue;
+          const list = pointsByTeam.get(o.description) ?? [];
+          if (!list.includes(o.point)) list.push(o.point);
+          pointsByTeam.set(o.description, list);
+        }
+        const keptByTeam = new Map(
+          [...pointsByTeam.entries()].map(([team, points]) => [
+            team,
+            points.sort((a, b) => a - b).slice(0, TEAM_TOTALS_MAX_LINES_PER_TEAM),
+          ]),
+        );
+        outcomes = outcomes.filter((o: any) => keptByTeam.get(o.description)?.includes(o.point));
       }
 
       for (const outcome of outcomes) {
@@ -359,6 +382,8 @@ async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: s
           const side = outcome.name === homeTeam ? "1" : outcome.name === awayTeam ? "2" : outcome.name;
           const point = Number(outcome.point);
           label = `${side} (${point >= 0 ? "+" : ""}${point})`;
+        } else if (apiMarket.key === "team_totals") {
+          label = `${outcome.description} ${outcome.name === "Over" ? "Plus" : "Moins"} ${outcome.point}`;
         } else {
           // draw_no_bet : une issue par équipe, pas de match nul
           label =

@@ -5,8 +5,8 @@ import { isSyncPaused, getCreditsStatus } from "../lib/credits.state";
 // Plan 100K/mois → ~3 300 crédits/jour disponibles
 // 17 championnats × 3 syncs/heure × 24h × 30j = ~36 700 crédits/mois (cotes principales)
 // + marchés additionnels (BTTS, double chance, score exact, remboursé si nul,
-//   plus/moins alternatif, handicap alternatif (6 lignes max chacun) — 6
-//   marchés × 1 région = 6 crédits/match, tous les championnats, matchs des
+//   plus/moins alternatif, handicap alternatif, totaux par équipe — 7
+//   marchés × 1 région = 7 crédits/match, tous les championnats, matchs des
 //   7 prochains jours, plafonné à 600 matchs/exécution, 1 seule fois par
 //   match tant que EXTRA_MARKETS_VERSION ne change pas) toutes les 30 min.
 //   Le volume total de matchs ne change pas avec la fréquence ou le plafond

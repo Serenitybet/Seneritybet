@@ -81,6 +81,7 @@ enum MarketType {
   DRAW_NO_BET
   ALTERNATE_TOTALS
   ALTERNATE_SPREADS
+  TEAM_TOTALS
 }
 
 enum BetType {
