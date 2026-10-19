@@ -120,27 +120,6 @@ export default function BoLoginPage() {
               ) : "Accéder au backoffice"}
             </button>
           </form>
-
-          {/* Compte démo */}
-          <div className="mt-5 pt-4 border-t border-bo-border">
-            <p className="text-[10px] text-t-faint text-center mb-2">Comptes de démonstration :</p>
-            <div className="space-y-1.5">
-              {[
-                { label: "Admin",  email: "admin@serenitybet.td",  pwd: "Admin@2024!" },
-                { label: "Trader", email: "trader@serenitybet.td", pwd: "Trader@2024!" },
-              ].map((acc) => (
-                <button
-                  key={acc.email}
-                  type="button"
-                  onClick={() => setForm({ email: acc.email, password: acc.pwd })}
-                  className="w-full flex items-center justify-between bg-bo-surface border border-bo-border2 rounded-lg px-3 py-2 hover:border-green-500/50 transition-all group"
-                >
-                  <span className="text-[10px] font-bold text-t-muted group-hover:text-t-primary">{acc.label}</span>
-                  <span className="text-[10px] text-t-faint font-mono">{acc.email}</span>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
 
         <p className="text-center text-[10px] text-t-faint mt-6">
