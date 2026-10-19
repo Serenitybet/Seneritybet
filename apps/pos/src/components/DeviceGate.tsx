@@ -66,7 +66,7 @@ export function DeviceGate({ children }: { children: React.ReactNode }) {
                 {pairingCode ?? "······"}
               </p>
             </div>
-            <p className="text-xs text-gray-400">En attente de validation… cette page se met à jour automatiquement.</p>
+            <p className="text-xs text-gray-400">En attente de validation…</p>
           </>
         )}
 
