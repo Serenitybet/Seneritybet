@@ -179,6 +179,116 @@ async function upsertEvent(competitionId: string, game: any, sportSlug = "footba
   }
 }
 
+// ─── Marchés additionnels (BTTS, double chance) — 5 grands championnats ───────
+//
+// Ces marchés ne sont disponibles que via l'endpoint par match (pas par
+// championnat), donc 1 appel = 1 match au lieu de 1 appel = 1 championnat.
+// Pour maîtriser les crédits, on les limite aux 5 plus gros championnats,
+// aux matchs des 48 prochaines heures, plafonnés à 30 matchs par exécution,
+// et on ne les récupère qu'une seule fois par match (pas de rafraîchissement
+// répété comme pour les marchés principaux).
+const BIG_LEAGUE_SPORT_KEY_BY_NAME: Record<string, string> = {
+  "Premier League":   "soccer_epl",
+  "Ligue 1":          "soccer_france_ligue_one",
+  "Serie A":          "soccer_italy_serie_a",
+  "Bundesliga":       "soccer_germany_bundesliga",
+  "Champions League": "soccer_uefa_champs_league",
+};
+
+export async function syncExtraMarketsForBigLeagues() {
+  if (!API_KEY) return;
+
+  const cutoff = new Date();
+  cutoff.setHours(cutoff.getHours() + 48);
+
+  const events = await prisma.event.findMany({
+    where: {
+      status: { in: ["UPCOMING", "LIVE"] },
+      startTime: { gte: new Date(), lte: cutoff },
+      competition: { name: { in: Object.keys(BIG_LEAGUE_SPORT_KEY_BY_NAME) } },
+      markets: { none: { type: "BOTH_TEAMS_SCORE" } },
+    },
+    include: { competition: true },
+    take: 30,
+  });
+
+  let synced = 0;
+  for (const event of events) {
+    const sportKey = BIG_LEAGUE_SPORT_KEY_BY_NAME[event.competition.name];
+    if (!sportKey || !event.externalId) continue;
+
+    try {
+      const res = await axios.get(
+        `${ODDS_API_BASE}/sports/${sportKey}/events/${event.externalId}/odds`,
+        {
+          params: {
+            apiKey:     API_KEY,
+            regions:    "eu",
+            markets:    "btts,double_chance",
+            oddsFormat: "decimal",
+            dateFormat: "iso",
+          },
+          timeout: 10000,
+        },
+      );
+
+      const remaining = parseInt(res.headers["x-requests-remaining"] ?? "-1", 10);
+      if (remaining >= 0) updateCredits(remaining);
+
+      await upsertExtraMarkets(event.id, event.homeTeam, event.awayTeam, res.data?.bookmakers ?? []);
+      synced++;
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        console.error("ODDS_API_KEY invalide ou quota dépassé");
+        break;
+      }
+      // 422 (pas de données additionnelles pour ce match) ou autre erreur : on ignore et on continue
+    }
+  }
+
+  if (synced > 0) console.log(`🎯 Marchés additionnels (BTTS, double chance) : ${synced} match(s) synchronisés`);
+}
+
+async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: string, bookmakers: any[]) {
+  const bookmaker = bookmakers?.find((b: any) =>
+    ["bet365", "unibet", "betway", "onexbet", "pinnacle"].includes(b.key)
+  ) ?? bookmakers?.[0];
+  if (!bookmaker) return;
+
+  for (const apiMarket of bookmaker.markets) {
+    const marketType =
+      apiMarket.key === "btts"          ? "BOTH_TEAMS_SCORE" :
+      apiMarket.key === "double_chance" ? "DOUBLE_CHANCE"    : null;
+    if (!marketType) continue;
+
+    const marketName =
+      apiMarket.key === "btts" ? "Les deux équipes marquent"
+        : `Double chance : ${homeTeam} vs ${awayTeam}`;
+
+    let market = await prisma.market.findFirst({ where: { eventId, type: marketType as any } });
+    if (!market) {
+      market = await prisma.market.create({ data: { eventId, name: marketName, type: marketType as any } });
+    }
+
+    for (const outcome of apiMarket.outcomes) {
+      const label =
+        apiMarket.key === "btts"
+          ? (outcome.name === "Yes" ? "Oui" : "Non")
+          : outcome.name === `${homeTeam} or Draw`      ? "1X"
+          : outcome.name === `${awayTeam} or Draw`      ? "X2"
+          : outcome.name === `${homeTeam} or ${awayTeam}` ? "12"
+          : outcome.name;
+
+      const existing = await prisma.odd.findFirst({ where: { marketId: market.id, label } });
+      if (existing) {
+        await prisma.odd.update({ where: { id: existing.id }, data: { value: outcome.price } });
+      } else {
+        await prisma.odd.create({ data: { marketId: market.id, label, value: outcome.price } });
+      }
+    }
+  }
+}
+
 function getSportLabel(slug: string): string {
   const labels: Record<string, string> = {
     "football":         "Football",
