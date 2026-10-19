@@ -41,6 +41,7 @@ export default function TpeTicketPage() {
   const [placing, setPlacing] = useState(false);
   const [ticket, setTicket] = useState<TicketResult | null>(null);
   const [dayOffset, setDayOffset] = useState(0);
+  const [competitionFilter, setCompetitionFilter] = useState("");
 
   useEffect(() => {
     api.get("/sports/events?date=week&limit=200").then((r) => setEvents(r.data.data.events))
@@ -52,7 +53,10 @@ export default function TpeTicketPage() {
     const d = new Date(); d.setDate(d.getDate() + i);
     return { offset: i, key: dayKey(d), label: DAY_LABELS[i] };
   });
-  const visibleEvents = events.filter((e) => dayKey(new Date(e.startTime)) === days[dayOffset]?.key);
+  const competitions = Array.from(new Set(events.map((e) => e.competition.name))).sort((a, b) => a.localeCompare(b));
+  const visibleEvents = events
+    .filter((e) => dayKey(new Date(e.startTime)) === days[dayOffset]?.key)
+    .filter((e) => !competitionFilter || e.competition.name === competitionFilter);
 
   function toggleOdd(event: Event, market: Market, odd: Odd) {
     const exists = selections.find((s) => s.oddId === odd.id);
@@ -184,10 +188,21 @@ export default function TpeTicketPage() {
             ))}
           </div>
 
+          <select
+            value={competitionFilter}
+            onChange={(e) => setCompetitionFilter(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg text-sm font-semibold border-2 border-gray-200 bg-white text-gray-700"
+          >
+            <option value="">🏆 Tous les championnats</option>
+            {competitions.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+
           {loadingEvents ? (
             <div className="bg-white rounded-2xl p-8 text-center text-gray-400">Chargement des matchs…</div>
           ) : visibleEvents.length === 0 ? (
-            <div className="bg-white rounded-2xl p-8 text-center text-gray-400">Aucun match ce jour-là</div>
+            <div className="bg-white rounded-2xl p-8 text-center text-gray-400">Aucun match pour ce filtre</div>
           ) : (
             visibleEvents.map((event) => (
               <div key={event.id} className="bg-white rounded-2xl shadow-sm p-4">
