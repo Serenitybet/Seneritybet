@@ -203,7 +203,7 @@ const EXTRA_MARKETS_LIMIT = 150;
 // À incrémenter à chaque fois que le jeu de marchés additionnels change
 // (ajout/retrait d'une clé dans l'appel ci-dessous), pour que les matchs
 // déjà traités sous une version antérieure soient retraités une fois.
-const EXTRA_MARKETS_VERSION = 3; // v1: btts+double_chance ; v2: + correct_score, draw_no_bet, alternate_totals ; v3: fix libellé double chance + plus/moins à 6 lignes
+const EXTRA_MARKETS_VERSION = 4; // v1: btts+double_chance ; v2: + correct_score, draw_no_bet, alternate_totals ; v3: fix libellé double chance + plus/moins à 6 lignes ; v4: plus/moins alternatif limité aux lignes X.5
 
 export async function syncExtraMarkets() {
   if (!API_KEY) return;
@@ -304,12 +304,16 @@ async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: s
         market = await prisma.market.create({ data: { eventId, name: marketName, type: marketType as any } });
       }
 
-      // Plus/moins alternatif : on garde seulement les lignes les plus basses
-      // (les plus pertinentes pour un match de foot), plafonné à 5.
+      // Plus/moins alternatif : certains bookmakers mélangent des lignes
+      // entières (1, 2, 3 — avec possibilité de remboursé) et des lignes à
+      // virgule (0.5, 1.5, 2.5 — sans remboursé possible). On ne garde que
+      // les lignes à virgule, seules utilisées par les books grand public
+      // (cohérent avec le marché "Plus/Moins" principal qui est toujours en
+      // X.5), plafonnées aux plus basses (les plus pertinentes en foot).
       let outcomes = apiMarket.outcomes;
       if (apiMarket.key === "alternate_totals") {
         const points = [...new Set(outcomes.map((o: any) => o.point))]
-          .filter((p): p is number => typeof p === "number")
+          .filter((p): p is number => typeof p === "number" && !Number.isInteger(p))
           .sort((a, b) => a - b)
           .slice(0, ALTERNATE_TOTALS_MAX_LINES);
         outcomes = outcomes.filter((o: any) => points.includes(o.point));

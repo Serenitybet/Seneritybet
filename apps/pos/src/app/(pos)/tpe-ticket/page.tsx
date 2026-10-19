@@ -283,28 +283,71 @@ export default function TpeTicketPage() {
                               event.markets.filter((m) => m.type !== "MATCH_WINNER").map((market) => (
                                 <div key={market.id} className="pt-1">
                                   <p className="text-xs text-gray-500 mb-1">{market.name}</p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {sortOddsForDisplay(market).map((odd) => {
-                                      const selected = selections.some((s) => s.oddId === odd.id);
-                                      return (
-                                        <button
-                                          key={odd.id}
-                                          disabled={market.isSuspended || !odd.isActive}
-                                          onClick={() => toggleOdd(event, market, odd)}
-                                          className={`flex flex-col items-center px-3 py-1.5 rounded-lg border-2 transition-colors disabled:opacity-40 min-w-[56px] ${
-                                            selected
-                                              ? "bg-green-600 border-green-600 text-white"
-                                              : "bg-white border-gray-200 text-gray-700 hover:border-green-400"
-                                          }`}
-                                        >
-                                          <span className={`text-[9px] font-semibold uppercase tracking-wide ${selected ? "text-green-100" : "text-gray-400"}`}>
-                                            {odd.label}
-                                          </span>
-                                          <span className="text-sm font-black leading-tight">{Number(odd.value).toFixed(2)}</span>
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
+                                  {market.type === "ALTERNATE_TOTALS" ? (
+                                    <div className="space-y-1">
+                                      {Object.entries(
+                                        market.odds.reduce<Record<string, Odd[]>>((acc, odd) => {
+                                          const point = odd.label.split(" ")[1] ?? "?";
+                                          (acc[point] ??= []).push(odd);
+                                          return acc;
+                                        }, {}),
+                                      )
+                                        .sort((a, b) => Number(a[0]) - Number(b[0]))
+                                        .map(([point, oddsForLine]) => (
+                                          <div key={point} className="flex items-center gap-2">
+                                            <span className="text-[11px] text-gray-400 w-14 shrink-0">{point} buts</span>
+                                            <div className="flex gap-2">
+                                              {[...oddsForLine]
+                                                .sort((a, b) => (a.label.startsWith("Moins") ? -1 : 1) - (b.label.startsWith("Moins") ? -1 : 1))
+                                                .map((odd) => {
+                                                  const selected = selections.some((s) => s.oddId === odd.id);
+                                                  const shortLabel = odd.label.split(" ")[0];
+                                                  return (
+                                                    <button
+                                                      key={odd.id}
+                                                      disabled={market.isSuspended || !odd.isActive}
+                                                      onClick={() => toggleOdd(event, market, odd)}
+                                                      className={`flex flex-col items-center px-3 py-1.5 rounded-lg border-2 transition-colors disabled:opacity-40 min-w-[56px] ${
+                                                        selected
+                                                          ? "bg-green-600 border-green-600 text-white"
+                                                          : "bg-white border-gray-200 text-gray-700 hover:border-green-400"
+                                                      }`}
+                                                    >
+                                                      <span className={`text-[9px] font-semibold uppercase tracking-wide ${selected ? "text-green-100" : "text-gray-400"}`}>
+                                                        {shortLabel}
+                                                      </span>
+                                                      <span className="text-sm font-black leading-tight">{Number(odd.value).toFixed(2)}</span>
+                                                    </button>
+                                                  );
+                                                })}
+                                            </div>
+                                          </div>
+                                        ))}
+                                    </div>
+                                  ) : (
+                                    <div className="flex flex-wrap gap-2">
+                                      {sortOddsForDisplay(market).map((odd) => {
+                                        const selected = selections.some((s) => s.oddId === odd.id);
+                                        return (
+                                          <button
+                                            key={odd.id}
+                                            disabled={market.isSuspended || !odd.isActive}
+                                            onClick={() => toggleOdd(event, market, odd)}
+                                            className={`flex flex-col items-center px-3 py-1.5 rounded-lg border-2 transition-colors disabled:opacity-40 min-w-[56px] ${
+                                              selected
+                                                ? "bg-green-600 border-green-600 text-white"
+                                                : "bg-white border-gray-200 text-gray-700 hover:border-green-400"
+                                            }`}
+                                          >
+                                            <span className={`text-[9px] font-semibold uppercase tracking-wide ${selected ? "text-green-100" : "text-gray-400"}`}>
+                                              {odd.label}
+                                            </span>
+                                            <span className="text-sm font-black leading-tight">{Number(odd.value).toFixed(2)}</span>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
                                 </div>
                               ))
                             )}
