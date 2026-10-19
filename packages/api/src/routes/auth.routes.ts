@@ -99,7 +99,7 @@ authRouter.post("/refresh", asyncHandler(async (req: Request, res: Response) => 
 
 authRouter.post("/logout", authenticate, asyncHandler(async (req: AuthRequest, res: Response) => {
   const refreshToken = req.cookies?.refreshToken;
-  if (refreshToken) await authService.logout(refreshToken);
+  await authService.logout(req.user!.id, refreshToken ?? "");
   res.clearCookie("refreshToken");
   res.json({ success: true, message: "Déconnecté avec succès" });
 }));

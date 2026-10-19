@@ -212,6 +212,12 @@ cashierRouter.get("/pending-withdrawals/:query", asyncHandler(async (req: AuthRe
   });
 
   if (byCode) {
+    // Un caissier ne doit voir/traiter que les retraits de sa propre
+    // boutique — sans ce contrôle, un code de retrait d'une autre boutique
+    // (deviné ou communiqué par erreur) serait tout de même consultable.
+    if (req.user!.role === "CASHIER" && byCode.shopId !== req.user!.shopId) {
+      throw new AppError(404, "Demande de retrait introuvable");
+    }
     // Trouvé par code de retrait → retourner directement cette demande
     if (byCode.user.status !== "ACTIVE") throw new AppError(403, "Compte joueur suspendu");
     if (byCode.status !== "PENDING") throw new AppError(400, `Cette demande est déjà ${byCode.status.toLowerCase()}`);
@@ -251,7 +257,13 @@ cashierRouter.get("/pending-withdrawals/:query", asyncHandler(async (req: AuthRe
   });
 
   const requests = await prisma.withdrawalRequest.findMany({
-    where: { userId: player.id, status: "PENDING" },
+    where: {
+      userId: player.id,
+      status: "PENDING",
+      // Un caissier ne voit que les demandes de sa propre boutique (les
+      // rôles admin voient tout, pour la supervision).
+      ...(req.user!.role === "CASHIER" ? { shopId: req.user!.shopId } : {}),
+    },
     include: { shop: { select: { name: true, city: true } } },
     orderBy: { createdAt: "desc" },
   });
@@ -283,6 +295,11 @@ cashierRouter.post("/validate-withdrawal/:id", asyncHandler(async (req: AuthRequ
   });
 
   if (!request) throw new AppError(404, "Demande de retrait introuvable");
+  // Un caissier ne peut valider (et donc encaisser dans son propre float)
+  // qu'un retrait créé pour sa propre boutique.
+  if (req.user!.role === "CASHIER" && request.shopId !== req.user!.shopId) {
+    throw new AppError(404, "Demande de retrait introuvable");
+  }
   if (request.status !== "PENDING") throw new AppError(400, `Demande déjà ${request.status.toLowerCase()}`);
   if (new Date() > request.expiresAt) {
     await prisma.withdrawalRequest.update({ where: { id: request.id }, data: { status: "EXPIRED" } });

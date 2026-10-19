@@ -20,15 +20,23 @@ export async function authenticate(req: AuthRequest, res: Response, next: NextFu
       sub: string;
       role: Role;
       email: string;
+      iat: number;
     };
 
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, role: true, email: true, status: true, shopId: true },
+      select: { id: true, role: true, email: true, status: true, shopId: true, tokensRevokedAt: true },
     });
 
     if (!user || user.status !== "ACTIVE") {
       res.status(401).json({ success: false, error: "Compte inactif ou inexistant" });
+      return;
+    }
+
+    // Un token émis avant la dernière déconnexion (voir logout()) n'est plus
+    // valable, même s'il n'a pas encore expiré naturellement.
+    if (user.tokensRevokedAt && payload.iat * 1000 < user.tokensRevokedAt.getTime()) {
+      res.status(401).json({ success: false, error: "Session expirée — reconnectez-vous" });
       return;
     }
 

@@ -36,6 +36,19 @@ export const useAuthAdminStore = create<AuthAdminState>()(
 
       logout: () => {
         if (typeof window !== "undefined") {
+          const token = localStorage.getItem("bo_token");
+          if (token) {
+            const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL ?? "https://seneritybet.onrender.com/api";
+            // Révoque la session côté serveur — sans ça, le token reste
+            // valable jusqu'à son expiration naturelle malgré la
+            // déconnexion. keepalive pour que la requête survive à la
+            // navigation immédiate vers /login juste en dessous.
+            fetch(`${API}/auth/logout`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${token}` },
+              keepalive: true,
+            }).catch(() => {});
+          }
           localStorage.removeItem("bo_token");
           window.location.href = "/login";
         }

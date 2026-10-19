@@ -144,6 +144,16 @@ model User {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
+  // Tout token (accès ou rafraîchissement) émis avant cette date est rejeté
+  // par authenticate()/refreshTokens(), quelle que soit sa durée de validité
+  // propre — posé à la date courante lors d'une déconnexion, pour que "se
+  // déconnecter" invalide réellement la session côté serveur plutôt que de
+  // laisser un token volé/réutilisé fonctionner jusqu'à son expiration
+  // naturelle (jusqu'à 24h). Vérifié via le Postgres déjà interrogé à chaque
+  // requête authentifiée — pas de dépendance à Redis (optionnel/dégradable
+  // dans ce projet) pour un contrôle de sécurité critique.
+  tokensRevokedAt DateTime?
+
   shopId              String?
   shop                Shop?          @relation("CashierShop", fields: [shopId], references: [id])
 

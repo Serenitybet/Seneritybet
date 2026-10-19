@@ -61,7 +61,12 @@ export async function login(payload: LoginPayload) {
   return { user: safeUser, ...tokens };
 }
 
-export async function logout(refreshToken: string) {
+// userId vient de req.user (déjà authentifié sur la route logout) — stampe
+// tokensRevokedAt pour que tout token (accès ou rafraîchissement) déjà émis
+// cesse immédiatement d'être accepté par authenticate()/refreshTokens(),
+// au lieu de rester valable jusqu'à son expiration naturelle.
+export async function logout(userId: string, refreshToken: string) {
+  await prisma.user.update({ where: { id: userId }, data: { tokensRevokedAt: new Date() } });
   await deleteSession(refreshToken);
 }
 
@@ -71,12 +76,16 @@ export async function refreshTokens(refreshToken: string) {
       sub: string;
       role: string;
       email: string;
+      iat: number;
     };
     const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, role: true, email: true, status: true },
+      select: { id: true, role: true, email: true, status: true, tokensRevokedAt: true },
     });
     if (!user || user.status !== "ACTIVE") throw new AppError(401, "Compte inactif");
+    if (user.tokensRevokedAt && payload.iat * 1000 < user.tokensRevokedAt.getTime()) {
+      throw new AppError(401, "Session expirée — reconnectez-vous");
+    }
 
     await deleteSession(refreshToken);
     const tokens = generateTokens(user.id, user.role, user.email);

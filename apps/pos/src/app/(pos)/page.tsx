@@ -55,7 +55,11 @@ export default function PosHomePage() {
     api.get("/tpe-device/status").then((r) => setDevice(r.data.data)).catch(() => {});
   }, [token]);
 
-  function handleLogout() {
+  async function handleLogout() {
+    // Révoque la session côté serveur (sans ça, le token reste valable
+    // jusqu'à son expiration naturelle malgré la déconnexion) — au mieux,
+    // la déconnexion locale a lieu même si l'appel échoue (hors-ligne…).
+    try { await api.post("/auth/logout"); } catch { /* déconnexion locale quand même */ }
     logout();
     setAuthToken(null);
     router.replace("/login");
