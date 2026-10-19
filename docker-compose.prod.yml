@@ -54,7 +54,7 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      JWT_EXPIRES_IN: 15m
+      JWT_EXPIRES_IN: 24h
       JWT_REFRESH_EXPIRES_IN: 7d
       NODE_ENV: production
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}

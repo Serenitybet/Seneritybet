@@ -1,8 +1,23 @@
 import axios from "axios";
+import { useAuthStore } from "@/store/auth.store";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "https://seneritybet.onrender.com/api";
 
 export const api = axios.create({ baseURL: API_URL });
+
+// Si le token a expiré (ou est invalide), on déconnecte proprement au lieu
+// de laisser les appels échouer silencieusement en boucle — le layout (pos)
+// redirige automatiquement vers /login dès que le token du store est vidé.
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err.response?.status === 401 && useAuthStore.getState().token) {
+      useAuthStore.getState().logout();
+      setAuthToken(null);
+    }
+    return Promise.reject(err);
+  },
+);
 
 // Auto-initialise le token depuis le localStorage dès le chargement du module
 if (typeof window !== "undefined") {

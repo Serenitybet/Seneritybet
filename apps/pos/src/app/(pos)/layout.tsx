@@ -6,6 +6,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuthStore } from "@/store/auth.store";
 import { api, setAuthToken } from "@/lib/api";
+import { IdleLogout } from "@/components/IdleLogout";
 
 export default function PosLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -45,6 +46,7 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
+      <IdleLogout />
       {/* Topbar */}
       <header className="bg-slate-950 text-white no-print">
         <div className="px-4 sm:px-6 py-3 flex items-center justify-between border-b border-slate-800">

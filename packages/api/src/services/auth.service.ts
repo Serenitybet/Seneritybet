@@ -88,13 +88,14 @@ export async function refreshTokens(refreshToken: string) {
 }
 
 function generateTokens(userId: string, role: string, email: string) {
-  // Caissiers : 24h (ne pas se reconnecter pendant le service)
   // Joueurs : 8h (journée complète de paris sans déconnexion)
-  // Admins/autres : configurable via JWT_EXPIRES_IN (défaut 15m)
+  // Caissiers/Admins/autres : configurable via JWT_EXPIRES_IN (défaut 24h) —
+  // la vraie limite de session vient de la déconnexion automatique après
+  // inactivité côté client (TPE, backoffice), pas de la durée du token lui-
+  // même : un token trop court fait échouer silencieusement les appels API
+  // en pleine utilisation active.
   const accessExpiry =
-    role === "CASHIER" ? "24h" :
-    role === "PLAYER"  ? "8h"  :
-    (process.env.JWT_EXPIRES_IN ?? "15m");
+    role === "PLAYER" ? "8h" : (process.env.JWT_EXPIRES_IN ?? "24h");
 
   const accessToken = jwt.sign(
     { sub: userId, role, email },
