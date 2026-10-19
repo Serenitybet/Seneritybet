@@ -240,13 +240,16 @@ export default function TpeTicketPage() {
                                   key={odd.id}
                                   disabled={mainMarket!.isSuspended || !odd.isActive}
                                   onClick={() => toggleOdd(event, mainMarket!, odd)}
-                                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border-2 transition-colors disabled:opacity-40 ${
+                                  className={`flex flex-col items-center px-2.5 py-1 rounded-lg border-2 transition-colors disabled:opacity-40 min-w-[46px] ${
                                     selected
                                       ? "bg-green-600 border-green-600 text-white"
                                       : "bg-gray-50 border-gray-200 text-gray-700 hover:border-green-400"
                                   }`}
                                 >
-                                  {odd.label} · {Number(odd.value).toFixed(2)}
+                                  <span className={`text-[9px] font-semibold uppercase tracking-wide ${selected ? "text-green-100" : "text-gray-400"}`}>
+                                    {odd.label}
+                                  </span>
+                                  <span className="text-sm font-black leading-tight">{Number(odd.value).toFixed(2)}</span>
                                 </button>
                               );
                             }) : <span className="text-[11px] text-gray-300 px-2">—</span>}
@@ -275,13 +278,16 @@ export default function TpeTicketPage() {
                                           key={odd.id}
                                           disabled={market.isSuspended || !odd.isActive}
                                           onClick={() => toggleOdd(event, market, odd)}
-                                          className={`px-3 py-1.5 rounded-lg text-sm font-bold border-2 transition-colors disabled:opacity-40 ${
+                                          className={`flex flex-col items-center px-3 py-1.5 rounded-lg border-2 transition-colors disabled:opacity-40 min-w-[56px] ${
                                             selected
                                               ? "bg-green-600 border-green-600 text-white"
                                               : "bg-white border-gray-200 text-gray-700 hover:border-green-400"
                                           }`}
                                         >
-                                          {odd.label} · {Number(odd.value).toFixed(2)}
+                                          <span className={`text-[9px] font-semibold uppercase tracking-wide ${selected ? "text-green-100" : "text-gray-400"}`}>
+                                            {odd.label}
+                                          </span>
+                                          <span className="text-sm font-black leading-tight">{Number(odd.value).toFixed(2)}</span>
                                         </button>
                                       );
                                     })}
