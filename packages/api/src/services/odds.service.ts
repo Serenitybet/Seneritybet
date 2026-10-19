@@ -188,17 +188,19 @@ async function upsertEvent(competitionId: string, game: any, sportSlug = "footba
 // championnat), donc 1 appel = 1 match au lieu de 1 appel = 1 championnat.
 // Fenêtre alignée sur le sync principal (J0 à J+7) : les parieurs doivent
 // pouvoir composer des combinés sur toute la semaine avec les mêmes options,
-// pas seulement sur les matchs des 48h à venir. Pour maîtriser les crédits :
-// plafonné à 100 matchs par exécution (toutes les 2h), récupéré une seule
-// fois par match (pas de rafraîchissement répété comme pour les marchés
-// principaux). Les crédits utilisés/restants sont loggés à chaque sync
-// (voir lib/credits.state) — à surveiller : si la couverture des 17
-// championnats devient trop lente ou que le budget mensuel est dépassé,
-// augmenter EXTRA_MARKETS_LIMIT ou passer sur un palier TheOddsAPI supérieur.
+// pas seulement sur les matchs des 48h à venir. Le coût réel (quelques
+// milliers de crédits pour couvrir tout le calendrier de la semaine, sur
+// 100 000/mois) ne justifie pas d'étaler la couverture sur plusieurs heures :
+// plafond large pour que tout le calendrier passe en un seul cycle (toutes
+// les 30 min), récupéré une seule fois par match (pas de rafraîchissement
+// répété comme pour les marchés principaux). Les crédits utilisés/restants
+// sont loggés à chaque sync (voir lib/credits.state) — à surveiller : si le
+// budget mensuel approche sa limite, réduire EXTRA_MARKETS_LIMIT ou passer
+// sur un palier TheOddsAPI supérieur.
 const SPORT_KEY_BY_COMPETITION_NAME: Record<string, string> = Object.fromEntries(
   SPORTS_CONFIG.map((c) => [c.name, c.key]),
 );
-const EXTRA_MARKETS_LIMIT = 150;
+const EXTRA_MARKETS_LIMIT = 600;
 
 // À incrémenter à chaque fois que le jeu de marchés additionnels change
 // (ajout/retrait d'une clé dans l'appel ci-dessous), pour que les matchs
