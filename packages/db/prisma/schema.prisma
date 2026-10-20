@@ -603,12 +603,18 @@ model Ticket {
   paidByCashier    User?        @relation("TicketPaidBy", fields: [paidByCashierId], references: [id])
   createdAt        DateTime     @default(now())
   items            TicketItem[]
-  webCoupon        WebCoupon?
+  // Coupon web d'origine, le cas échéant — un même coupon peut être retiré
+  // plusieurs fois (par le parieur et ses amis à qui il a partagé le code)
+  // jusqu'à expiration, donc plusieurs tickets peuvent pointer vers le même
+  // WebCoupon (voir WebCoupon.tickets).
+  webCouponId      String?
+  webCoupon        WebCoupon?   @relation(fields: [webCouponId], references: [id])
 
   @@index([tpeId])
   @@index([status])
   @@index([code])
   @@index([createdAt])
+  @@index([webCouponId])
 }
 
 model TicketItem {
@@ -630,13 +636,18 @@ model TicketItem {
 // SavedCoupon, qui suppose un joueur authentifié avec portefeuille). Ne
 // contient que les sélections ; la mise est décidée en espèces en boutique,
 // où le caissier le convertit en Ticket (voir placeTicket/webCouponCode).
+//
+// Usage multiple et volontaire : un même code reste valable jusqu'à
+// expiration et n'est jamais consommé à la première utilisation — un
+// parieur peut composer son coupon et partager le code avec des amis, qui
+// peuvent chacun le faire retirer séparément (chacun avec sa propre mise)
+// en boutique. D'où la relation 1-N vers Ticket (tickets) plutôt que 1-1.
 model WebCoupon {
   id         String          @id @default(cuid())
   code       String          @unique
   selections Json            // snapshot [{ eventId, eventLabel, marketId, marketName, oddId, oddLabel, oddValue }]
   status     WebCouponStatus @default(PENDING)
-  ticketId   String?         @unique
-  ticket     Ticket?         @relation(fields: [ticketId], references: [id])
+  tickets    Ticket[]
   createdAt  DateTime        @default(now())
   expiresAt  DateTime
 

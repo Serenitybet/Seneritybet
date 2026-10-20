@@ -71,12 +71,27 @@ export async function createWebCoupon(selections: { oddId: string }[]) {
   return { code: coupon.code, selectionsCount: snapshot.length, expiresAt: coupon.expiresAt };
 }
 
-/** Consultation publique — ne renvoie jamais payoutCode (serializeTicket l'exclut déjà). Accepte aussi un code de ticket imprimé directement en boutique (jamais passé par un coupon web). */
+/**
+ * Consultation publique — ne renvoie jamais payoutCode (serializeTicket
+ * l'exclut déjà). Accepte aussi un code de ticket imprimé directement en
+ * boutique (jamais passé par un coupon web).
+ *
+ * Usage multiple volontaire : un coupon reste valable (et réutilisable par
+ * quiconque connaît le code, p. ex. des amis à qui il a été partagé)
+ * jusqu'à expiration — il n'est jamais marqué "utilisé" après un premier
+ * retrait. `tickets` liste donc tous les tickets déjà émis à partir de ce
+ * code (peut être vide, un, ou plusieurs).
+ */
 export async function getWebCouponStatus(code: string) {
   const cleanCode = code.trim().toUpperCase();
   const coupon = await prisma.webCoupon.findUnique({
     where: { code: cleanCode },
-    include: { ticket: { include: { items: { include: { market: { include: { event: true } }, odd: true } } } } },
+    include: {
+      tickets: {
+        include: { items: { include: { market: { include: { event: true } }, odd: true } } },
+        orderBy: { createdAt: "desc" },
+      },
+    },
   });
 
   if (!coupon) {
@@ -93,23 +108,19 @@ export async function getWebCouponStatus(code: string) {
     coupon.status = "EXPIRED";
   }
 
-  if (coupon.status === "USED" && coupon.ticket) {
-    return { code: coupon.code, status: "USED" as const, ticket: serializeTicket(coupon.ticket) };
-  }
-
   return {
     code: coupon.code,
     status: coupon.status,
     selections: coupon.selections,
     expiresAt: coupon.expiresAt,
+    tickets: coupon.tickets.map(serializeTicket),
   };
 }
 
-/** Caissier (TPE) — revalide les sélections contre les cotes actuelles avant de les proposer à l'écran de mise. */
+/** Caissier (TPE) — revalide les sélections contre les cotes actuelles avant de les proposer à l'écran de mise. Réutilisable jusqu'à expiration : pas de contrôle "déjà utilisé". */
 export async function getWebCouponForCashier(code: string) {
   const coupon = await prisma.webCoupon.findUnique({ where: { code: code.trim().toUpperCase() } });
   if (!coupon) throw new AppError(404, "Code coupon introuvable");
-  if (coupon.status === "USED") throw new AppError(400, "Ce coupon a déjà été retiré en boutique");
   if (coupon.status === "CANCELLED") throw new AppError(400, "Ce coupon a été annulé");
   if (coupon.status === "EXPIRED" || new Date() > coupon.expiresAt) {
     if (coupon.status !== "EXPIRED") {

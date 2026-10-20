@@ -65,12 +65,23 @@ function combinedGroupOdds(event: Event, types: string[]): { market: Market; odd
   return result;
 }
 
+interface WebCouponSelection {
+  eventId: string; eventLabel: string; marketId: string; marketName: string;
+  oddId: string; oddLabel: string; oddValue: number;
+}
+
 export default function TpeTicketPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [selections, setSelections] = useState<Selection[]>([]);
   const [stakeXAF, setStakeXAF] = useState("");
   const [placing, setPlacing] = useState(false);
+  // Code coupon composé par le client sur le site public (serenitybetcode.com)
+  // — réutilisable jusqu'à expiration (pas à usage unique), un même code peut
+  // donc être chargé plusieurs fois, y compris par des clients différents.
+  const [couponCode, setCouponCode] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [loadedWebCouponCode, setLoadedWebCouponCode] = useState<string | null>(null);
   const [ticket, setTicket] = useState<TicketResult | null>(null);
   const [ticketBarcode, setTicketBarcode] = useState<string | null>(null);
   // Le code de validation ne doit figurer que sur l'impression ORIGINALE —
@@ -151,6 +162,32 @@ export default function TpeTicketPage() {
 
   const totalOdds = selections.reduce((acc, s) => acc * s.oddValue, 1);
 
+  async function loadCoupon() {
+    const code = couponCode.trim();
+    if (!code) return;
+    setCouponLoading(true);
+    try {
+      const res = await api.get(`/tpe/web-coupons/${encodeURIComponent(code)}`);
+      const data = res.data.data as { code: string; selections: WebCouponSelection[]; droppedCount: number };
+      if (data.selections.length === 0) {
+        toast.error("Aucune sélection valide dans ce coupon (cotes changées ou matchs déjà commencés)");
+        return;
+      }
+      setSelections(data.selections.map((s) => ({ ...s, groupKey: s.marketId })));
+      setLoadedWebCouponCode(data.code);
+      setCouponCode("");
+      if (data.droppedCount > 0) {
+        toast.error(`${data.droppedCount} sélection(s) retirée(s) — cote changée ou match déjà commencé`);
+      } else {
+        toast.success(`Coupon ${data.code} chargé — ${data.selections.length} sélection(s)`);
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error ?? "Code coupon introuvable");
+    } finally {
+      setCouponLoading(false);
+    }
+  }
+
   async function placeTicket() {
     if (!selections.length || !stakeXAF) return;
     const stake = parseFloat(stakeXAF);
@@ -163,11 +200,13 @@ export default function TpeTicketPage() {
       const res = await api.post("/tpe/tickets", {
         selections: selections.map((s) => ({ marketId: s.marketId, oddId: s.oddId, oddValue: s.oddValue })),
         stakeXAF: stake,
+        webCouponCode: loadedWebCouponCode ?? undefined,
       });
       setTicket(res.data.data);
       setCodePrinted(false);
       setSelections([]);
       setStakeXAF("");
+      setLoadedWebCouponCode(null);
       // Pas de toast ici — il reste visible à l'écran pendant l'impression
       // et se superpose à l'aperçu du ticket.
       setTimeout(() => window.print(), 500);
@@ -554,6 +593,34 @@ export default function TpeTicketPage() {
 
         {/* Coupon en cours */}
         <div className="bg-white rounded-2xl shadow-sm p-4 h-fit sticky top-4">
+          <div className="mb-4 pb-4 border-b border-gray-100">
+            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+              Code coupon client (serenitybetcode.com)
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={couponCode}
+                onChange={(e) => setCouponCode(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && loadCoupon()}
+                placeholder="Ex: 4821"
+                className="flex-1 min-w-0 px-3 py-2 text-sm font-mono border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
+              />
+              <button
+                onClick={loadCoupon}
+                disabled={couponLoading || !couponCode.trim()}
+                className="px-3 py-2 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold rounded-lg disabled:opacity-40 shrink-0"
+              >
+                {couponLoading ? "…" : "Charger"}
+              </button>
+            </div>
+            {loadedWebCouponCode && (
+              <p className="text-[11px] text-green-700 font-semibold mt-1.5">
+                ✓ Coupon {loadedWebCouponCode} chargé
+              </p>
+            )}
+          </div>
+
           <h3 className="font-bold text-gray-800 mb-3">🧾 Sélections ({selections.length})</h3>
           {selections.length === 0 ? (
             <p className="text-sm text-gray-400">Cliquez sur une cote pour l'ajouter</p>

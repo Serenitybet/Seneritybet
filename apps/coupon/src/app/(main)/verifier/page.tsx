@@ -7,13 +7,13 @@ import { useEffect } from "react";
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 
 const COUPON_STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  PENDING:   { label: "En attente de retrait en boutique", color: "text-gold" },
-  EXPIRED:   { label: "Expiré",                              color: "text-live" },
-  CANCELLED: { label: "Annulé",                              color: "text-live" },
+  PENDING:   { label: "Disponible en boutique", color: "text-green-700" },
+  EXPIRED:   { label: "Expiré",                 color: "text-live" },
+  CANCELLED: { label: "Annulé",                 color: "text-live" },
 };
 
 const TICKET_STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  PENDING:   { label: "En attente du résultat", color: "text-gold" },
+  PENDING:   { label: "En attente du résultat", color: "text-info" },
   WON:       { label: "Gagné — à retirer en boutique", color: "text-green-700" },
   LOST:      { label: "Perdu", color: "text-live" },
   REFUNDED:  { label: "Remboursé", color: "text-info" },
@@ -58,7 +58,11 @@ interface Ticket {
 }
 
 type Result =
-  | { code: string; status: "PENDING" | "EXPIRED" | "CANCELLED"; selections: Selection[]; expiresAt: string }
+  // Coupon web — réutilisable jusqu'à expiration : tickets liste tous les
+  // retraits déjà effectués à partir de ce code (peut être vide, un, ou
+  // plusieurs si le parieur l'a partagé avec des amis).
+  | { code: string; status: "PENDING" | "EXPIRED" | "CANCELLED"; selections: Selection[]; expiresAt: string; tickets: Ticket[] }
+  // Code de ticket saisi directement (pas un coupon web)
   | { code: string; status: "USED"; ticket: Ticket };
 
 export default function VerifierPage() {
@@ -127,17 +131,29 @@ export default function VerifierPage() {
         </div>
       )}
 
-      {result && result.status === "USED" && (
+      {result && "ticket" in result && (
         <TicketResultView ticket={result.ticket} />
       )}
 
-      {result && result.status !== "USED" && (
-        <CouponResultView
-          code={result.code}
-          status={result.status}
-          selections={"selections" in result ? result.selections : []}
-          expiresAt={"expiresAt" in result ? result.expiresAt : null}
-        />
+      {result && "selections" in result && (
+        <>
+          <CouponResultView
+            code={result.code}
+            status={result.status}
+            selections={result.selections}
+            expiresAt={result.expiresAt}
+          />
+          {result.tickets.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-txt-muted uppercase tracking-wide">
+                {result.tickets.length > 1
+                  ? `${result.tickets.length} tickets déjà retirés avec ce code`
+                  : "1 ticket déjà retiré avec ce code"}
+              </p>
+              {result.tickets.map((t) => <TicketResultView key={t.id} ticket={t} />)}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -144,6 +144,20 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
     if (deducted.count === 0) {
       throw new AppError(400, "Crédit TPE insuffisant pour cette mise — contactez le backoffice");
     }
+
+    // Coupon web d'origine, le cas échéant — volontairement réutilisable
+    // jusqu'à expiration (un parieur peut partager son code avec des amis,
+    // chacun le fait alors retirer séparément avec sa propre mise), donc
+    // une simple lecture suffit ici : pas de verrou anti-réemploi à poser.
+    let webCouponId: string | undefined;
+    if (webCouponCode) {
+      const coupon = await tx.webCoupon.findUnique({ where: { code: webCouponCode.toUpperCase() } });
+      if (!coupon || coupon.status === "CANCELLED" || coupon.status === "EXPIRED" || coupon.expiresAt <= new Date()) {
+        throw new AppError(400, "Ce coupon web est invalide, annulé ou a expiré");
+      }
+      webCouponId = coupon.id;
+    }
+
     const created = await tx.ticket.create({
       data: {
         code,
@@ -153,6 +167,7 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
         stake,
         totalOdds,
         potentialWin,
+        webCouponId,
         items: {
           create: selections.map((s) => {
             const odd = odds.find((o) => o.id === s.oddId)!;
@@ -165,21 +180,6 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
         tpe: { select: { code: true, name: true } },
       },
     });
-
-    // Lie et consomme le coupon web d'origine, le cas échéant — conditionné
-    // (WHERE status = PENDING) pour qu'un même coupon ne puisse jamais être
-    // retiré deux fois si deux caissiers tentent de le faire en même temps :
-    // la seconde tentative touche 0 ligne, ce qui annule toute la transaction
-    // (ticket + déduction de crédit inclus).
-    if (webCouponCode) {
-      const consumed = await tx.webCoupon.updateMany({
-        where: { code: webCouponCode.toUpperCase(), status: "PENDING", expiresAt: { gt: new Date() } },
-        data: { status: "USED", ticketId: created.id },
-      });
-      if (consumed.count === 0) {
-        throw new AppError(400, "Ce coupon web a déjà été retiré, annulé ou a expiré");
-      }
-    }
 
     return created;
   });
