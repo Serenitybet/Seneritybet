@@ -93,6 +93,18 @@ enum MarketType {
   CORNERS_HANDICAP
   CARDS_TOTAL
   CARDS_HANDICAP
+  // Mêmes familles de marchés que le match complet (plus/moins, handicap,
+  // double chance), déclinées par mi-temps — voir odds.service.ts
+  // syncHalfMarkets. Clés TheOddsAPI non garanties pour toutes les
+  // rencontres/bookmakers (couverture moindre qu'en match complet) : lot
+  // isolé pour ne pas faire régresser syncPropMarkets si l'une d'elles
+  // s'avère invalide.
+  FIRST_HALF_TOTALS
+  FIRST_HALF_HANDICAP
+  FIRST_HALF_DOUBLE_CHANCE
+  SECOND_HALF_TOTALS
+  SECOND_HALF_HANDICAP
+  SECOND_HALF_DOUBLE_CHANCE
 }
 
 enum BetType {
@@ -312,6 +324,13 @@ model Event {
   // synchronisation des marchés additionnels déjà en place (BTTS, double
   // chance...).
   propMarketsVersion Int @default(0)
+
+  // Même principe que propMarketsVersion, pour le lot "mêmes marchés que le
+  // match complet, déclinés par mi-temps" (plus/moins, handicap, double
+  // chance) — voir odds.service.ts HALF_MARKETS_VERSION. Lot distinct pour
+  // la même raison : isoler un échec sur une clé encore non confirmée côté
+  // TheOddsAPI du reste des marchés déjà éprouvés.
+  halfMarketsVersion Int @default(0)
 
   @@index([competitionId])
   @@index([status])
