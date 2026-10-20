@@ -165,7 +165,7 @@ function CouponResultView({
               <p className="text-sm font-semibold text-txt-primary truncate">{s.eventLabel}</p>
               <p className="text-[11px] text-txt-muted">{s.marketName} · {s.oddLabel}</p>
             </div>
-            <span className="text-sm font-black text-gold shrink-0">{s.oddValue.toFixed(2)}</span>
+            <span className="text-sm font-black text-txt-primary shrink-0">{s.oddValue.toFixed(2)}</span>
           </div>
         ))}
       </div>
@@ -182,7 +182,7 @@ function TicketResultView({ ticket }: { ticket: Ticket }) {
         <span className={`text-sm font-bold ${info.color}`}>{info.label}</span>
       </div>
       <div className="flex items-center justify-between text-xs text-txt-muted">
-        <span>Cote totale <span className="text-gold font-bold">{ticket.totalOdds.toFixed(2)}</span></span>
+        <span>Cote totale <span className="text-green-700 font-bold">{ticket.totalOdds.toFixed(2)}</span></span>
         <span>Gain potentiel <span className="text-green-700 font-bold">{ticket.potentialWinXAF.toLocaleString()} XAF</span></span>
       </div>
       <div className="divide-y divide-bg-border">
@@ -197,7 +197,7 @@ function TicketResultView({ ticket }: { ticket: Ticket }) {
                 <p className="text-[11px] text-txt-muted">{item.market.name} · {item.odd.label}</p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-sm font-black text-gold">{Number(item.oddValue).toFixed(2)}</span>
+                <span className="text-sm font-black text-txt-primary">{Number(item.oddValue).toFixed(2)}</span>
                 {resInfo && <span className={`text-[11px] font-bold ${resInfo.color}`}>{resInfo.label}</span>}
               </div>
             </div>

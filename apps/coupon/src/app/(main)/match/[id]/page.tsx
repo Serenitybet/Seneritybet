@@ -164,7 +164,11 @@ export default function MatchPage() {
                     {MARKET_LABELS[market.type] ?? market.name}
                   </p>
                 </div>
-                <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className={`p-3 grid gap-2 ${
+                  (market.odds?.length ?? 0) === 3 ? "grid-cols-3" :
+                  (market.odds?.length ?? 0) <= 2 ? "grid-cols-2" :
+                  "grid-cols-2 sm:grid-cols-3"
+                }`}>
                   {market.odds?.map((odd: any) => (
                     <button key={odd.id}
                       onClick={() => handleOdd(market.id, odd.id, Number(odd.value), odd.label, market.name)}
@@ -174,7 +178,7 @@ export default function MatchPage() {
                           : "bg-bg-card border-bg-border hover:border-green-600/40 hover:bg-green-600/5"
                       }`}>
                       <span className="text-sm text-txt-secondary">{odd.label}</span>
-                      <span className={`text-sm font-black ${hasSelection(odd.id) ? "text-green-700" : "text-gold"}`}>
+                      <span className={`text-sm font-black ${hasSelection(odd.id) ? "text-green-700" : "text-txt-primary"}`}>
                         {Number(odd.value).toFixed(2)}
                       </span>
                     </button>

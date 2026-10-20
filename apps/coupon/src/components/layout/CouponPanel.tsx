@@ -109,7 +109,7 @@ export function CouponPanel() {
                   <span className="text-[11px] font-medium text-green-700 bg-green-600/10 px-2 py-0.5 rounded border border-green-600/20">
                     {sel.oddLabel}
                   </span>
-                  <span className="text-sm font-black text-gold">{sel.oddValue.toFixed(2)}</span>
+                  <span className="text-sm font-black text-txt-primary">{sel.oddValue.toFixed(2)}</span>
                 </div>
               </div>
             ))}
@@ -119,7 +119,7 @@ export function CouponPanel() {
             {selections.length > 1 && (
               <div className="flex items-center justify-between text-sm">
                 <span className="text-txt-secondary">Cote combinée</span>
-                <span className="font-black text-gold text-base">{totalOdds.toFixed(2)}</span>
+                <span className="font-black text-green-700 text-base">{totalOdds.toFixed(2)}</span>
               </div>
             )}
 

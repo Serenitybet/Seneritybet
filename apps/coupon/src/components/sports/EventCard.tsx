@@ -47,16 +47,16 @@ export function EventCard({ event }: { event: EventDTO }) {
 
   return (
     <div className="grid grid-cols-[1fr_auto] hover:bg-bg-hover transition-colors">
-      {/* Équipes + heure + badge marchés */}
-      <div className="min-w-0 py-2.5 px-3 flex flex-col justify-center gap-1">
+      {/* Équipes + heure + badge marchés — toute la zone mène à la fiche match */}
+      <Link href={`/match/${event.id}`} className="min-w-0 py-2.5 px-3 flex flex-col justify-center gap-1 active:bg-bg-hover">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 space-y-0.5">
             <p className="text-sm font-bold text-txt-primary leading-snug truncate">{event.homeTeam}</p>
             <p className="text-sm font-bold text-txt-primary leading-snug truncate">{event.awayTeam}</p>
           </div>
-          <Link href={`/match/${event.id}`} className="shrink-0 text-txt-muted hover:text-green-700 mt-0.5">
+          <span className="shrink-0 text-txt-muted mt-0.5">
             <StatsIcon />
-          </Link>
+          </span>
         </div>
         <div className="flex items-center gap-2">
           {event.status === "LIVE" ? (
@@ -69,15 +69,12 @@ export function EventCard({ event }: { event: EventDTO }) {
             <span className="text-[11px] text-txt-muted">{formatTime()}</span>
           )}
           {totalMarkets > 1 && (
-            <Link
-              href={`/match/${event.id}`}
-              className="bg-slate-900 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0"
-            >
+            <span className="bg-slate-900 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">
               +{totalMarkets - 1}
-            </Link>
+            </span>
           )}
         </div>
-      </div>
+      </Link>
 
       {/* Cotes 1 X 2 */}
       {mainMarket ? (
