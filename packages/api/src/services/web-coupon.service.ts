@@ -52,6 +52,14 @@ export async function createWebCoupon(selections: { oddId: string }[]) {
     throw new AppError(400, "Une ou plusieurs sélections sont invalides ou suspendues");
   }
 
+  // Un seul pari par match sur un même coupon — déjà appliqué côté site
+  // public (coupon.store.ts), revalidé ici au cas où l'API serait appelée
+  // directement sans passer par le store.
+  const eventIds = odds.map((o) => o.market.event.id);
+  if (new Set(eventIds).size !== eventIds.length) {
+    throw new AppError(400, "Une seule sélection par match est autorisée sur un même coupon");
+  }
+
   const snapshot: CouponSelection[] = [];
   for (const odd of odds) {
     if (odd.market.isSuspended) throw new AppError(400, `Marché suspendu : ${odd.market.name}`);

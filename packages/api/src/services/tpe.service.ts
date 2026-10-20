@@ -96,6 +96,14 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
     throw new AppError(400, "Une ou plusieurs cotes sont invalides ou suspendues");
   }
 
+  // Un seul pari par match sur un même ticket (pas de "victoire" + "nombre
+  // de buts" simultanés sur le même match) — revalidé ici côté serveur, pas
+  // seulement côté écran caissier, qui n'est qu'une aide à la saisie.
+  const eventIds = odds.map((o) => o.market.event.id);
+  if (new Set(eventIds).size !== eventIds.length) {
+    throw new AppError(400, "Une seule sélection par match est autorisée sur un même ticket");
+  }
+
   for (const selection of selections) {
     const odd = odds.find((o) => o.id === selection.oddId);
     if (!odd) throw new AppError(400, "Cote introuvable");
