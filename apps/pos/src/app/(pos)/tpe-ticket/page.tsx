@@ -155,10 +155,13 @@ export default function TpeTicketPage() {
       setSelections(selections.filter((s) => s.oddId !== odd.id));
       return;
     }
-    // Un seul choix par marché (ou par groupe fusionné) à la fois
-    const withoutSameGroup = selections.filter((s) => s.groupKey !== key);
+    // Un seul pari par match sur un même coupon, quel que soit le marché
+    // (pas de "victoire" + "nombre de buts" simultanés sur le même match) —
+    // choisir une cote remplace donc toute sélection existante sur ce match,
+    // pas seulement celle du même marché/groupe.
+    const withoutSameEvent = selections.filter((s) => s.eventId !== event.id);
     setSelections([
-      ...withoutSameGroup,
+      ...withoutSameEvent,
       {
         eventId: event.id,
         eventLabel: `${event.homeTeam} vs ${event.awayTeam}`,
