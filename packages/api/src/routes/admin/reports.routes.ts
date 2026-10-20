@@ -10,12 +10,17 @@ adminReportsRouter.use(requireRole("ADMIN", "SUPER_ADMIN", "FINANCE"));
 // GET /api/admin/reports/credits — statut crédits TheOddsAPI
 adminReportsRouter.get("/credits", asyncHandler(async (_req: Request, res: Response) => {
   const credits = getCreditsStatus();
-  const MONTHLY_BUDGET = 100_000;
+  // Palier TheOddsAPI 5M crédits/mois (passage depuis 100K le 20/10/2026 —
+  // voir odds-sync.worker.ts). Usage réel projeté ~400K/mois avec les
+  // cycles actuels (cotes/résultats toutes les 5 min) : cible fixée avec
+  // une marge confortable, pas un plafond strict.
+  const MONTHLY_BUDGET = 5_000_000;
   const now   = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const daysPassed  = now.getDate();
-  const expectedUsed = Math.round((daysPassed / daysInMonth) * MONTHLY_BUDGET * 0.56); // budget cible 56K
+  const TARGET_USAGE = 400_000; // ~8% du palier — voir estimation ci-dessus
+  const expectedUsed = Math.round((daysPassed / daysInMonth) * TARGET_USAGE);
 
   res.json({
     success: true,
@@ -25,12 +30,15 @@ adminReportsRouter.get("/credits", asyncHandler(async (_req: Request, res: Respo
       paused:        credits.paused,
       lastSync:      credits.lastSync,
       monthlyBudget: MONTHLY_BUDGET,
-      targetUsage:   56_000,
+      targetUsage:   TARGET_USAGE,
       periodStart:   start,
       expectedUsedSoFar: expectedUsed,
+      // Seuils mis à l'échelle du palier 5M (environ 1 jour de marge avant
+      // "warning", quelques heures avant "critical", au rythme ~13 300
+      // crédits/jour attendu).
       status: credits.remaining === null ? "unknown"
-        : credits.remaining < 500  ? "critical"
-        : credits.remaining < 5000 ? "warning"
+        : credits.remaining < 10_000 ? "critical"
+        : credits.remaining < 50_000 ? "warning"
         : "ok",
     },
   });
