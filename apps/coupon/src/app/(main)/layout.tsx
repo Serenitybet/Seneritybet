@@ -20,7 +20,11 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         </main>
 
         <aside className="hidden xl:flex flex-col w-72 shrink-0 border-l border-bg-border">
-          <div className="sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
+          {/* Pas de overflow-y-auto ici : CouponPanel gère déjà son propre
+              défilement interne (liste des sélections uniquement), pour que
+              le pied (cote combinée + bouton "Enregistrer") reste toujours
+              visible au lieu de nécessiter un défilement de tout le panneau. */}
+          <div className="sticky top-16 h-[calc(100vh-4rem)]">
             <CouponPanel />
           </div>
         </aside>

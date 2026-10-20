@@ -29,14 +29,19 @@ export function MobileCouponButton() {
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute bottom-0 left-0 right-0 bg-bg-secondary rounded-t-2xl max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-bg-border sticky top-0 bg-bg-secondary z-10">
+          {/* flex-col + hauteur bornée (pas de overflow-y-auto directement
+              ici) : CouponPanel gère son propre défilement interne (liste des
+              sélections uniquement), pour que le bouton "Enregistrer" reste
+              toujours visible en bas du tiroir, quel que soit le nombre de
+              sélections. */}
+          <div className="absolute bottom-0 left-0 right-0 bg-bg-secondary rounded-t-2xl max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-bg-border shrink-0">
               <span className="font-bold text-txt-primary">Mon coupon ({selections.length})</span>
               <button onClick={() => setOpen(false)} className="text-txt-muted text-2xl leading-none">
                 ✕
               </button>
             </div>
-            <div className="pb-6">
+            <div className="flex-1 min-h-0">
               <CouponPanel />
             </div>
           </div>
