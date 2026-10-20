@@ -24,7 +24,11 @@ export function MobileCouponButton() {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 md:hidden">
+        // z-[60] : doit passer au-dessus de BottomNav (z-50), sans quoi la
+        // barre de navigation du bas — rendue après dans le DOM, donc
+        // gagnante à z-index égal — recouvre en permanence le bas du tiroir
+        // (et donc le bouton "Enregistrer mon coupon").
+        <div className="fixed inset-0 z-[60] md:hidden">
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setOpen(false)}
