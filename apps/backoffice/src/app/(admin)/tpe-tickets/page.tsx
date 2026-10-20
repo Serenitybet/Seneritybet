@@ -59,6 +59,8 @@ export default function TpeTicketsPage() {
   const [status, setStatus] = useState("");
   const [tpeId, setTpeId] = useState("");
   const [dangerousOnly, setDangerousOnly] = useState(false);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [groupByTpe, setGroupByTpe] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -122,6 +124,8 @@ export default function TpeTicketsPage() {
       if (status) params.set("status", status);
       if (tpeId) params.set("tpeId", tpeId);
       if (dangerousOnly) params.set("dangerous", "true");
+      if (from) params.set("from", from);
+      if (to) params.set("to", to);
       const [ticketsRes, tpesRes] = await Promise.all([
         fetch(`${API}/admin/tickets?${params}`, { headers: authHeaders() }),
         fetch(`${API}/admin/tpe`, { headers: authHeaders() }),
@@ -134,7 +138,17 @@ export default function TpeTicketsPage() {
     finally { setLoading(false); }
   }
 
-  useEffect(() => { load(); }, [status, tpeId, dangerousOnly]);
+  useEffect(() => { load(); }, [status, tpeId, dangerousOnly, from, to]);
+
+  function todayStr() { return new Date().toISOString().slice(0, 10); }
+  function applyPreset(preset: "today" | "7days" | "all") {
+    if (preset === "all")   { setFrom(""); setTo(""); return; }
+    const today = todayStr();
+    setTo(today);
+    if (preset === "today") { setFrom(today); return; }
+    const d = new Date(); d.setDate(d.getDate() - 6);
+    setFrom(d.toISOString().slice(0, 10));
+  }
 
   const grouped = useMemo(() => {
     if (!groupByTpe) return null;
@@ -145,6 +159,20 @@ export default function TpeTicketsPage() {
       map[key].tickets.push(t);
     }
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+  }, [tickets, groupByTpe]);
+
+  // Regroupement par jour, affiché par défaut (quand pas groupé par TPE) —
+  // les tickets restent par ailleurs triés du plus récent au plus ancien
+  // (voir l'API), donc l'ordre des groupes suit cet ordre naturellement.
+  const groupedByDate = useMemo(() => {
+    if (groupByTpe) return null;
+    const map = new Map<string, Ticket[]>();
+    for (const t of tickets) {
+      const key = new Date(t.createdAt).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(t);
+    }
+    return [...map.entries()];
   }, [tickets, groupByTpe]);
 
   function isDangerous(t: Ticket) {
@@ -267,6 +295,20 @@ export default function TpeTicketsPage() {
           <option value="">Tous les TPE</option>
           {tpes.map((t) => <option key={t.id} value={t.id}>{t.name ?? t.code}</option>)}
         </select>
+
+        <div className="flex items-center gap-1.5">
+          <input type="date" className="bo-input w-36" value={from} onChange={(e) => setFrom(e.target.value)} title="Du" />
+          <span className="text-t-faint text-xs">→</span>
+          <input type="date" className="bo-input w-36" value={to} onChange={(e) => setTo(e.target.value)} title="Au" />
+          {(from || to) && (
+            <button className="bo-btn-secondary bo-btn-sm" onClick={() => { setFrom(""); setTo(""); }}>✕</button>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          <button className="bo-btn-secondary bo-btn-sm" onClick={() => applyPreset("today")}>Aujourd'hui</button>
+          <button className="bo-btn-secondary bo-btn-sm" onClick={() => applyPreset("7days")}>7 jours</button>
+        </div>
+
         <label className="flex items-center gap-1.5 text-xs text-t-muted cursor-pointer">
           <input type="checkbox" checked={dangerousOnly} onChange={(e) => setDangerousOnly(e.target.checked)} />
           ⚠️ Dangereux uniquement
@@ -294,8 +336,16 @@ export default function TpeTicketsPage() {
           ))}
         </div>
       ) : (
-        <div className="bo-card">
-          <div>{tickets.map((t) => <TicketRow key={t.id} t={t} />)}</div>
+        <div className="space-y-3">
+          {groupedByDate!.map(([dateLabel, dayTickets]) => (
+            <div key={dateLabel} className="bo-card">
+              <div className="bo-card-header">
+                <span className="bo-card-title capitalize">📅 {dateLabel}</span>
+                <span className="text-[11px] text-t-faint">{dayTickets.length} ticket(s)</span>
+              </div>
+              <div>{dayTickets.map((t) => <TicketRow key={t.id} t={t} />)}</div>
+            </div>
+          ))}
         </div>
       )}
     </div>

@@ -15,11 +15,19 @@ adminTicketsRouter.get("/", asyncHandler(async (req: Request, res: Response) => 
   const status    = req.query.status as string | undefined;
   const tpeId     = req.query.tpeId as string | undefined;
   const dangerous = req.query.dangerous === "true";
+  const from      = req.query.from as string | undefined; // YYYY-MM-DD, début de journée
+  const to        = req.query.to   as string | undefined; // YYYY-MM-DD, fin de journée incluse
 
   const where = {
     ...(status ? { status: status as any } : {}),
     ...(tpeId ? { tpeId } : {}),
     ...(dangerous ? { requiresApproval: true, approvedAt: null } : {}),
+    ...((from || to) ? {
+      createdAt: {
+        ...(from ? { gte: new Date(`${from}T00:00:00`) } : {}),
+        ...(to   ? { lte: new Date(`${to}T23:59:59.999`) } : {}),
+      },
+    } : {}),
   };
 
   const [total, tickets] = await Promise.all([
