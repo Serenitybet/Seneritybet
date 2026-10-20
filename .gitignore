@@ -29,3 +29,6 @@ apps/pos/public/swe-worker-*.js
 
 # Fichiers de travail temporaires (jamais destinés à ce dépôt)
 .scratchpad/
+
+# Sauvegardes de base de données (générées sur le VPS, jamais commitées)
+backups/
