@@ -24,6 +24,7 @@ const NAV = [
     section: "Système",
     items: [
       { href: "/partners", label: "Partenaires",         icon: "🤝", badge: null },
+      { href: "/banners",  label: "Bannières",           icon: "📣", badge: null },
       { href: "/tpe",      label: "Terminaux TPE",       icon: "🖥", badge: null },
       { href: "/staff",    label: "Équipe backoffice",   icon: "🧑‍💼", badge: null },
       { href: "/settings", label: "Paramètres",         icon: "⚙",  badge: null },

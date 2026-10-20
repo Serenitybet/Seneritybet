@@ -9,6 +9,7 @@ import { adminPartnersRouter } from "./partners.routes";
 import { adminTpeRouter } from "./tpe.routes";
 import { adminTicketsRouter } from "./tickets.routes";
 import { adminSettingsRouter } from "./settings.routes";
+import { adminBannersRouter } from "./banners.routes";
 
 export const adminRouter = Router();
 
@@ -24,3 +25,4 @@ adminRouter.use("/partners", adminPartnersRouter);
 adminRouter.use("/tpe", adminTpeRouter);
 adminRouter.use("/tickets", adminTicketsRouter);
 adminRouter.use("/settings", adminSettingsRouter);
+adminRouter.use("/banners", adminBannersRouter);

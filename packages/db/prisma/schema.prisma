@@ -662,6 +662,24 @@ enum WebCouponStatus {
   CANCELLED
 }
 
+// Bannières promotionnelles du carrousel en haut de la page d'accueil du
+// site joueur (apps/web) — gérées depuis le backoffice. imageUrl est une
+// URL externe collée à la main (même pattern que Competition.logo) : pas
+// d'infrastructure d'upload de fichier dans ce projet.
+model PromoBanner {
+  id        String   @id @default(cuid())
+  imageUrl  String
+  title     String?
+  subtitle  String?
+  linkUrl   String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, sortOrder])
+}
+
 // ─── Configuration backoffice (clé/valeur) ───────────────────────────────────
 
 model Setting {

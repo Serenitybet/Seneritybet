@@ -2,6 +2,7 @@ import Link from "next/link";
 import { EventCard } from "@/components/sports/EventCard";
 import { SportNav } from "@/components/sports/SportNav";
 import { DateTabs } from "@/components/sports/DateTabs";
+import { PromoCarousel } from "@/components/layout/PromoCarousel";
 import type { EventDTO } from "@serenitybet/shared";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
@@ -28,6 +29,17 @@ async function getEvents(sport?: string, date?: string) {
     return json.data ?? { events: [], total: 0 };
   } catch {
     return { events: [], total: 0 };
+  }
+}
+
+async function getBanners() {
+  try {
+    const res = await fetch(`${API_URL}/banners`, { next: { revalidate: 60 } });
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json.data ?? [];
+  } catch {
+    return [];
   }
 }
 
@@ -105,7 +117,7 @@ export default async function HomePage({
   searchParams: Promise<{ sport?: string; date?: string }>;
 }) {
   const { sport, date } = await searchParams;
-  const { events, total } = await getEvents(sport, date);
+  const [{ events, total }, banners] = await Promise.all([getEvents(sport, date), getBanners()]);
   const eventsArr = (events ?? []) as EventDTO[];
 
   const liveEvents = eventsArr.filter(e => e.status === "LIVE");
@@ -116,6 +128,9 @@ export default async function HomePage({
       <SportNav activeSport={sport} />
 
       <div className="space-y-3 pt-3">
+
+        {/* Bannières promotionnelles (gérées depuis le backoffice) */}
+        <PromoCarousel banners={banners} />
 
         {/* Navigation par date */}
         <DateTabs activeSport={sport} />
