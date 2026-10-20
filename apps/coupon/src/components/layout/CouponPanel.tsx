@@ -9,7 +9,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 export function CouponPanel() {
   const { selections, removeSelection, clearSlip, totalOdds } = useCouponStore();
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState<{ code: string; expiresAt: string } | null>(null);
+  const [saved, setSaved] = useState<{ code: string; validUntil: string } | null>(null);
 
   async function handleSaveCoupon() {
     if (selections.length === 0) { toast.error("Coupon vide"); return; }
@@ -24,7 +24,18 @@ export function CouponPanel() {
       });
       const data = await res.json();
       if (!res.ok) { toast.error(data.error ?? "Erreur"); return; }
-      setSaved({ code: data.data.code, expiresAt: data.data.expiresAt });
+
+      // L'échéance utile pour le parieur est le coup d'envoi du premier
+      // match du coupon (au-delà, plus moyen de miser dessus) — sauf si
+      // l'expiration système (24h) tombe avant, auquel cas c'est elle qui
+      // compte réellement.
+      const earliestStart = selections.reduce<string | null>(
+        (min, s) => (!min || s.startTime < min) ? s.startTime : min, null,
+      );
+      const expiresAt = data.data.expiresAt as string;
+      const validUntil = earliestStart && earliestStart < expiresAt ? earliestStart : expiresAt;
+
+      setSaved({ code: data.data.code, validUntil });
       clearSlip();
       toast.success("Coupon enregistré !");
     } catch {
@@ -39,7 +50,7 @@ export function CouponPanel() {
   }
 
   if (saved) {
-    const expiry = new Date(saved.expiresAt);
+    const validUntil = new Date(saved.validUntil);
     return (
       <div className="flex flex-col h-full">
         <div className="flex items-center justify-between px-3 py-3 border-b border-bg-border">
@@ -50,12 +61,10 @@ export function CouponPanel() {
             <span className="text-3xl">🎫</span>
           </div>
           <p className="text-xs text-txt-muted mb-1">Votre code coupon</p>
-          <p className="font-mono text-3xl font-black text-gold tracking-widest mb-3">{saved.code}</p>
-          <div className="bg-bg-card border border-bg-border rounded-lg p-3 text-xs text-txt-secondary space-y-1 mb-4">
-            <p>📍 Présentez ce code dans une boutique Serenitybet</p>
-            <p>💵 Le caissier saisira votre mise en espèces</p>
-            <p>⏰ Valable jusqu'au {expiry.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</p>
-          </div>
+          <p className="font-mono text-5xl font-black text-green-700 tracking-widest mb-3">{saved.code}</p>
+          <p className="text-xs text-txt-muted mb-4">
+            Valable jusqu'au {validUntil.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
+          </p>
           <button onClick={handleNewCoupon} className="btn-outline w-full py-2 text-sm">
             Composer un nouveau coupon
           </button>

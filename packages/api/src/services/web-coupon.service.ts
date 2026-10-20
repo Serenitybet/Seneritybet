@@ -2,16 +2,18 @@ import { prisma } from "../lib/prisma";
 import { AppError } from "../middleware/error.middleware";
 import { serializeTicket } from "./tpe.service";
 
-const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const COUPON_TTL_MS = 24 * 60 * 60 * 1000; // 24h — à retirer en boutique avant expiration
 
+// Code à 4 chiffres — simple à retenir et à communiquer oralement en
+// boutique (même format que Ticket.payoutCode). Avec ~10 000 combinaisons,
+// le code seul ne protège ni argent ni donnée personnelle (il ne révèle que
+// des sélections de paris publiques) : au pire, quelqu'un qui devine le
+// code d'un tiers pourrait faire valider ses sélections à sa place en
+// boutique avant lui — pas de vol possible, juste une gêne. La boucle de
+// régénération ci-dessous (createWebCoupon) absorbe les collisions sans
+// erreur, même si elles deviennent plus fréquentes à fort volume.
 function generateCode(): string {
-  let code = "";
-  for (let i = 0; i < 3; i++) {
-    for (let j = 0; j < 3; j++) code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
-    if (i < 2) code += "-";
-  }
-  return code;
+  return String(Math.floor(1000 + Math.random() * 9000));
 }
 
 interface CouponSelection {
@@ -69,13 +71,22 @@ export async function createWebCoupon(selections: { oddId: string }[]) {
   return { code: coupon.code, selectionsCount: snapshot.length, expiresAt: coupon.expiresAt };
 }
 
-/** Consultation publique — ne renvoie jamais payoutCode (serializeTicket l'exclut déjà). */
+/** Consultation publique — ne renvoie jamais payoutCode (serializeTicket l'exclut déjà). Accepte aussi un code de ticket imprimé directement en boutique (jamais passé par un coupon web). */
 export async function getWebCouponStatus(code: string) {
+  const cleanCode = code.trim().toUpperCase();
   const coupon = await prisma.webCoupon.findUnique({
-    where: { code: code.trim().toUpperCase() },
+    where: { code: cleanCode },
     include: { ticket: { include: { items: { include: { market: { include: { event: true } }, odd: true } } } } },
   });
-  if (!coupon) throw new AppError(404, "Code coupon introuvable");
+
+  if (!coupon) {
+    const ticket = await prisma.ticket.findUnique({
+      where: { code: cleanCode },
+      include: { items: { include: { market: { include: { event: true } }, odd: true } } },
+    });
+    if (!ticket) throw new AppError(404, "Code introuvable");
+    return { code: ticket.code, status: "USED" as const, ticket: serializeTicket(ticket) };
+  }
 
   if (coupon.status === "PENDING" && new Date() > coupon.expiresAt) {
     await prisma.webCoupon.update({ where: { id: coupon.id }, data: { status: "EXPIRED" } });

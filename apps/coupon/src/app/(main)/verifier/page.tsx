@@ -111,7 +111,7 @@ export default function VerifierPage() {
       <form onSubmit={handleSubmit} className="flex gap-2">
         <input
           className="field font-mono uppercase tracking-widest text-center"
-          placeholder="XXX-XXX-XXX"
+          placeholder="1234"
           value={code}
           onChange={(e) => setCode(e.target.value)}
           maxLength={20}

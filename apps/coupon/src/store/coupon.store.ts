@@ -9,6 +9,7 @@ interface CouponSelection {
   oddId: string;
   oddLabel: string;
   oddValue: number;
+  startTime: string; // coup d'envoi — sert à afficher l'échéance utile du coupon (voir CouponPanel)
 }
 
 interface CouponStore {

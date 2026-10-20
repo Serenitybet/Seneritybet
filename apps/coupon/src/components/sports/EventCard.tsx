@@ -41,6 +41,7 @@ export function EventCard({ event }: { event: EventDTO }) {
     else addSelection({
       eventId:    event.id,
       eventLabel: `${event.homeTeam} — ${event.awayTeam}`,
+      startTime:  event.startTime,
       marketId, marketName, oddId, oddLabel, oddValue,
     });
   }
