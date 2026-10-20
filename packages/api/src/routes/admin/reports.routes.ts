@@ -36,49 +36,89 @@ adminReportsRouter.get("/credits", asyncHandler(async (_req: Request, res: Respo
   });
 }));
 
+// Tableau de bord recentré sur les tickets physiques (TPE) — l'activité en
+// ligne (User/Bet/Transaction) n'est plus le cœur du métier actuellement.
 adminReportsRouter.get("/dashboard", asyncHandler(async (_req: Request, res: Response) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  const weekAgo = new Date(today);
+  weekAgo.setDate(weekAgo.getDate() - 6); // 7 jours, aujourd'hui inclus
+
   const [
-    totalUsers,
-    activeToday,
-    totalBetsToday,
-    pendingBets,
-    manualReviewBets,
-    depositsToday,
-    withdrawalsToday,
-    grossRevenue,
+    ticketsToday,
+    pendingTickets,
+    wonUnpaidTickets,
+    stakesTodayAgg,
+    payoutsTodayAgg,
+    tpeCreditAgg,
+    activeTpeCount,
+    topTpeRaw,
+    weekTickets,
   ] = await Promise.all([
-    prisma.user.count({ where: { role: "PLAYER" } }),
-    prisma.user.count({ where: { role: "PLAYER", updatedAt: { gte: today } } }),
-    prisma.bet.count({ where: { createdAt: { gte: today } } }),
-    prisma.bet.count({ where: { status: "PENDING" } }),
-    prisma.bet.count({ where: { isManualCheck: true, status: { in: ["PENDING", "MANUAL_REVIEW"] } } }),
-    prisma.transaction.aggregate({
-      where: { type: "DEPOSIT", status: "COMPLETED", createdAt: { gte: today } },
-      _sum: { amount: true },
+    prisma.ticket.count({ where: { createdAt: { gte: today } } }),
+    prisma.ticket.count({ where: { status: "PENDING" } }),
+    prisma.ticket.count({ where: { status: "WON" } }),
+    prisma.ticket.aggregate({ where: { createdAt: { gte: today } }, _sum: { stake: true } }),
+    prisma.ticket.aggregate({ where: { status: "PAID", paidAt: { gte: today } }, _sum: { potentialWin: true } }),
+    prisma.tpe.aggregate({ where: { status: "ACTIVE" }, _sum: { credit: true } }),
+    prisma.tpe.count({ where: { status: "ACTIVE" } }),
+    prisma.ticket.groupBy({
+      by: ["tpeId"],
+      where: { createdAt: { gte: weekAgo } },
+      _count: { id: true },
+      orderBy: { _count: { id: "desc" } },
+      take: 5,
     }),
-    prisma.transaction.aggregate({
-      where: { type: "WITHDRAWAL", status: { in: ["PENDING", "COMPLETED"] }, createdAt: { gte: today } },
-      _sum: { amount: true },
-    }),
-    prisma.transaction.aggregate({
-      where: { type: { in: ["BET_PLACED", "BET_WON"] }, status: "COMPLETED" },
-      _sum: { amount: true },
+    prisma.ticket.findMany({
+      where: { createdAt: { gte: weekAgo } },
+      select: { createdAt: true, stake: true },
     }),
   ]);
+
+  const topTpeInfo = await prisma.tpe.findMany({
+    where: { id: { in: topTpeRaw.map((t: { tpeId: string }) => t.tpeId) } },
+    select: { id: true, code: true, name: true },
+  });
+  const topTpe = topTpeRaw.map((t: { tpeId: string; _count: { id: number } }) => {
+    const info = topTpeInfo.find((i: { id: string }) => i.id === t.tpeId);
+    return { code: info?.code ?? "—", name: info?.name ?? null, ticketCount: t._count.id };
+  });
+
+  // Mises par jour (XAF, pas centimes) — 7 derniers jours, bucketing en JS
+  // (jeu de données TPE assez restreint pour ne pas justifier du SQL brut).
+  const DAY_LABELS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
+  const chartMap = new Map<string, number>();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekAgo); d.setDate(d.getDate() + i);
+    chartMap.set(d.toISOString().slice(0, 10), 0);
+  }
+  for (const t of weekTickets) {
+    const key = t.createdAt.toISOString().slice(0, 10);
+    if (chartMap.has(key)) chartMap.set(key, (chartMap.get(key) ?? 0) + Number(t.stake) / 100);
+  }
+  const chart = [...chartMap.entries()].map(([dateStr, stakesXAF]) => ({
+    day: DAY_LABELS[new Date(`${dateStr}T00:00:00Z`).getUTCDay()],
+    stakesXAF,
+  }));
+
+  // Montants en centimes (formatXAF, côté front, attend des centimes).
+  const stakesToday  = Number(stakesTodayAgg._sum.stake ?? 0);
+  const payoutsToday = Number(payoutsTodayAgg._sum.potentialWin ?? 0);
+  const ggrToday     = stakesToday - payoutsToday;
+  const marginPct    = stakesToday > 0 ? Math.round((ggrToday / stakesToday) * 1000) / 10 : 0;
 
   res.json({
     success: true,
     data: {
-      users:   { total: totalUsers, activeToday },
-      bets:    { today: totalBetsToday, pending: pendingBets, manualReview: manualReviewBets },
-      finance: {
-        depositsToday:    Number(depositsToday._sum.amount ?? 0),
-        withdrawalsToday: Math.abs(Number(withdrawalsToday._sum.amount ?? 0)),
-        grossRevenue:     Number(grossRevenue._sum.amount ?? 0),
+      tickets: { today: ticketsToday, pending: pendingTickets, wonUnpaid: wonUnpaidTickets },
+      finance: { stakesToday, payoutsToday, ggrToday, marginPct },
+      tpe: {
+        totalCredit: Number(tpeCreditAgg._sum.credit ?? 0), // centimes
+        activeCount: activeTpeCount,
+        topTpe,
       },
+      chart,
     },
   });
 }));
