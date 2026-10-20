@@ -102,7 +102,6 @@ export default function PosHomePage() {
             <Tile href="/tpe-payout" icon={<QrIcon />} label="Scanner un ticket" primary />
           </div>
           <Tile href="/tpe-ticket" icon="🆕" label="Nouveau ticket" />
-          <Tile href="/tpe-history" icon="🧾" label="Historique de paris" />
           <Tile href="/caisse" icon="💰" label="Caisse (dépôt/retrait)" />
           <Tile icon="🚪" label="Déconnexion" onClick={handleLogout} />
         </div>

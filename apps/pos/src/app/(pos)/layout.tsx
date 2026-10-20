@@ -39,7 +39,6 @@ export default function PosLayout({ children }: { children: React.ReactNode }) {
     { href: "/tickets",     icon: "🎫", label: "Tickets" },
     { href: "/tpe-ticket",  icon: "🆕", label: "Nouveau" },
     { href: "/tpe-payout",  icon: "📷", label: "Scanner" },
-    { href: "/tpe-history", icon: "🧾", label: "Historique" },
     { href: "/withdrawals", icon: "💸", label: "Retraits" },
     { href: "/history",     icon: "📋", label: "Caisse du jour" },
   ];
