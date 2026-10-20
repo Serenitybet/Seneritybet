@@ -8,18 +8,6 @@ const NAV_LINKS = [
   { label: "Vérifier un code",       href: "/verifier" },
 ];
 
-const MOBILE_SPORTS = [
-  { icon: "⚽", label: "Football",  href: "/?sport=football" },
-  { icon: "🏀", label: "Basket",    href: "/?sport=basketball" },
-  { icon: "🎾", label: "Tennis",    href: "/?sport=tennis" },
-  { icon: "🏈", label: "US",        href: "/?sport=american-football" },
-  { icon: "⚾", label: "Baseball",  href: "/?sport=baseball" },
-  { icon: "🏒", label: "Hockey",    href: "/?sport=hockey" },
-  { icon: "🥊", label: "Boxe",      href: "/?sport=mma" },
-  { icon: "🏐", label: "Volley",    href: "/?sport=volleyball" },
-  { icon: "🏉", label: "Rugby",     href: "/?sport=rugby" },
-];
-
 // En-tête sombre (slate-950) sur fond clair — même palette que le topbar
 // de apps/pos (TPE), pour une identité visuelle cohérente entre les deux apps.
 export function Header() {
@@ -84,17 +72,6 @@ export function Header() {
             </div>
           </div>
         )}
-
-        {/* Barre sports horizontale */}
-        <div className="flex items-center border-t border-slate-800 overflow-x-auto scrollbar-none py-1">
-          {MOBILE_SPORTS.map((s) => (
-            <Link key={s.href} href={s.href}
-              className="flex-none flex flex-col items-center px-3 py-1 active:opacity-60">
-              <span className="text-base">{s.icon}</span>
-              <span className="text-[9px] font-medium text-slate-400 mt-0.5">{s.label}</span>
-            </Link>
-          ))}
-        </div>
       </div>
     </header>
   );
