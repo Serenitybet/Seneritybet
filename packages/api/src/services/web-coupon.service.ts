@@ -16,6 +16,18 @@ function generateCode(): string {
   return String(Math.floor(1000 + Math.random() * 9000));
 }
 
+// Les codes de ticket (voir tpe.service.generateTicketCode) gardent le
+// format XXX-XXX-XXX, séparé du nouveau format coupon à 4 chiffres — la
+// page de vérification publique invite maintenant juste à entrer "1234" en
+// exemple, donc un bettor cherchant son TICKET peut taper son code sans les
+// tirets en pensant que c'est optionnel. Reconstruit le format d'origine
+// avant d'abandonner la recherche.
+function reinsertTicketDashes(code: string): string | null {
+  const stripped = code.replace(/-/g, "");
+  if (!/^[A-Z0-9]{9}$/.test(stripped)) return null;
+  return `${stripped.slice(0, 3)}-${stripped.slice(3, 6)}-${stripped.slice(6, 9)}`;
+}
+
 interface CouponSelection {
   eventId: string;
   eventLabel: string;
@@ -95,10 +107,14 @@ export async function getWebCouponStatus(code: string) {
   });
 
   if (!coupon) {
-    const ticket = await prisma.ticket.findUnique({
-      where: { code: cleanCode },
-      include: { items: { include: { market: { include: { event: true } }, odd: true } } },
-    });
+    const ticketInclude = { items: { include: { market: { include: { event: true } }, odd: true } } };
+    let ticket = await prisma.ticket.findUnique({ where: { code: cleanCode }, include: ticketInclude });
+    if (!ticket) {
+      const dashed = reinsertTicketDashes(cleanCode);
+      if (dashed && dashed !== cleanCode) {
+        ticket = await prisma.ticket.findUnique({ where: { code: dashed }, include: ticketInclude });
+      }
+    }
     if (!ticket) throw new AppError(404, "Code introuvable");
     return { code: ticket.code, status: "USED" as const, ticket: serializeTicket(ticket) };
   }

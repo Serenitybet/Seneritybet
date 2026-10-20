@@ -70,6 +70,18 @@ interface WebCouponSelection {
   oddId: string; oddLabel: string; oddValue: number;
 }
 
+// Même regroupement que combinedGroupOdds : une sélection handicap ou
+// plus/moins chargée depuis un coupon web doit porter le même groupKey
+// synthétique (${eventId}:HCAP / :TOTALS) que celui utilisé par les boutons
+// de lignes fusionnées ci-dessous, sinon cliquer une autre ligne en
+// boutique ajoute une deuxième sélection au lieu de remplacer celle du
+// coupon (le filtre "même groupe" ne la reconnaîtrait pas).
+function inferGroupKey(eventId: string, marketId: string, oddLabel: string): string {
+  if (/^[12] \([+-]?[\d.]+\)$/.test(oddLabel)) return `${eventId}:HCAP`;
+  if (/^(Plus|Moins) [\d.]+$/.test(oddLabel)) return `${eventId}:TOTALS`;
+  return marketId;
+}
+
 export default function TpeTicketPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
@@ -162,6 +174,26 @@ export default function TpeTicketPage() {
 
   const totalOdds = selections.reduce((acc, s) => acc * s.oddValue, 1);
 
+  // Permet de modifier une sélection (la sienne ou celle d'un coupon
+  // chargé) sans tout recomposer : amène directement sur le match déplié,
+  // le caissier n'a plus qu'à cliquer une autre cote — utile si le parieur
+  // change d'avis en chemin vers la boutique (demander un nouveau code
+  // pour un simple changement serait peu pratique pour tout le monde).
+  function goToSelection(s: Selection) {
+    const event = events.find((e) => e.id === s.eventId);
+    if (!event) {
+      toast.error("Match introuvable (plus de 7 jours ou déjà commencé)");
+      return;
+    }
+    const idx = days.findIndex((d) => d.key === dayKey(new Date(event.startTime)));
+    if (idx >= 0) setDayOffset(idx);
+    setCompetitionFilter("");
+    setExpandedId(event.id);
+    setTimeout(() => {
+      document.getElementById(`event-${event.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 50);
+  }
+
   async function loadCoupon() {
     const code = couponCode.trim();
     if (!code) return;
@@ -173,7 +205,9 @@ export default function TpeTicketPage() {
         toast.error("Aucune sélection valide dans ce coupon (cotes changées ou matchs déjà commencés)");
         return;
       }
-      setSelections(data.selections.map((s) => ({ ...s, groupKey: s.marketId })));
+      setSelections(data.selections.map((s) => ({
+        ...s, groupKey: inferGroupKey(s.eventId, s.marketId, s.oddLabel),
+      })));
       setLoadedWebCouponCode(data.code);
       setCouponCode("");
       if (data.droppedCount > 0) {
@@ -344,7 +378,7 @@ export default function TpeTicketPage() {
                       : [];
                     const isExpanded = expandedId === event.id;
                     return (
-                      <div key={event.id}>
+                      <div key={event.id} id={`event-${event.id}`}>
                         <div className="flex items-center gap-2 p-3">
                           <button
                             onClick={() => setExpandedId(isExpanded ? null : event.id)}
@@ -627,13 +661,14 @@ export default function TpeTicketPage() {
           ) : (
             <div className="space-y-2 mb-4">
               {selections.map((s) => (
-                <div key={s.oddId} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2">
+                <div key={s.oddId} className="flex items-center justify-between bg-gray-50 hover:bg-green-50 rounded-lg px-3 py-2 cursor-pointer"
+                  onClick={() => goToSelection(s)} title="Modifier cette sélection">
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-gray-800 truncate">{s.eventLabel}</p>
                     <p className="text-[11px] text-gray-500">{s.marketName} — {s.oddLabel} @ {s.oddValue.toFixed(2)}</p>
                   </div>
                   <button
-                    onClick={() => setSelections(selections.filter((x) => x.oddId !== s.oddId))}
+                    onClick={(e) => { e.stopPropagation(); setSelections(selections.filter((x) => x.oddId !== s.oddId)); }}
                     className="text-red-400 hover:text-red-600 shrink-0 ml-2"
                   >
                     ✕
