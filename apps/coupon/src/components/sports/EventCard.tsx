@@ -47,7 +47,7 @@ export function EventCard({ event }: { event: EventDTO }) {
         </div>
         <Link
           href={`/match/${event.id}`}
-          className="text-[10px] text-txt-muted hover:text-green-400 font-medium border border-bg-border px-2 py-0.5 rounded hover:border-green-500/50 transition-colors"
+          className="text-[10px] text-txt-muted hover:text-green-700 font-medium border border-bg-border px-2 py-0.5 rounded hover:border-green-500/50 transition-colors"
         >
           +{totalMarkets > 1 ? totalMarkets : ""}  marchés
         </Link>
@@ -84,7 +84,7 @@ export function EventCard({ event }: { event: EventDTO }) {
             ))}
           </div>
         ) : (
-          <Link href={`/match/${event.id}`} className="text-[11px] text-green-400 shrink-0">
+          <Link href={`/match/${event.id}`} className="text-[11px] text-green-700 shrink-0">
             Voir cotes →
           </Link>
         )}
@@ -173,7 +173,7 @@ export function EventCard({ event }: { event: EventDTO }) {
       {totalMarkets > 2 && (
         <div className="mt-1.5 pt-1.5 border-t border-bg-border/50">
           <Link href={`/match/${event.id}`}
-            className="text-[10px] text-txt-muted hover:text-green-400 transition-colors">
+            className="text-[10px] text-txt-muted hover:text-green-700 transition-colors">
             Voir les {totalMarkets} marchés disponibles (score exact, totaux par équipe, remboursé si nul...) →
           </Link>
         </div>
@@ -182,7 +182,7 @@ export function EventCard({ event }: { event: EventDTO }) {
       {!ouMarket && !handicapMarket && !bttsMarket && !doubleChanceMarket && totalMarkets <= 1 && (
         <div className="mt-1.5 pt-1.5 border-t border-bg-border/50">
           <Link href={`/match/${event.id}`}
-            className="text-[10px] text-txt-muted hover:text-green-400 transition-colors">
+            className="text-[10px] text-txt-muted hover:text-green-700 transition-colors">
             Voir tous les marchés disponibles →
           </Link>
         </div>

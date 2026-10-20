@@ -106,7 +106,7 @@ export function CouponPanel() {
                 </div>
                 <p className="text-[10px] text-txt-muted mb-1.5">{sel.marketName}</p>
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-medium text-green-400 bg-green-600/10 px-2 py-0.5 rounded border border-green-600/20">
+                  <span className="text-[11px] font-medium text-green-700 bg-green-600/10 px-2 py-0.5 rounded border border-green-600/20">
                     {sel.oddLabel}
                   </span>
                   <span className="text-sm font-black text-gold">{sel.oddValue.toFixed(2)}</span>

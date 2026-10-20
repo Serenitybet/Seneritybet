@@ -5,13 +5,15 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Fond clair — mêmes teintes (slate) que apps/pos (TPE) : bg-slate-100
+        // en fond général, cartes blanches, en-tête sombre (voir Header.tsx).
         bg: {
-          primary:  "#0b0e14",
-          secondary:"#111520",
-          card:     "#161b27",
-          hover:    "#1c2335",
-          border:   "#252e42",
-          input:    "#1a2030",
+          primary:  "#f1f5f9", // slate-100
+          secondary:"#ffffff",
+          card:     "#ffffff",
+          hover:    "#f8fafc", // slate-50
+          border:   "#e2e8f0", // slate-200
+          input:    "#ffffff",
         },
         green: {
           50:  "#f0fdf4",
@@ -24,9 +26,9 @@ const config: Config = {
           900: "#14532d",
         },
         txt: {
-          primary:  "#f1f5f9",
-          secondary:"#94a3b8",
-          muted:    "#4b5563",
+          primary:  "#0f172a", // slate-900
+          secondary:"#475569", // slate-600
+          muted:    "#94a3b8", // slate-400
         },
         live:  "#ef4444",
         gold:  "#f59e0b",

@@ -169,7 +169,7 @@ function AllSportsView({ sportGroups }: { sportGroups: SportGroup[] }) {
             <span className="text-base">{sg.icon}</span>
             <Link
               href={`/?sport=${sg.slug}`}
-              className="text-sm font-black text-txt-primary uppercase tracking-wide hover:text-green-400 transition-colors"
+              className="text-sm font-black text-txt-primary uppercase tracking-wide hover:text-green-700 transition-colors"
             >
               {sg.name}
             </Link>
@@ -182,7 +182,7 @@ function AllSportsView({ sportGroups }: { sportGroups: SportGroup[] }) {
             )}
             <Link
               href={`/?sport=${sg.slug}`}
-              className="text-[11px] text-txt-muted hover:text-green-400 transition-colors shrink-0"
+              className="text-[11px] text-txt-muted hover:text-green-700 transition-colors shrink-0"
             >
               Tout voir ›
             </Link>
@@ -241,7 +241,7 @@ function CompetitionGroups({
             {hidden > 0 && (
               <Link
                 href={`/?sport=${group.sportSlug}`}
-                className="flex items-center justify-center gap-1 px-3 py-2 text-[11px] text-green-400 hover:text-green-300 hover:bg-green-600/5 transition-colors border-t border-bg-border"
+                className="flex items-center justify-center gap-1 px-3 py-2 text-[11px] text-green-700 hover:text-green-800 hover:bg-green-600/5 transition-colors border-t border-bg-border"
               >
                 +{hidden} autres matchs · Voir tout {group.compName} ›
               </Link>

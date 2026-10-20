@@ -12,14 +12,14 @@ export function BottomNav() {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-bg-secondary border-t border-bg-border md:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-slate-950 border-t border-slate-800 md:hidden">
       <div className="flex items-center">
         {TABS.map((tab) => (
           <Link
             key={tab.href}
             href={tab.href}
             className={`flex-1 flex flex-col items-center justify-center py-2.5 gap-0.5 transition-colors ${
-              tab.active ? "text-green-400" : "text-txt-muted"
+              tab.active ? "text-green-400" : "text-slate-400"
             }`}
           >
             <span className="text-xl">{tab.icon}</span>

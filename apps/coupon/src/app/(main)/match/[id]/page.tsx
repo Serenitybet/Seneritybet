@@ -96,7 +96,7 @@ export default function MatchPage() {
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
-      <button onClick={() => router.back()} className="text-sm text-txt-muted hover:text-green-400 flex items-center gap-1">
+      <button onClick={() => router.back()} className="text-sm text-txt-muted hover:text-green-700 flex items-center gap-1">
         ← Retour
       </button>
 
@@ -170,11 +170,11 @@ export default function MatchPage() {
                       onClick={() => handleOdd(market.id, odd.id, Number(odd.value), odd.label, market.name)}
                       className={`flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all ${
                         hasSelection(odd.id)
-                          ? "bg-green-600/20 border-green-600/60 text-green-400"
+                          ? "bg-green-600/20 border-green-600/60 text-green-700"
                           : "bg-bg-card border-bg-border hover:border-green-600/40 hover:bg-green-600/5"
                       }`}>
                       <span className="text-sm text-txt-secondary">{odd.label}</span>
-                      <span className={`text-sm font-black ${hasSelection(odd.id) ? "text-green-400" : "text-gold"}`}>
+                      <span className={`text-sm font-black ${hasSelection(odd.id) ? "text-green-700" : "text-gold"}`}>
                         {Number(odd.value).toFixed(2)}
                       </span>
                     </button>

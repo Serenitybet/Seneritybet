@@ -14,7 +14,7 @@ const COUPON_STATUS_LABEL: Record<string, { label: string; color: string }> = {
 
 const TICKET_STATUS_LABEL: Record<string, { label: string; color: string }> = {
   PENDING:   { label: "En attente du résultat", color: "text-gold" },
-  WON:       { label: "Gagné — à retirer en boutique", color: "text-green-400" },
+  WON:       { label: "Gagné — à retirer en boutique", color: "text-green-700" },
   LOST:      { label: "Perdu", color: "text-live" },
   REFUNDED:  { label: "Remboursé", color: "text-info" },
   CANCELLED: { label: "Annulé", color: "text-live" },
@@ -22,7 +22,7 @@ const TICKET_STATUS_LABEL: Record<string, { label: string; color: string }> = {
 };
 
 const ITEM_RESULT_LABEL: Record<string, { label: string; color: string }> = {
-  WON:  { label: "Gagné", color: "text-green-400" },
+  WON:  { label: "Gagné", color: "text-green-700" },
   LOST: { label: "Perdu", color: "text-live" },
   VOID: { label: "Annulé", color: "text-txt-muted" },
 };
@@ -183,7 +183,7 @@ function TicketResultView({ ticket }: { ticket: Ticket }) {
       </div>
       <div className="flex items-center justify-between text-xs text-txt-muted">
         <span>Cote totale <span className="text-gold font-bold">{ticket.totalOdds.toFixed(2)}</span></span>
-        <span>Gain potentiel <span className="text-green-400 font-bold">{ticket.potentialWinXAF.toLocaleString()} XAF</span></span>
+        <span>Gain potentiel <span className="text-green-700 font-bold">{ticket.potentialWinXAF.toLocaleString()} XAF</span></span>
       </div>
       <div className="divide-y divide-bg-border">
         {ticket.items.map((item) => {
@@ -205,7 +205,7 @@ function TicketResultView({ ticket }: { ticket: Ticket }) {
         })}
       </div>
       {ticket.status === "WON" && (
-        <p className="text-xs text-green-400 text-center bg-green-600/10 border border-green-600/20 rounded-lg p-2">
+        <p className="text-xs text-green-700 text-center bg-green-600/10 border border-green-600/20 rounded-lg p-2">
           Présentez ce ticket (ou son code) en boutique pour être payé.
         </p>
       )}
