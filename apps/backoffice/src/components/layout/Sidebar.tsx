@@ -10,7 +10,6 @@ const NAV = [
     items: [
       { href: "/dashboard", label: "Dashboard",       icon: "▣", badge: null },
       { href: "/sports",    label: "Matchs & Cotes",  icon: "⚽", badge: null },
-      { href: "/bets",      label: "Paris",            icon: "🎯", badge: "12" },
       { href: "/tpe-tickets", label: "Tickets TPE",    icon: "🎫", badge: null },
     ],
   },
