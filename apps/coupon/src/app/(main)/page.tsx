@@ -106,15 +106,6 @@ export default async function HomePage({
 
   return (
     <div className="space-y-0">
-      {/* Bandeau explicatif */}
-      <div className="mb-3 bg-bg-card border border-bg-border rounded-xl p-3 text-xs text-txt-secondary flex items-center gap-2">
-        <span className="text-base">📰</span>
-        <span>
-          Journal des événements sportifs — composez votre coupon, enregistrez-le, puis présentez le
-          code en boutique pour miser en espèces.
-        </span>
-      </div>
-
       <SportNav activeSport={sport} />
 
       <div className="space-y-3 pt-3">

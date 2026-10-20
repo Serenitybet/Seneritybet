@@ -6,6 +6,7 @@ const DATES = [
   { key: "today",    label: "Aujourd'hui" },
   { key: "tomorrow", label: "Demain" },
   { key: "3days",    label: "3 jours" },
+  { key: "week",     label: "7 jours" },
   { key: "all",      label: "Tout" },
 ];
 
