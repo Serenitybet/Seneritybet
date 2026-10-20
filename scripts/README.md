@@ -24,16 +24,56 @@ Pour tester manuellement sans attendre 3h :
 ls -lh /opt/serenitybet/backups/
 ```
 
+## Sauvegarde hors-serveur (Backblaze B2)
+
+Les sauvegardes locales seules ne protègent pas contre une attaque qui compromettrait le serveur entier (le site et ses sauvegardes seraient perdus ensemble). `backup-db.sh` copie donc automatiquement chaque sauvegarde vers un bucket Backblaze B2, en plus de la copie locale — à configurer une seule fois :
+
+### 1. Créer le compte et le bucket Backblaze
+
+1. Créez un compte sur https://www.backblaze.com/b2/cloud-storage.html
+2. Dans la console B2, créez un bucket **privé**, par exemple `serenitybet-db-backups` (le nom doit être unique dans tout Backblaze — ajoutez des chiffres si besoin)
+3. Allez dans **Bucket Settings → Lifecycle Settings** et choisissez "Keep only the last version of the file, and delete older files after X days" avec X = 60, pour que B2 nettoie automatiquement les anciennes sauvegardes côté serveur
+4. Allez dans **App Keys → Add a New Application Key** : nommez-la `serenitybet-backup`, restreignez-la au bucket créé, droits lecture+écriture. **Notez le `keyID` et la `applicationKey` affichés — la clé secrète n'est montrée qu'une seule fois.**
+
+### 2. Installer et configurer rclone sur le VPS
+
+```bash
+sudo apt update && sudo apt install -y rclone
+mkdir -p ~/.config/rclone
+cat > ~/.config/rclone/rclone.conf <<'EOF'
+[b2]
+type = b2
+account = VOTRE_KEY_ID
+key = VOTRE_APPLICATION_KEY
+EOF
+```
+
+Remplacez `VOTRE_KEY_ID` et `VOTRE_APPLICATION_KEY` par les valeurs notées à l'étape précédente.
+
+Si le nom du bucket choisi n'est pas `serenitybet-backups`, modifiez la ligne `B2_REMOTE` dans `scripts/backup-db.sh` pour qu'elle corresponde (`b2:<nom-du-bucket>`).
+
+### 3. Tester
+
+```bash
+/opt/serenitybet/scripts/backup-db.sh
+rclone ls b2:serenitybet-backups
+```
+
+Le fichier `.sql.gz` le plus récent doit apparaître dans la liste.
+
 ## Restauration en cas d'attaque / problème
+
+Si le serveur est intact, restaurez directement depuis la sauvegarde locale :
 
 ```bash
 /opt/serenitybet/scripts/restore-db.sh /opt/serenitybet/backups/serenitybet_2026-10-20_030000.sql.gz
 ```
 
-Le script demande une confirmation explicite avant d'écraser la base actuelle.
+Si le serveur a été compromis/perdu et que vous repartez d'un nouveau serveur, téléchargez d'abord la sauvegarde depuis B2 :
 
-## ⚠️ Limite importante
+```bash
+rclone copy b2:serenitybet-backups/serenitybet_2026-10-20_030000.sql.gz /opt/serenitybet/backups/
+/opt/serenitybet/scripts/restore-db.sh /opt/serenitybet/backups/serenitybet_2026-10-20_030000.sql.gz
+```
 
-Ces sauvegardes sont stockées **sur le même serveur** que l'application. Elles protègent contre une erreur humaine, une corruption de données ou un bug, mais **pas** contre une attaque qui compromettrait le serveur entier (le serveur et ses sauvegardes seraient perdus ensemble).
-
-Pour une vraie protection contre ce scénario, il faudrait copier régulièrement les sauvegardes vers un stockage externe (S3, Backblaze, etc.) — à mettre en place plus tard si besoin.
+Le script de restauration demande une confirmation explicite avant d'écraser la base actuelle.
