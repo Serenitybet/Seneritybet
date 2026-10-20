@@ -57,7 +57,7 @@ adminReportsRouter.get("/dashboard", asyncHandler(async (_req: Request, res: Res
     weekTickets,
   ] = await Promise.all([
     prisma.ticket.count({ where: { createdAt: { gte: today } } }),
-    prisma.ticket.count({ where: { status: "PENDING" } }),
+    prisma.ticket.count({ where: { status: "PENDING", createdAt: { gte: today } } }),
     prisma.ticket.count({ where: { status: "WON" } }),
     prisma.ticket.aggregate({ where: { createdAt: { gte: today } }, _sum: { stake: true } }),
     prisma.ticket.aggregate({ where: { status: "PAID", paidAt: { gte: today } }, _sum: { potentialWin: true } }),
