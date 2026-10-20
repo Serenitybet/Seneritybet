@@ -50,13 +50,13 @@ EOF
 
 Remplacez `VOTRE_KEY_ID` et `VOTRE_APPLICATION_KEY` par les valeurs notées à l'étape précédente.
 
-Si le nom du bucket choisi n'est pas `serenitybet-backups`, modifiez la ligne `B2_REMOTE` dans `scripts/backup-db.sh` pour qu'elle corresponde (`b2:<nom-du-bucket>`).
+Si le nom du bucket choisi n'est pas `serenitybet-db-backups`, modifiez la ligne `B2_REMOTE` dans `scripts/backup-db.sh` pour qu'elle corresponde (`b2:<nom-du-bucket>`).
 
 ### 3. Tester
 
 ```bash
 /opt/serenitybet/scripts/backup-db.sh
-rclone ls b2:serenitybet-backups
+rclone ls b2:serenitybet-db-backups
 ```
 
 Le fichier `.sql.gz` le plus récent doit apparaître dans la liste.
@@ -72,7 +72,7 @@ Si le serveur est intact, restaurez directement depuis la sauvegarde locale :
 Si le serveur a été compromis/perdu et que vous repartez d'un nouveau serveur, téléchargez d'abord la sauvegarde depuis B2 :
 
 ```bash
-rclone copy b2:serenitybet-backups/serenitybet_2026-10-20_030000.sql.gz /opt/serenitybet/backups/
+rclone copy b2:serenitybet-db-backups/serenitybet_2026-10-20_030000.sql.gz /opt/serenitybet/backups/
 /opt/serenitybet/scripts/restore-db.sh /opt/serenitybet/backups/serenitybet_2026-10-20_030000.sql.gz
 ```
 
