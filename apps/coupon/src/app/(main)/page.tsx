@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { EventCard } from "@/components/sports/EventCard";
+import { EventCard, ODDS_COLUMNS_WIDTH } from "@/components/sports/EventCard";
 import { SportNav } from "@/components/sports/SportNav";
 import { DateTabs } from "@/components/sports/DateTabs";
 import type { EventDTO } from "@serenitybet/shared";
@@ -230,6 +230,10 @@ function CompetitionGroups({
               <span className="ml-auto text-[10px] text-txt-muted shrink-0">
                 {group.events.length} match{group.events.length > 1 ? "s" : ""}
               </span>
+              {/* Alignée avec les colonnes de cotes de EventCard */}
+              <div className={`grid grid-cols-3 shrink-0 text-center text-[10px] font-bold text-txt-muted uppercase tracking-wide ${ODDS_COLUMNS_WIDTH}`}>
+                <span>1</span><span>X</span><span>2</span>
+              </div>
             </div>
 
             <div className="divide-y divide-bg-border">

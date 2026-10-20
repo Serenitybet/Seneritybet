@@ -5,19 +5,32 @@ import { useCouponStore } from "@/store/coupon.store";
 import type { EventDTO } from "@serenitybet/shared";
 import { format, isToday, isTomorrow } from "date-fns";
 
+// Icône "statistiques" — lien vers la fiche match (tous les marchés).
+function StatsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+      <rect x="3" y="12" width="4" height="9" rx="1" />
+      <rect x="10" y="7" width="4" height="14" rx="1" />
+      <rect x="17" y="3" width="4" height="18" rx="1" />
+    </svg>
+  );
+}
+
+// Largeur des 3 colonnes de cotes — partagée (en dur) avec l'en-tête "1 X 2"
+// de CompetitionGroups (page.tsx) pour que les colonnes s'alignent.
+export const ODDS_COLUMNS_WIDTH = "w-[168px] sm:w-[204px]";
+
 export function EventCard({ event }: { event: EventDTO }) {
   const { addSelection, removeSelection, hasSelection } = useCouponStore();
 
-  const mainMarket      = event.markets?.find((m) => m.type === "MATCH_WINNER");
-  const ouMarket        = event.markets?.find((m) => m.type === "OVER_UNDER");
-  const handicapMarket  = event.markets?.find((m) => m.type === "HANDICAP");
-  const bttsMarket       = event.markets?.find((m) => m.type === "BOTH_TEAMS_SCORE");
-  const doubleChanceMarket = event.markets?.find((m) => m.type === "DOUBLE_CHANCE");
-  const totalMarkets   = event.markets?.length ?? 0;
-  const startTime      = new Date(event.startTime);
+  // Seul le résultat du match (1X2) est affiché dans la liste — tous les
+  // autres marchés (plus/moins, handicap, BTTS, corners, cartons...) ne
+  // sont accessibles qu'en cliquant sur le match.
+  const mainMarket   = event.markets?.find((m) => m.type === "MATCH_WINNER");
+  const totalMarkets = event.markets?.length ?? 0;
+  const startTime    = new Date(event.startTime);
 
   function formatTime() {
-    if (event.status === "LIVE") return null;
     if (isToday(startTime))    return `Aujourd'hui ${format(startTime, "HH:mm")}`;
     if (isTomorrow(startTime)) return `Demain ${format(startTime, "HH:mm")}`;
     return format(startTime, "dd/MM · HH:mm");
@@ -33,159 +46,61 @@ export function EventCard({ event }: { event: EventDTO }) {
   }
 
   return (
-    <div className="px-3 py-2.5 hover:bg-bg-hover transition-colors">
-      <div className="flex items-center justify-between mb-1.5">
+    <div className="grid grid-cols-[1fr_auto] hover:bg-bg-hover transition-colors">
+      {/* Équipes + heure + badge marchés */}
+      <div className="min-w-0 py-2.5 px-3 flex flex-col justify-center gap-1">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 space-y-0.5">
+            <p className="text-sm font-bold text-txt-primary leading-snug truncate">{event.homeTeam}</p>
+            <p className="text-sm font-bold text-txt-primary leading-snug truncate">{event.awayTeam}</p>
+          </div>
+          <Link href={`/match/${event.id}`} className="shrink-0 text-txt-muted hover:text-green-700 mt-0.5">
+            <StatsIcon />
+          </Link>
+        </div>
         <div className="flex items-center gap-2">
           {event.status === "LIVE" ? (
             <span className="badge-live">
               <span className="w-1.5 h-1.5 bg-live rounded-full animate-pulse" />
               Live {event.minute ? `${event.minute}'` : ""}
+              {event.homeScore !== undefined ? ` · ${event.homeScore}-${event.awayScore}` : ""}
             </span>
           ) : (
-            <span className="badge-upcoming text-[11px]">{formatTime()}</span>
+            <span className="text-[11px] text-txt-muted">{formatTime()}</span>
+          )}
+          {totalMarkets > 1 && (
+            <Link
+              href={`/match/${event.id}`}
+              className="bg-slate-900 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0"
+            >
+              +{totalMarkets - 1}
+            </Link>
           )}
         </div>
+      </div>
+
+      {/* Cotes 1 X 2 */}
+      {mainMarket ? (
+        <div className={`grid grid-cols-3 shrink-0 divide-x divide-bg-border border-l border-bg-border ${ODDS_COLUMNS_WIDTH}`}>
+          {mainMarket.odds.slice(0, 3).map((odd) => (
+            <button
+              key={odd.id}
+              onClick={() => handleOdd(mainMarket.id, odd.id, Number(odd.value), odd.label, mainMarket.name)}
+              className={`flex items-center justify-center text-sm font-bold transition-colors ${
+                hasSelection(odd.id) ? "bg-green-50 text-green-700" : "text-txt-primary hover:bg-bg-hover"
+              }`}
+            >
+              {Number(odd.value).toFixed(2)}
+            </button>
+          ))}
+        </div>
+      ) : (
         <Link
           href={`/match/${event.id}`}
-          className="text-[10px] text-txt-muted hover:text-green-700 font-medium border border-bg-border px-2 py-0.5 rounded hover:border-green-500/50 transition-colors"
+          className={`flex items-center justify-center text-[11px] text-green-700 shrink-0 border-l border-bg-border ${ODDS_COLUMNS_WIDTH}`}
         >
-          +{totalMarkets > 1 ? totalMarkets : ""}  marchés
+          Voir cotes →
         </Link>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <div className="flex-1 min-w-0 space-y-0.5 mr-1">
-          <p className="text-sm font-semibold text-txt-primary leading-tight truncate">{event.homeTeam}</p>
-          <p className="text-sm font-semibold text-txt-primary leading-tight truncate">{event.awayTeam}</p>
-        </div>
-
-        {event.status === "LIVE" && event.homeScore !== undefined ? (
-          <div className="flex flex-col items-center bg-live/10 border border-live/30 rounded-lg px-2 py-1 shrink-0">
-            <span className="text-sm font-black text-live leading-none">{event.homeScore}</span>
-            <span className="text-sm font-black text-live leading-none">{event.awayScore}</span>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center bg-bg-input border border-bg-border rounded-lg px-2 py-1 shrink-0">
-            <span className="text-[10px] font-bold text-txt-muted leading-none">VS</span>
-          </div>
-        )}
-
-        {mainMarket ? (
-          <div className="flex gap-1 shrink-0">
-            {mainMarket.odds.slice(0, 3).map((odd) => (
-              <button
-                key={odd.id}
-                onClick={() => handleOdd(mainMarket.id, odd.id, Number(odd.value), odd.label, mainMarket.name)}
-                className={`odd-btn ${hasSelection(odd.id) ? "active" : ""}`}
-              >
-                <span className="odd-label">{odd.label}</span>
-                <span className="odd-value">{Number(odd.value).toFixed(2)}</span>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <Link href={`/match/${event.id}`} className="text-[11px] text-green-700 shrink-0">
-            Voir cotes →
-          </Link>
-        )}
-      </div>
-
-      {(ouMarket || handicapMarket) && (
-        <div className="flex items-center gap-1.5 mt-1.5 pt-1.5 border-t border-bg-border/50 flex-wrap">
-          {ouMarket && (
-            <div className="flex items-center gap-1">
-              <span className="text-[9px] text-txt-muted uppercase tracking-wide shrink-0 mr-0.5">O/U</span>
-              {ouMarket.odds.slice(0, 2).map((odd) => (
-                <button
-                  key={odd.id}
-                  onClick={() => handleOdd(ouMarket.id, odd.id, Number(odd.value), odd.label, ouMarket.name)}
-                  className={`odd-btn text-[10px] ${hasSelection(odd.id) ? "active" : ""}`}
-                >
-                  <span className="odd-label text-[9px]">{odd.label}</span>
-                  <span className="odd-value">{Number(odd.value).toFixed(2)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {ouMarket && handicapMarket && (
-            <span className="w-px h-4 bg-bg-border shrink-0" />
-          )}
-
-          {handicapMarket && (
-            <div className="flex items-center gap-1">
-              <span className="text-[9px] text-txt-muted uppercase tracking-wide shrink-0 mr-0.5">HCP</span>
-              {handicapMarket.odds.slice(0, 2).map((odd) => (
-                <button
-                  key={odd.id}
-                  onClick={() => handleOdd(handicapMarket.id, odd.id, Number(odd.value), odd.label, handicapMarket.name)}
-                  className={`odd-btn text-[10px] ${hasSelection(odd.id) ? "active" : ""}`}
-                >
-                  <span className="odd-label text-[9px]">{odd.label}</span>
-                  <span className="odd-value">{Number(odd.value).toFixed(2)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {(bttsMarket || doubleChanceMarket) && (
-        <div className="flex items-center gap-1.5 mt-1.5 pt-1.5 border-t border-bg-border/50 flex-wrap">
-          {doubleChanceMarket && (
-            <div className="flex items-center gap-1">
-              <span className="text-[9px] text-txt-muted uppercase tracking-wide shrink-0 mr-0.5">1X2 Double</span>
-              {doubleChanceMarket.odds.slice(0, 3).map((odd) => (
-                <button
-                  key={odd.id}
-                  onClick={() => handleOdd(doubleChanceMarket.id, odd.id, Number(odd.value), odd.label, doubleChanceMarket.name)}
-                  className={`odd-btn text-[10px] ${hasSelection(odd.id) ? "active" : ""}`}
-                >
-                  <span className="odd-label text-[9px]">{odd.label}</span>
-                  <span className="odd-value">{Number(odd.value).toFixed(2)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {bttsMarket && doubleChanceMarket && (
-            <span className="w-px h-4 bg-bg-border shrink-0" />
-          )}
-
-          {bttsMarket && (
-            <div className="flex items-center gap-1">
-              <span className="text-[9px] text-txt-muted uppercase tracking-wide shrink-0 mr-0.5">BTTS</span>
-              {bttsMarket.odds.slice(0, 2).map((odd) => (
-                <button
-                  key={odd.id}
-                  onClick={() => handleOdd(bttsMarket.id, odd.id, Number(odd.value), odd.label, bttsMarket.name)}
-                  className={`odd-btn text-[10px] ${hasSelection(odd.id) ? "active" : ""}`}
-                >
-                  <span className="odd-label text-[9px]">{odd.label}</span>
-                  <span className="odd-value">{Number(odd.value).toFixed(2)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {totalMarkets > 2 && (
-        <div className="mt-1.5 pt-1.5 border-t border-bg-border/50">
-          <Link href={`/match/${event.id}`}
-            className="text-[10px] text-txt-muted hover:text-green-700 transition-colors">
-            Voir les {totalMarkets} marchés disponibles (score exact, totaux par équipe, remboursé si nul...) →
-          </Link>
-        </div>
-      )}
-
-      {!ouMarket && !handicapMarket && !bttsMarket && !doubleChanceMarket && totalMarkets <= 1 && (
-        <div className="mt-1.5 pt-1.5 border-t border-bg-border/50">
-          <Link href={`/match/${event.id}`}
-            className="text-[10px] text-txt-muted hover:text-green-700 transition-colors">
-            Voir tous les marchés disponibles →
-          </Link>
-        </div>
       )}
     </div>
   );
