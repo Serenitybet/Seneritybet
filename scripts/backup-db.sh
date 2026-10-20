@@ -11,7 +11,7 @@ FILE="$BACKUP_DIR/serenitybet_${TIMESTAMP}.sql.gz"
 
 # Destination hors-serveur (Backblaze B2 via rclone). Voir scripts/README.md
 # pour la configuration initiale du remote "b2" et du nom de bucket.
-B2_REMOTE="b2:serenitybet-backups"
+B2_REMOTE="b2:serenitybet-db-backups"
 
 mkdir -p "$BACKUP_DIR"
 
