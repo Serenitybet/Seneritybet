@@ -14,19 +14,6 @@ const NAV_LINKS = [
   { label: "Promotions",href: "/promotions" },
 ];
 
-const MOBILE_SPORTS = [
-  { icon: "⚽", label: "Football",  href: "/?sport=football" },
-  { icon: "🏀", label: "Basket",    href: "/?sport=basketball" },
-  { icon: "🎾", label: "Tennis",    href: "/?sport=tennis" },
-  { icon: "🏈", label: "US",        href: "/?sport=american-football" },
-  { icon: "⚾", label: "Baseball",  href: "/?sport=baseball" },
-  { icon: "🏒", label: "Hockey",    href: "/?sport=hockey" },
-  { icon: "🥊", label: "Boxe",      href: "/?sport=mma" },
-  { icon: "🏐", label: "Volley",    href: "/?sport=volleyball" },
-  { icon: "🏉", label: "Rugby",     href: "/?sport=rugby" },
-  { icon: "🎱", label: "Snooker",   href: "/?sport=snooker" },
-];
-
 export function Header() {
   const { user, logout } = useAuthStore();
   const { balance, fetchBalance } = useWalletStore();
@@ -145,21 +132,6 @@ export function Header() {
             </div>
           </div>
         )}
-
-        {/* Barre sports horizontale */}
-        <div className="flex items-center border-t border-bg-border overflow-x-auto scrollbar-none py-1">
-          <Link href="/live" className="flex-none flex flex-col items-center px-3 py-1 text-live">
-            <span className="text-base relative">🔴<span className="absolute -top-0.5 -right-1 w-1.5 h-1.5 bg-live rounded-full animate-pulse" /></span>
-            <span className="text-[9px] font-bold mt-0.5">Live</span>
-          </Link>
-          {MOBILE_SPORTS.map((s) => (
-            <Link key={s.href} href={s.href}
-              className="flex-none flex flex-col items-center px-3 py-1 active:opacity-60">
-              <span className="text-base">{s.icon}</span>
-              <span className="text-[9px] font-medium text-txt-muted mt-0.5">{s.label}</span>
-            </Link>
-          ))}
-        </div>
       </div>
     </header>
   );
