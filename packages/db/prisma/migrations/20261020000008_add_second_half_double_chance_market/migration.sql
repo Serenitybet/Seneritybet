@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "MarketType" ADD VALUE 'SECOND_HALF_DOUBLE_CHANCE';

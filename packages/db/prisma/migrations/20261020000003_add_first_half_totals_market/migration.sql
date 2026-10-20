@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "MarketType" ADD VALUE 'FIRST_HALF_TOTALS';

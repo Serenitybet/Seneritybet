@@ -585,6 +585,157 @@ async function upsertPropMarkets(eventId: string, homeTeam: string, awayTeam: st
   }
 }
 
+// ─── Marchés "mi-temps" (plus/moins, handicap, double chance) — football ──────
+//
+// Objectif : offrir sur chaque mi-temps les mêmes familles de marchés que
+// sur le match complet (plus/moins, handicap, double chance). TheOddsAPI
+// documente les clés totals_h1/h2 et double_chance_h1/h2 ; spreads_h1/h2
+// suit la même convention (confirmée par h2h_h1/h2h_h2, déjà utilisées dans
+// syncPropMarkets) mais sans documentation officielle trouvée — à surveiller
+// dans les logs. Couverture bookmakers probablement plus faible qu'en match
+// complet (marché plus confidentiel) : lot séparé de syncPropMarkets, comme
+// celui-ci l'est de syncExtraMarkets, pour qu'une clé invalide ou mal
+// couverte ne fasse régresser aucun des deux lots déjà éprouvés.
+const HALF_MARKETS_LIMIT = 600;
+const HALF_MARKETS_VERSION = 1;
+
+export async function syncHalfMarkets() {
+  if (!API_KEY) return;
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() + 7);
+
+  const events = await prisma.event.findMany({
+    where: {
+      status: { in: ["UPCOMING", "LIVE"] },
+      startTime: { gte: new Date(), lte: cutoff },
+      competition: { name: { in: Object.keys(FOOTBALL_SPORT_KEY_BY_COMPETITION_NAME) } },
+      halfMarketsVersion: { lt: HALF_MARKETS_VERSION },
+    },
+    include: { competition: true },
+    take: HALF_MARKETS_LIMIT,
+  });
+
+  let synced = 0;
+  for (const event of events) {
+    const sportKey = FOOTBALL_SPORT_KEY_BY_COMPETITION_NAME[event.competition.name];
+    if (!sportKey || !event.externalId) continue;
+
+    try {
+      const res = await axios.get(
+        `${ODDS_API_BASE}/sports/${sportKey}/events/${event.externalId}/odds`,
+        {
+          params: {
+            apiKey:     API_KEY,
+            regions:    "eu",
+            markets:    "totals_h1,totals_h2,spreads_h1,spreads_h2,double_chance_h1,double_chance_h2",
+            oddsFormat: "decimal",
+            dateFormat: "iso",
+          },
+          timeout: 10000,
+        },
+      );
+
+      const remaining = parseInt(res.headers["x-requests-remaining"] ?? "-1", 10);
+      if (remaining >= 0) updateCredits(remaining);
+
+      await upsertHalfMarkets(event.id, event.homeTeam, event.awayTeam, res.data?.bookmakers ?? []);
+      await prisma.event.update({ where: { id: event.id }, data: { halfMarketsVersion: HALF_MARKETS_VERSION } });
+      synced++;
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        console.error("ODDS_API_KEY invalide ou quota dépassé");
+        break;
+      }
+      // 422 (marché non proposé pour ce match, ou clé invalide) ou autre erreur : on ignore et on continue
+    }
+  }
+
+  if (synced > 0) console.log(`⏱  Marchés mi-temps (plus/moins, handicap, double chance) : ${synced} match(s) synchronisés`);
+}
+
+const HALF_MARKET_TYPE_BY_KEY: Record<string, string> = {
+  totals_h1:        "FIRST_HALF_TOTALS",
+  spreads_h1:       "FIRST_HALF_HANDICAP",
+  double_chance_h1: "FIRST_HALF_DOUBLE_CHANCE",
+  totals_h2:        "SECOND_HALF_TOTALS",
+  spreads_h2:       "SECOND_HALF_HANDICAP",
+  double_chance_h2: "SECOND_HALF_DOUBLE_CHANCE",
+};
+
+const HALF_TOTALS_MAX_LINES  = 4;
+const HALF_SPREADS_MAX_LINES = 4;
+
+async function upsertHalfMarkets(eventId: string, homeTeam: string, awayTeam: string, bookmakers: any[]) {
+  const priorityKeys = ["bet365", "unibet", "betway", "onexbet", "pinnacle"];
+  const orderedBookmakers = [
+    ...priorityKeys.map((k) => bookmakers.find((b: any) => b.key === k)).filter(Boolean),
+    ...bookmakers,
+  ];
+
+  const seenTypes = new Set<string>();
+
+  for (const bookmaker of orderedBookmakers) {
+    for (const apiMarket of bookmaker.markets ?? []) {
+      const marketType = HALF_MARKET_TYPE_BY_KEY[apiMarket.key];
+      if (!marketType || seenTypes.has(marketType)) continue;
+      seenTypes.add(marketType);
+
+      const marketName =
+        apiMarket.key === "totals_h1"        ? "Plus/Moins 1ère mi-temps" :
+        apiMarket.key === "totals_h2"        ? "Plus/Moins 2nde mi-temps" :
+        apiMarket.key === "spreads_h1"       ? "Handicap 1ère mi-temps" :
+        apiMarket.key === "spreads_h2"       ? "Handicap 2nde mi-temps" :
+        apiMarket.key === "double_chance_h1" ? "Double chance 1ère mi-temps" :
+        "Double chance 2nde mi-temps";
+
+      let market = await prisma.market.findFirst({ where: { eventId, type: marketType as any } });
+      if (!market) {
+        market = await prisma.market.create({ data: { eventId, name: marketName, type: marketType as any } });
+      }
+
+      let outcomes = apiMarket.outcomes;
+      if (apiMarket.key === "totals_h1" || apiMarket.key === "totals_h2") {
+        const points = [...new Set(outcomes.map((o: any) => o.point))]
+          .filter((p): p is number => typeof p === "number" && p % 1 === 0.5)
+          .sort((a, b) => a - b)
+          .slice(0, HALF_TOTALS_MAX_LINES);
+        outcomes = outcomes.filter((o: any) => points.includes(o.point));
+      } else if (apiMarket.key === "spreads_h1" || apiMarket.key === "spreads_h2") {
+        const absPoints = [...new Set(outcomes.map((o: any) => Math.abs(o.point)))]
+          .filter((p): p is number => typeof p === "number" && p > 0)
+          .sort((a, b) => a - b)
+          .slice(0, HALF_SPREADS_MAX_LINES);
+        outcomes = outcomes.filter((o: any) => absPoints.includes(Math.abs(o.point)));
+      }
+
+      for (const outcome of outcomes) {
+        let label: string;
+        if (apiMarket.key === "totals_h1" || apiMarket.key === "totals_h2") {
+          label = `${outcome.name === "Over" ? "Plus" : "Moins"} ${outcome.point}`;
+        } else if (apiMarket.key === "spreads_h1" || apiMarket.key === "spreads_h2") {
+          const side = outcome.name === homeTeam ? "1" : outcome.name === awayTeam ? "2" : outcome.name;
+          const point = Number(outcome.point);
+          label = `${side} (${point >= 0 ? "+" : ""}${point})`;
+        } else {
+          // double_chance_h1 / double_chance_h2 — même convention que double_chance (match complet)
+          const name = String(outcome.name);
+          label = name.includes("Draw")
+            ? (name.startsWith(homeTeam) ? "1X" : "X2")
+            : "12";
+        }
+
+        const existing = await prisma.odd.findFirst({ where: { marketId: market.id, label } });
+        if (existing) {
+          await prisma.odd.update({ where: { id: existing.id }, data: { value: outcome.price } });
+        } else {
+          await prisma.odd.create({ data: { marketId: market.id, label, value: outcome.price } });
+        }
+      }
+    }
+  }
+}
+
 function getSportLabel(slug: string): string {
   const labels: Record<string, string> = {
     "football":         "Football",
