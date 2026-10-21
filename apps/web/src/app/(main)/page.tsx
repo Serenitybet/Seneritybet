@@ -13,6 +13,7 @@ const COUNTRY_FLAG: Record<string, string> = {
   Europe: "🇪🇺", Brazil: "🇧🇷", Argentina: "🇦🇷", USA: "🇺🇸", Mexico: "🇲🇽",
   Japan: "🇯🇵", Turkey: "🇹🇷", Australia: "🇦🇺", Netherlands: "🇳🇱", Portugal: "🇵🇹",
   Africa: "🌍", World: "🌐", Chad: "🇹🇩", "South America": "🌎",
+  "South Korea": "🇰🇷", Canada: "🇨🇦", "North America": "🌎",
 };
 
 // ─── Fetch ────────────────────────────────────────────────────────────────────
