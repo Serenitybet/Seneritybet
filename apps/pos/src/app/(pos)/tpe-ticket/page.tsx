@@ -290,7 +290,7 @@ export default function TpeTicketPage() {
               toute la page plutôt qu'une largeur fixe pensée pour du 80mm,
               qui forçait un redécoupage imprévisible du ticket en plusieurs
               pages côté impression Android. */}
-          <div style={{ fontFamily: "monospace", width: "100%", padding: "4px 6px", fontSize: 10, lineHeight: 1.3, fontWeight: "bold" }}>
+          <div style={{ fontFamily: "monospace", width: "100%", padding: "4px 6px", fontSize: 12, lineHeight: 1.4, fontWeight: 900 }}>
             <div style={{ textAlign: "center", borderBottom: "1px solid #000", paddingBottom: 4, marginBottom: 4 }}>
               <p style={{ fontSize: 14, fontWeight: "bold" }}>SERENITYBET</p>
               <p style={{ fontSize: 9 }}>Ticket de pari sportif</p>

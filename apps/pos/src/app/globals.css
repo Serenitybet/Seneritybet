@@ -15,5 +15,12 @@ body { font-family: 'Inter', sans-serif; background: #f1f5f9; }
      bande continue, sans quoi le navigateur retombe sur un format de page
      standard (Letter/A4) et découpe le ticket en plusieurs pages. */
   @page { size: 58mm auto; margin: 0; }
+  /* Désactive l'anticrénelage (lissage des bords en niveaux de gris) sur le
+     reçu — une imprimante thermique n'imprime qu'en noir pur, donc un texte
+     anticrénelé y ressort flou/pâle au lieu de traits nets. */
+  .print-only, .print-only * {
+    -webkit-font-smoothing: none;
+    text-rendering: optimizeSpeed;
+  }
 }
 .print-only { display: none; }
