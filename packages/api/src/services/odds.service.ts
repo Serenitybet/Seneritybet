@@ -367,7 +367,9 @@ export async function syncExtraMarkets() {
         console.error("ODDS_API_KEY invalide ou quota dépassé");
         break;
       }
-      // 422 (pas de données additionnelles pour ce match) ou autre erreur : on ignore et on continue
+      // 422 (pas de données additionnelles pour ce match) ou autre erreur : on ignore et on continue,
+      // mais on logue pour pouvoir diagnostiquer un échec répété sur un match précis.
+      console.warn(`⚠️  Marchés additionnels — échec pour ${event.homeTeam} vs ${event.awayTeam} : ${err.response?.status ?? "?"} ${JSON.stringify(err.response?.data ?? err.message)}`);
     }
   }
 
@@ -592,7 +594,9 @@ export async function syncPropMarkets() {
         console.error("ODDS_API_KEY invalide ou quota dépassé");
         break;
       }
-      // 422 (marché non proposé pour ce match, ou clé invalide) ou autre erreur : on ignore et on continue
+      // 422 (marché non proposé pour ce match, ou clé invalide) ou autre erreur : on ignore et on continue,
+      // mais on logue pour pouvoir diagnostiquer un échec répété sur un match précis.
+      console.warn(`⚠️  Marchés stats — échec pour ${event.homeTeam} vs ${event.awayTeam} : ${err.response?.status ?? "?"} ${JSON.stringify(err.response?.data ?? err.message)}`);
     }
   }
 
@@ -751,7 +755,9 @@ export async function syncHalfMarkets() {
         console.error("ODDS_API_KEY invalide ou quota dépassé");
         break;
       }
-      // 422 (marché non proposé pour ce match, ou clé invalide) ou autre erreur : on ignore et on continue
+      // 422 (marché non proposé pour ce match, ou clé invalide) ou autre erreur : on ignore et on continue,
+      // mais on logue pour pouvoir diagnostiquer un échec répété sur un match précis.
+      console.warn(`⚠️  Marchés mi-temps — échec pour ${event.homeTeam} vs ${event.awayTeam} : ${err.response?.status ?? "?"} ${JSON.stringify(err.response?.data ?? err.message)}`);
     }
   }
 
