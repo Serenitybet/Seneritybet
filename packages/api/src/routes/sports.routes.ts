@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { prisma } from "../lib/prisma";
-import { getUpcomingEvents } from "../services/odds.service";
+import { getUpcomingEvents, sortOddsByCanonicalOrder } from "../services/odds.service";
 import { asyncHandler } from "../lib/asyncHandler";
 
 export const sportsRouter = Router();
@@ -38,5 +38,6 @@ sportsRouter.get("/events/:id", asyncHandler(async (req: Request, res: Response)
     res.status(404).json({ success: false, error: "Événement introuvable" });
     return;
   }
-  res.json({ success: true, data: event });
+  const sorted = { ...event, markets: event.markets.map((m: { type: string; odds: any[] }) => ({ ...m, odds: sortOddsByCanonicalOrder(m.type, m.odds) })) };
+  res.json({ success: true, data: sorted });
 }));

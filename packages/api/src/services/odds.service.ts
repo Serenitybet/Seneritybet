@@ -6,6 +6,50 @@ import { settleTicket } from "./tpe.service";
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
 const API_KEY = process.env.ODDS_API_KEY;
 
+// Lignes de handicap "au quart" (ex: -0.25, +0.75) : le pari est en réalité
+// scindé en deux moitiés de mise sur deux lignes voisines (-0.25 = moitié
+// sur 0/remboursé-si-nul, moitié sur -0.5), ce que notre règlement
+// automatique (WON/LOST/VOID binaire, voir computeItemResult) ne sait pas
+// calculer correctement — il déclarerait à tort une victoire ou défaite
+// complète. On exclut donc ces lignes à la source (handicap principal,
+// alternatif, mi-temps, corners, cartons) ; seules les lignes entières ou
+// à la demie (toujours correctement réglables) sont conservées.
+function isQuarterLine(point: number): boolean {
+  return Math.abs(Math.round(point * 4) % 2) === 1;
+}
+
+// ─── Ordre d'affichage canonique des issues ────────────────────────────────
+//
+// TheOddsAPI ne garantit pas l'ordre des "outcomes" dans sa réponse (varie
+// selon le bookmaker retenu pour chaque match) — sans tri explicite, "1"
+// pouvait apparaître avant ou après "2" selon le match, ce qui perturbe le
+// repérage visuel des joueurs. Un seul ordre canonique par type de marché,
+// appliqué ici (lecture) pour que web/coupon/pos l'affichent tous pareil
+// sans dupliquer la logique côté client.
+export const ODD_LABEL_ORDER: Record<string, string[]> = {
+  MATCH_WINNER:              ["1", "X", "2"],
+  FIRST_HALF_WINNER:         ["1", "X", "2"],
+  SECOND_HALF_WINNER:        ["1", "X", "2"],
+  DOUBLE_CHANCE:             ["1X", "12", "X2"],
+  FIRST_HALF_DOUBLE_CHANCE:  ["1X", "12", "X2"],
+  SECOND_HALF_DOUBLE_CHANCE: ["1X", "12", "X2"],
+  BOTH_TEAMS_SCORE:          ["Oui", "Non"],
+  DRAW_NO_BET:               ["1", "2"],
+};
+
+export function sortOddsByCanonicalOrder<T extends { label: string }>(marketType: string, odds: T[]): T[] {
+  const order = ODD_LABEL_ORDER[marketType];
+  if (!order) return odds;
+  return [...odds].sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
+}
+
+function sortEventMarketsOdds<T extends { markets: { type: string; odds: any[] }[] }>(event: T): T {
+  return {
+    ...event,
+    markets: event.markets.map((m) => ({ ...m, odds: sortOddsByCanonicalOrder(m.type, m.odds) })),
+  };
+}
+
 // Sports TheOddsAPI → slug interne + métadonnées
 //
 // Les 17 championnats ci-dessous sont ceux ciblés par Serenitybet (Tchad),
@@ -172,8 +216,9 @@ async function upsertEvent(competitionId: string, game: any, sportSlug = "footba
       // pour permettre la fusion à l'affichage (même ligne = même libellé).
       let label: string;
       if (apiMarket.key === "spreads") {
-        const side = outcome.name === game.home_team ? "1" : outcome.name === game.away_team ? "2" : outcome.name;
         const point = Number(outcome.point);
+        if (isQuarterLine(point)) continue; // non réglable automatiquement — voir isQuarterLine
+        const side = outcome.name === game.home_team ? "1" : outcome.name === game.away_team ? "2" : outcome.name;
         label = `${side} (${point >= 0 ? "+" : ""}${point})`;
       } else if (apiMarket.key === "totals") {
         label = `${outcome.name === "Over" ? "Plus" : "Moins"} ${outcome.point}`;
@@ -351,8 +396,9 @@ async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: s
       } else if (apiMarket.key === "alternate_spreads") {
         // Les lignes sont symétriques (home -1.5 / away +1.5 = même ligne) —
         // on regroupe par valeur absolue et on garde les plus proches de 0.
+        // Lignes au quart (0.25, 0.75...) exclues — voir isQuarterLine.
         const absPoints = [...new Set(outcomes.map((o: any) => Math.abs(o.point)))]
-          .filter((p): p is number => typeof p === "number" && p > 0)
+          .filter((p): p is number => typeof p === "number" && p > 0 && !isQuarterLine(p))
           .sort((a, b) => a - b)
           .slice(0, ALTERNATE_SPREADS_MAX_LINES);
         outcomes = outcomes.filter((o: any) => absPoints.includes(Math.abs(o.point)));
@@ -555,8 +601,9 @@ async function upsertPropMarkets(eventId: string, homeTeam: string, awayTeam: st
         const points = (halfPoints.length > 0 ? halfPoints : allPoints.sort((a, b) => a - b)).slice(0, PROP_TOTALS_MAX_LINES);
         outcomes = outcomes.filter((o: any) => points.includes(o.point));
       } else if (apiMarket.key === "alternate_spreads_corners" || apiMarket.key === "alternate_spreads_cards") {
+        // Lignes au quart exclues — voir isQuarterLine.
         const absPoints = [...new Set(outcomes.map((o: any) => Math.abs(o.point)))]
-          .filter((p): p is number => typeof p === "number" && p > 0)
+          .filter((p): p is number => typeof p === "number" && p > 0 && !isQuarterLine(p))
           .sort((a, b) => a - b)
           .slice(0, PROP_SPREADS_MAX_LINES);
         outcomes = outcomes.filter((o: any) => absPoints.includes(Math.abs(o.point)));
@@ -709,8 +756,9 @@ async function upsertHalfMarkets(eventId: string, homeTeam: string, awayTeam: st
           .slice(0, HALF_TOTALS_MAX_LINES);
         outcomes = outcomes.filter((o: any) => points.includes(o.point));
       } else if (apiMarket.key === "spreads_h1" || apiMarket.key === "spreads_h2") {
+        // Lignes au quart exclues — voir isQuarterLine.
         const absPoints = [...new Set(outcomes.map((o: any) => Math.abs(o.point)))]
-          .filter((p): p is number => typeof p === "number" && p > 0)
+          .filter((p): p is number => typeof p === "number" && p > 0 && !isQuarterLine(p))
           .sort((a, b) => a - b)
           .slice(0, HALF_SPREADS_MAX_LINES);
         outcomes = outcomes.filter((o: any) => absPoints.includes(Math.abs(o.point)));
@@ -802,7 +850,7 @@ export async function getUpcomingEvents(sportSlug?: string, page = 1, limit = 50
     }),
   ]);
 
-  return { events, total, page, limit, totalPages: Math.ceil(total / limit) };
+  return { events: events.map(sortEventMarketsOdds), total, page, limit, totalPages: Math.ceil(total / limit) };
 }
 
 // ─── Résultats finaux & règlement automatique des tickets ─────────────────
