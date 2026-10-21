@@ -1,5 +1,6 @@
 import { syncOddsFromAPI, syncExtraMarkets, syncPropMarkets, syncHalfMarkets, syncScoresAndSettle } from "../services/odds.service";
 import { isSyncPaused, getCreditsStatus } from "../lib/credits.state";
+import { syncApiFootballSettlement } from "../services/api-football.service";
 
 // ─── Budget crédits TheOddsAPI ────────────────────────────────────────────────
 // Plan 5M/mois (passage depuis 100K le 20/10/2026 pour supporter ce rythme).
@@ -39,6 +40,16 @@ const EXTRA_MARKETS_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes — marchés add
 const PROP_MARKETS_INTERVAL_MS  = 17 * 60 * 1000; // 17 minutes — marchés stats (corners, cartons, vainqueur mi-temps)
 const HALF_MARKETS_INTERVAL_MS  = 19 * 60 * 1000; // 19 minutes — marchés mi-temps (plus/moins, handicap, double chance)
 const SCORES_INTERVAL_MS        = 5  * 60 * 1000; // 5 minutes  — résultats finaux + règlement auto
+
+// Règlement automatique via API-Football (mi-temps, corners, cartons — voir
+// api-football.service.ts), indépendant de TheOddsAPI (clé/quota séparés,
+// jamais mis en pause par isSyncPaused qui ne concerne que les crédits
+// TheOddsAPI). Intervalle volontairement large : le forfait gratuit
+// API-Football (100 requêtes/jour) ne supporterait pas un rythme proche de
+// celui des autres syncs — le service se limite lui-même en interne
+// (quota + plafond de matchs par cycle), cet intervalle n'est qu'une
+// fréquence de passage raisonnable.
+const API_FOOTBALL_INTERVAL_MS  = 30 * 60 * 1000; // 30 minutes
 
 async function runSync() {
   if (isSyncPaused()) {
@@ -88,6 +99,14 @@ async function runScoresSync() {
   }
 }
 
+async function runApiFootballSettlement() {
+  try {
+    await syncApiFootballSettlement();
+  } catch (err) {
+    console.error("❌ Erreur règlement API-Football:", err);
+  }
+}
+
 export function startOddsSyncWorker() {
   const credits = getCreditsStatus();
   console.log(`📡 Worker cotes démarré — sync toutes les 5 min, marchés additionnels toutes les 15 min, marchés stats toutes les 17 min, marchés mi-temps toutes les 19 min, résultats toutes les 5 min`);
@@ -101,6 +120,7 @@ export function startOddsSyncWorker() {
   setTimeout(() => runPropMarketsSync(), 40_000);
   setTimeout(() => runHalfMarketsSync(), 50_000);
   setTimeout(() => runScoresSync(), 55_000);
+  setTimeout(() => runApiFootballSettlement(), 90_000);
 
   // Sync régulière
   setInterval(() => runSync(), ODDS_INTERVAL_MS);
@@ -108,4 +128,5 @@ export function startOddsSyncWorker() {
   setInterval(() => runPropMarketsSync(), PROP_MARKETS_INTERVAL_MS);
   setInterval(() => runHalfMarketsSync(), HALF_MARKETS_INTERVAL_MS);
   setInterval(() => runScoresSync(), SCORES_INTERVAL_MS);
+  setInterval(() => runApiFootballSettlement(), API_FOOTBALL_INTERVAL_MS);
 }

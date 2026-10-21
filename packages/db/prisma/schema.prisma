@@ -332,6 +332,16 @@ model Event {
   // TheOddsAPI du reste des marchés déjà éprouvés.
   halfMarketsVersion Int @default(0)
 
+  // Nombre de tentatives de règlement automatique via API-Football (mi-temps,
+  // corners, cartons — voir api-football.service.ts) pour cet évènement.
+  // Le forfait gratuit d'API-Football est très limité en débit/quota
+  // journalier : sans ce compteur, un match jamais trouvé côté API-Football
+  // (championnat non couvert, décalage de date...) serait retenté à chaque
+  // cycle pour toujours, gaspillant le quota — on abandonne après
+  // API_FOOTBALL_MAX_ATTEMPTS tentatives (le ticket reste alors en réglage
+  // manuel, comme avant l'intégration de cette API).
+  apiFootballAttempts Int @default(0)
+
   @@index([competitionId])
   @@index([status])
   @@index([startTime])
