@@ -250,7 +250,16 @@ export default function TpeTicketPage() {
       // et se superpose à l'aperçu du ticket.
       setTimeout(() => window.print(), 500);
     } catch (err: any) {
-      toast.error(err.response?.data?.error ?? "Erreur lors de la création du ticket");
+      const maxStakeXAF = err.response?.data?.data?.maxStakeXAF;
+      if (maxStakeXAF) {
+        // Plafond de gain dépassé : on propose directement la mise maximale
+        // acceptée pour ce coupon (voir tpe.service.ts placeTicket) — le
+        // caissier n'a plus qu'à revalider si ça convient au parieur.
+        setStakeXAF(String(maxStakeXAF));
+        toast.error(`Gain trop élevé — mise ramenée à ${maxStakeXAF.toLocaleString("fr-FR")} XAF (maximum autorisé). Revalidez si ça convient.`, { duration: 6000 });
+      } else {
+        toast.error(err.response?.data?.error ?? "Erreur lors de la création du ticket");
+      }
     } finally {
       setPlacing(false);
     }

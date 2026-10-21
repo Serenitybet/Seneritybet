@@ -8,6 +8,7 @@ import { fr } from "date-fns/locale";
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard":   "Dashboard",
   "/sports":      "Matchs & Cotes",
+  "/risk":        "Gestion du risque",
   "/users":       "Parieurs",
   "/kyc":         "KYC / Vérification identité",
   "/reports":     "Finances & Analytics",

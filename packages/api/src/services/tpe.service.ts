@@ -125,6 +125,21 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
   const totalOdds = odds.reduce((acc, o) => acc * Number(o.value), 1);
   const potentialWin = BigInt(Math.floor(Number(stake) * totalOdds));
 
+  // Gestion de risque : refus à la source si le gain potentiel dépasse le
+  // plafond configuré (backoffice → Gestion du risque), plutôt qu'un
+  // paiement bloqué a posteriori — évite d'avoir à payer moins que ce que
+  // les cotes affichées promettaient. Mise maximale suggérée renvoyée pour
+  // que le caissier puisse ajuster directement.
+  const maxWin = await getSettingNumber(SETTING_KEYS.TPE_MAX_WIN_XAF);
+  if (maxWin > 0 && Number(potentialWin) > maxWin) {
+    const maxStakeXAF = Math.floor(maxWin / totalOdds / 100);
+    throw new AppError(
+      400,
+      `Le gain potentiel de ce coupon dépasse le plafond autorisé (${(maxWin / 100).toLocaleString("fr-FR")} XAF). Mise maximale pour ce coupon : ${maxStakeXAF.toLocaleString("fr-FR")} XAF.`,
+      { maxStakeXAF, maxWinXAF: maxWin / 100 },
+    );
+  }
+
   const placingTpe = await prisma.tpe.findUnique({ where: { id: tpeId } });
   if (!placingTpe) throw new AppError(404, "TPE introuvable");
   if (placingTpe.credit < stake) {
