@@ -240,7 +240,7 @@ export default function SportsPage() {
               <input className="bo-input flex-1" placeholder="🔍 Rechercher un match…"
                 value={search} onChange={e => setSearch(e.target.value)} />
               <select className="bo-select" value={filterStatus} onChange={e => setStatus(e.target.value)}>
-                <option value="">Tous les statuts</option>
+                <option value="">À venir / en direct (défaut)</option>
                 {["UPCOMING", "LIVE", "FINISHED", "CANCELLED"].map(s => <option key={s}>{s}</option>)}
               </select>
               <button onClick={loadEvents} className="bo-btn-secondary text-xs">↺ Actualiser</button>
