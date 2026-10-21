@@ -25,7 +25,12 @@ adminSportsRouter.get("/events", asyncHandler(async (req: Request, res: Response
   const status = req.query.status as string | undefined;
 
   const where: any = {};
-  if (status) where.status = status;
+  // Sans filtre explicite, exclure les matchs terminés/annulés : triés du
+  // plus proche au plus lointain (startTime asc), ils remontaient en
+  // premier (dates passées = les plus "petites") et reléguaient les matchs
+  // à venir en pages suivantes. Toujours accessibles via le filtre de
+  // statut pour qui veut les consulter volontairement.
+  where.status = status ? status : { notIn: ["FINISHED", "CANCELLED"] };
   if (search) {
     where.OR = [
       { homeTeam: { contains: search, mode: "insensitive" } },
