@@ -1,4 +1,4 @@
-import { syncOddsFromAPI, syncExtraMarkets, syncPropMarkets, syncHalfMarkets, syncScoresAndSettle } from "../services/odds.service";
+import { syncOddsFromAPI, syncExtraMarkets, syncPropMarkets, syncHalfMarkets, syncScoresAndSettle, markLiveEvents } from "../services/odds.service";
 import { isSyncPaused, getCreditsStatus } from "../lib/credits.state";
 import { syncApiFootballSettlement } from "../services/api-football.service";
 
@@ -48,6 +48,11 @@ const SCORES_INTERVAL_MS        = 5  * 60 * 1000; // 5 minutes  — résultats f
 // réduit pour un règlement plus rapide, le service reste protégé par son
 // propre quota + plafond de matchs par cycle en interne.
 const API_FOOTBALL_INTERVAL_MS  = 10 * 60 * 1000; // 10 minutes
+
+// Purement interne (aucun appel API externe, juste la base) — intervalle
+// court pour suspendre les cotes dès que possible après le coup d'envoi
+// d'un match (voir markLiveEvents). Jamais mis en pause par isSyncPaused.
+const LIVE_CHECK_INTERVAL_MS    = 2  * 60 * 1000; // 2 minutes
 
 async function runSync() {
   if (isSyncPaused()) {
@@ -105,6 +110,14 @@ async function runApiFootballSettlement() {
   }
 }
 
+async function runMarkLiveEvents() {
+  try {
+    await markLiveEvents();
+  } catch (err) {
+    console.error("❌ Erreur passage en direct des matchs:", err);
+  }
+}
+
 export function startOddsSyncWorker() {
   const credits = getCreditsStatus();
   console.log(`📡 Worker cotes démarré — sync toutes les 5 min, marchés additionnels toutes les 15 min, marchés stats toutes les 17 min, marchés mi-temps toutes les 19 min, résultats toutes les 5 min`);
@@ -119,6 +132,7 @@ export function startOddsSyncWorker() {
   setTimeout(() => runHalfMarketsSync(), 50_000);
   setTimeout(() => runScoresSync(), 55_000);
   setTimeout(() => runApiFootballSettlement(), 90_000);
+  setTimeout(() => runMarkLiveEvents(), 10_000);
 
   // Sync régulière
   setInterval(() => runSync(), ODDS_INTERVAL_MS);
@@ -127,4 +141,5 @@ export function startOddsSyncWorker() {
   setInterval(() => runHalfMarketsSync(), HALF_MARKETS_INTERVAL_MS);
   setInterval(() => runScoresSync(), SCORES_INTERVAL_MS);
   setInterval(() => runApiFootballSettlement(), API_FOOTBALL_INTERVAL_MS);
+  setInterval(() => runMarkLiveEvents(), LIVE_CHECK_INTERVAL_MS);
 }
