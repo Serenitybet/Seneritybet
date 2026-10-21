@@ -44,12 +44,10 @@ const SCORES_INTERVAL_MS        = 5  * 60 * 1000; // 5 minutes  — résultats f
 // Règlement automatique via API-Football (mi-temps, corners, cartons — voir
 // api-football.service.ts), indépendant de TheOddsAPI (clé/quota séparés,
 // jamais mis en pause par isSyncPaused qui ne concerne que les crédits
-// TheOddsAPI). Intervalle volontairement large : le forfait gratuit
-// API-Football (100 requêtes/jour) ne supporterait pas un rythme proche de
-// celui des autres syncs — le service se limite lui-même en interne
-// (quota + plafond de matchs par cycle), cet intervalle n'est qu'une
-// fréquence de passage raisonnable.
-const API_FOOTBALL_INTERVAL_MS  = 30 * 60 * 1000; // 30 minutes
+// TheOddsAPI). Palier Pro (7 500 req/jour, depuis le 21/10/2026) : intervalle
+// réduit pour un règlement plus rapide, le service reste protégé par son
+// propre quota + plafond de matchs par cycle en interne.
+const API_FOOTBALL_INTERVAL_MS  = 10 * 60 * 1000; // 10 minutes
 
 async function runSync() {
   if (isSyncPaused()) {
