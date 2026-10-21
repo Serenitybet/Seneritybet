@@ -37,8 +37,11 @@ export function Sidebar() {
   const pathname = usePathname();
   const { admin, logout } = useAuthAdminStore();
 
+  // startsWith seul confond "/tpe" avec "/tpe-tickets" (même préfixe) — n'y
+  // recourt que pour un vrai sous-chemin (pathname suivi de "/"), jamais
+  // pour un simple préfixe textuel.
   function isActive(href: string) {
-    return pathname === href || (pathname.startsWith(href) && href !== "/dashboard");
+    return pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`));
   }
 
   return (
