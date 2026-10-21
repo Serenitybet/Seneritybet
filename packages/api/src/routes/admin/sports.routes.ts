@@ -4,6 +4,7 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../lib/asyncHandler";
 import { STATS_MARKET_TYPES, computeStatsItemResult } from "../../lib/stats-settlement";
 import { settleTicket } from "../../services/tpe.service";
+import { settleEventTickets } from "../../services/odds.service";
 
 export const adminSportsRouter = Router();
 
@@ -169,6 +170,13 @@ adminSportsRouter.post("/events/:id/settle-stats",
     if (event.homeScore == null || event.awayScore == null) {
       res.status(400).json({ success: false, error: "Le score final n'est pas encore connu — saisissez-le d'abord." }); return;
     }
+    // Le score final est connu : le match est forcément terminé, même si
+    // TheOddsAPI ne l'a jamais rapporté (cas observé sur certains combats
+    // MMA, absents de son flux /scores) — sans ça l'évènement restait
+    // bloqué en LIVE indéfiniment malgré la saisie manuelle.
+    if (event.status !== "FINISHED") {
+      event = await prisma.event.update({ where: { id: event.id }, data: { status: "FINISHED" } });
+    }
 
     const isValidCount = (v: unknown) => Number.isInteger(Number(v)) && Number(v) >= 0;
 
@@ -199,9 +207,11 @@ adminSportsRouter.post("/events/:id/settle-stats",
       cards = { home: Number(cardsHome), away: Number(cardsAway) };
     }
 
-    if (htHome === undefined && !corners && !cards) {
-      res.status(400).json({ success: false, error: "Renseignez au moins une donnée (mi-temps, corners ou cartons)" }); return;
-    }
+    // Remarque : contrairement à avant, l'absence de données mi-temps/
+    // corners/cartons n'est plus bloquante — un score final seul suffit
+    // désormais à régler les marchés "classiques" (vainqueur, etc.) via
+    // settleEventTickets ci-dessous, utile pour les matchs sans aucun
+    // marché statistique (ex. MMA) ou dont ces données arriveront plus tard.
 
     const markets = await prisma.market.findMany({
       where: { eventId: event.id, type: { in: STATS_MARKET_TYPES as unknown as string[] } },
@@ -238,6 +248,13 @@ adminSportsRouter.post("/events/:id/settle-stats",
         settledTickets++;
       }
     }
+
+    // Le score final étant maintenant connu, on règle aussi les marchés
+    // "classiques" (vainqueur, double chance, etc.) — jusqu'ici, un match
+    // jamais rapporté comme terminé par TheOddsAPI (ex. certains combats
+    // MMA) restait réglable uniquement via les marchés statistiques
+    // ci-dessus, et son marché principal ne se réglait jamais.
+    settledTickets += await settleEventTickets(event.id, event.homeTeam, event.awayTeam, event.homeScore, event.awayScore);
 
     res.json({ success: true, data: { updatedItems, settledTickets } });
   }),
