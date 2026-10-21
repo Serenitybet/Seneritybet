@@ -416,12 +416,15 @@ export default function SportsPage() {
               {/* ── Réglage en masse (mi-temps, corners, cartons) ── */}
               <div className="bo-card border-dashed border-orange-500/30">
                 <div className="bo-card-header">
-                  <span className="bo-card-title text-sm">🧮 Régler les marchés stats</span>
+                  <span className="bo-card-title text-sm">🧮 Clôturer le match / régler les tickets</span>
                 </div>
                 <div className="bo-card-body space-y-2.5">
                   <p className="text-[11px] text-t-faint -mt-1">
                     Entre les données connues une seule fois — ça règle automatiquement toutes les
-                    sélections concernées, sur tous les tickets liés à ce match.
+                    sélections concernées, sur tous les tickets liés à ce match. Le score final seul
+                    suffit à clôturer le match et régler son marché principal (ex. vainqueur) même si
+                    TheOddsAPI ne l'a jamais rapporté comme terminé — mi-temps/corners/cartons sont
+                    facultatifs et ne servent qu'à régler ces marchés spécifiques en plus.
                   </p>
                   <div>
                     <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1">Score final</label>

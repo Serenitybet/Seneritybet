@@ -1104,8 +1104,15 @@ export async function syncScoresAndSettle() {
   if (settledCount > 0) console.log(`🏁 Résultats automatiques : ${settledCount} ticket(s) réglé(s)`);
 }
 
-/** Déduit et enregistre le résultat de chaque sélection de ticket encore en attente liée à ce match, puis règle les tickets devenus complets. */
-async function settleEventTickets(
+/**
+ * Déduit et enregistre le résultat de chaque sélection de ticket encore en
+ * attente liée à ce match, puis règle les tickets devenus complets.
+ * Exportée pour être réutilisée par la saisie manuelle du score final
+ * (admin/sports.routes.ts) — les marchés "statistiques" (mi-temps/corners/
+ * cartons, voir stats-settlement.ts) ne sont pas reconnus par
+ * computeItemResult et sont donc ignorés ici sans risque d'interférence.
+ */
+export async function settleEventTickets(
   eventId: string, homeTeam: string, awayTeam: string, homeScore: number, awayScore: number,
 ): Promise<number> {
   const items = await prisma.ticketItem.findMany({
