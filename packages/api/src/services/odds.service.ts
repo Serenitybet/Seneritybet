@@ -772,7 +772,7 @@ async function upsertPropMarkets(eventId: string, homeTeam: string, awayTeam: st
 // celui-ci l'est de syncExtraMarkets, pour qu'une clé invalide ou mal
 // couverte ne fasse régresser aucun des deux lots déjà éprouvés.
 const HALF_MARKETS_LIMIT = 600;
-const HALF_MARKETS_VERSION = 1;
+const HALF_MARKETS_VERSION = 2; // v2: totaux/handicap mi-temps n'étaient plus filtrés qu'aux lignes X.5/positives, vidant la section quand seules des lignes entières ou la ligne 0 étaient offertes
 
 export async function syncHalfMarkets() {
   if (!API_KEY) return;
@@ -880,15 +880,26 @@ async function upsertHalfMarkets(eventId: string, homeTeam: string, awayTeam: st
 
       let outcomes = apiMarket.outcomes;
       if (apiMarket.key === "totals_h1" || apiMarket.key === "totals_h2") {
+        // Contrairement au marché plein-match (qui a toujours une ligne de
+        // référence non filtrée en plus de ses alternatives), la mi-temps
+        // n'a QUE ce marché : se restreindre aux lignes X.5 uniquement (comme
+        // pour les alternatives plein-match) laissait la section totalement
+        // vide dès qu'un bookmaker n'offrait que des lignes entières pour un
+        // total aussi bas (0, 1 but) — fréquent en 1ère mi-temps. On garde
+        // donc entières ET demies, en n'excluant que les lignes au quart
+        // (non réglables — voir isQuarterLine).
         const points = [...new Set(outcomes.map((o: any) => o.point))]
-          .filter((p): p is number => typeof p === "number" && p % 1 === 0.5)
+          .filter((p): p is number => typeof p === "number" && !isQuarterLine(p))
           .sort((a, b) => a - b)
           .slice(0, HALF_TOTALS_MAX_LINES);
         outcomes = outcomes.filter((o: any) => points.includes(o.point));
       } else if (apiMarket.key === "spreads_h1" || apiMarket.key === "spreads_h2") {
-        // Lignes au quart exclues — voir isQuarterLine.
+        // Même raisonnement + inclut la ligne 0 (pick'em) exclue à tort par
+        // "p > 0" — en 1ère/2nde mi-temps (score souvent serré), c'est
+        // fréquemment la SEULE ligne de handicap proposée, donc l'exclure
+        // vidait entièrement la section au lieu de ne retirer qu'un doublon.
         const absPoints = [...new Set(outcomes.map((o: any) => Math.abs(o.point)))]
-          .filter((p): p is number => typeof p === "number" && p > 0 && !isQuarterLine(p))
+          .filter((p): p is number => typeof p === "number" && p >= 0 && !isQuarterLine(p))
           .sort((a, b) => a - b)
           .slice(0, HALF_SPREADS_MAX_LINES);
         outcomes = outcomes.filter((o: any) => absPoints.includes(Math.abs(o.point)));
