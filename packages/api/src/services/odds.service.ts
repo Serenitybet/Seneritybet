@@ -18,6 +18,38 @@ function isQuarterLine(point: number): boolean {
   return Math.abs(Math.round(point * 4) % 2) === 1;
 }
 
+// ─── Ordre d'affichage canonique des issues ────────────────────────────────
+//
+// TheOddsAPI ne garantit pas l'ordre des "outcomes" dans sa réponse (varie
+// selon le bookmaker retenu pour chaque match) — sans tri explicite, "1"
+// pouvait apparaître avant ou après "2" selon le match, ce qui perturbe le
+// repérage visuel des joueurs. Un seul ordre canonique par type de marché,
+// appliqué ici (lecture) pour que web/coupon/pos l'affichent tous pareil
+// sans dupliquer la logique côté client.
+export const ODD_LABEL_ORDER: Record<string, string[]> = {
+  MATCH_WINNER:              ["1", "X", "2"],
+  FIRST_HALF_WINNER:         ["1", "X", "2"],
+  SECOND_HALF_WINNER:        ["1", "X", "2"],
+  DOUBLE_CHANCE:             ["1X", "12", "X2"],
+  FIRST_HALF_DOUBLE_CHANCE:  ["1X", "12", "X2"],
+  SECOND_HALF_DOUBLE_CHANCE: ["1X", "12", "X2"],
+  BOTH_TEAMS_SCORE:          ["Oui", "Non"],
+  DRAW_NO_BET:               ["1", "2"],
+};
+
+export function sortOddsByCanonicalOrder<T extends { label: string }>(marketType: string, odds: T[]): T[] {
+  const order = ODD_LABEL_ORDER[marketType];
+  if (!order) return odds;
+  return [...odds].sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
+}
+
+function sortEventMarketsOdds<T extends { markets: { type: string; odds: any[] }[] }>(event: T): T {
+  return {
+    ...event,
+    markets: event.markets.map((m) => ({ ...m, odds: sortOddsByCanonicalOrder(m.type, m.odds) })),
+  };
+}
+
 // Sports TheOddsAPI → slug interne + métadonnées
 //
 // Les 17 championnats ci-dessous sont ceux ciblés par Serenitybet (Tchad),
@@ -818,7 +850,7 @@ export async function getUpcomingEvents(sportSlug?: string, page = 1, limit = 50
     }),
   ]);
 
-  return { events, total, page, limit, totalPages: Math.ceil(total / limit) };
+  return { events: events.map(sortEventMarketsOdds), total, page, limit, totalPages: Math.ceil(total / limit) };
 }
 
 // ─── Résultats finaux & règlement automatique des tickets ─────────────────
