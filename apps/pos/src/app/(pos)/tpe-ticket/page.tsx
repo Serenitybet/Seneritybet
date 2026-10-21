@@ -99,8 +99,11 @@ export default function TpeTicketPage() {
   const [ticket, setTicket] = useState<TicketResult | null>(null);
   const [ticketBarcode, setTicketBarcode] = useState<string | null>(null);
   // Le code de validation ne doit figurer que sur l'impression ORIGINALE —
-  // dès que la première impression se termine (window.onafterprint), il
-  // disparaît du rendu : un clic sur "Ré-imprimer" n'imprime plus le code.
+  // masqué dès que le caissier clique "Ré-imprimer" (voir plus bas), pas sur
+  // l'événement navigateur "afterprint" : sur certains appareils Android
+  // (selon l'appli d'impression tierce utilisée), cet événement se déclenche
+  // avant que l'aperçu/impression ne soit réellement généré, ce qui faisait
+  // disparaître le code AVANT qu'il soit imprimé sur l'original lui-même.
   const [codePrinted, setCodePrinted] = useState(false);
   const [dayOffset, setDayOffset] = useState(0);
   const [competitionFilter, setCompetitionFilter] = useState("");
@@ -134,12 +137,6 @@ export default function TpeTicketPage() {
       setTicketBarcode(null);
     }
   }, [ticket]);
-
-  useEffect(() => {
-    const onAfterPrint = () => setCodePrinted(true);
-    window.addEventListener("afterprint", onAfterPrint);
-    return () => window.removeEventListener("afterprint", onAfterPrint);
-  }, []);
 
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(); d.setDate(d.getDate() + i);
@@ -276,7 +273,7 @@ export default function TpeTicketPage() {
             <p className="font-mono text-2xl font-black tracking-widest text-gray-800 mt-2">{ticket.code}</p>
           </div>
           <div className="flex gap-3">
-            <button onClick={() => window.print()} className="flex-1 py-3 bg-gray-800 text-white font-bold rounded-xl">
+            <button onClick={() => { setCodePrinted(true); setTimeout(() => window.print(), 50); }} className="flex-1 py-3 bg-gray-800 text-white font-bold rounded-xl">
               🖨️ Ré-imprimer
             </button>
             <button onClick={() => setTicket(null)} className="flex-1 py-3 bg-green-600 text-white font-bold rounded-xl">
