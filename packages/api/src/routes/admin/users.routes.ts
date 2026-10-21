@@ -1,10 +1,27 @@
 import { Router, Request, Response } from "express";
-import { requireRole } from "../../middleware/auth.middleware";
+import { requireRole, AuthRequest } from "../../middleware/auth.middleware";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../lib/asyncHandler";
 import bcrypt from "bcryptjs";
 
 export const adminUsersRouter = Router();
+
+// Hiérarchie de pouvoir du personnel — un rôle ne peut agir (suspendre,
+// réinitialiser le mot de passe, changer le rôle) que sur un compte de rang
+// strictement inférieur au sien, sauf SUPER_ADMIN qui peut agir sur
+// n'importe qui. Empêche un ADMIN banal de suspendre/modifier un autre
+// ADMIN ou un SUPER_ADMIN (faille de sécurité corrigée).
+const ROLE_RANK: Record<string, number> = {
+  CASHIER: 1,
+  TRADER: 2,
+  FINANCE: 2,
+  ADMIN: 3,
+  SUPER_ADMIN: 4,
+};
+function canManage(actorRole: string, targetRole: string): boolean {
+  if (actorRole === "SUPER_ADMIN") return true;
+  return (ROLE_RANK[actorRole] ?? 0) > (ROLE_RANK[targetRole] ?? 0);
+}
 
 // POST /api/admin/users — créer un caissier ou admin
 adminUsersRouter.post("/", requireRole("ADMIN", "SUPER_ADMIN"),
@@ -123,11 +140,14 @@ adminUsersRouter.get("/:id", asyncHandler(async (req: Request, res: Response) =>
 
 // PATCH /api/admin/users/:id/role — changer le rôle (pouvoirs) d'un membre du personnel
 adminUsersRouter.patch("/:id/role", requireRole("SUPER_ADMIN"),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: AuthRequest, res: Response) => {
     const { role } = req.body;
     const allowedRoles = ["CASHIER", "TRADER", "FINANCE", "ADMIN", "SUPER_ADMIN"];
     if (!allowedRoles.includes(role)) {
       res.status(400).json({ success: false, error: "Rôle non autorisé" }); return;
+    }
+    if (req.params.id === req.user!.id) {
+      res.status(400).json({ success: false, error: "Impossible de modifier votre propre rôle" }); return;
     }
     const target = await prisma.user.findUnique({ where: { id: req.params.id } });
     if (!target) { res.status(404).json({ success: false, error: "Utilisateur introuvable" }); return; }
@@ -140,10 +160,18 @@ adminUsersRouter.patch("/:id/role", requireRole("SUPER_ADMIN"),
 );
 
 adminUsersRouter.patch("/:id/status", requireRole("ADMIN", "SUPER_ADMIN"),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: AuthRequest, res: Response) => {
     const { status } = req.body;
     if (!["ACTIVE", "SUSPENDED", "CLOSED"].includes(status)) {
       res.status(400).json({ success: false, error: "Statut invalide" }); return;
+    }
+    if (req.params.id === req.user!.id) {
+      res.status(400).json({ success: false, error: "Impossible de modifier votre propre statut" }); return;
+    }
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) { res.status(404).json({ success: false, error: "Utilisateur introuvable" }); return; }
+    if (!canManage(req.user!.role, target.role)) {
+      res.status(403).json({ success: false, error: "Vous n'avez pas l'autorité pour modifier ce compte" }); return;
     }
     await prisma.user.update({ where: { id: req.params.id }, data: { status } });
     res.json({ success: true, message: `Statut mis à jour : ${status}` });
@@ -174,10 +202,15 @@ adminUsersRouter.patch("/:id/recharge", requireRole("ADMIN", "SUPER_ADMIN"),
 );
 
 adminUsersRouter.patch("/:id/password", requireRole("ADMIN", "SUPER_ADMIN"),
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: AuthRequest, res: Response) => {
     const { newPassword } = req.body;
     if (!newPassword || newPassword.length < 6) {
       res.status(400).json({ success: false, error: "Mot de passe trop court (6 caractères minimum)" }); return;
+    }
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) { res.status(404).json({ success: false, error: "Utilisateur introuvable" }); return; }
+    if (!canManage(req.user!.role, target.role)) {
+      res.status(403).json({ success: false, error: "Vous n'avez pas l'autorité pour modifier ce compte" }); return;
     }
     const hash = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({ where: { id: req.params.id }, data: { password: hash } });
