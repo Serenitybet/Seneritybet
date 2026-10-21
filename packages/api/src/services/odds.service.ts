@@ -57,12 +57,22 @@ function sortEventMarketsOdds<T extends { markets: { type: string; odds: any[] }
 // (vérifié le 19/10/2026). Deux championnats visés ne sont PAS couverts par
 // TheOddsAPI et ne peuvent donc pas être synchronisés : République Tchèque
 // et Égypte (aucune clé correspondante dans leur catalogue).
+// Liste complète des clés TheOddsAPI récupérée le 21/10/2026 via
+// GET /v4/sports?all=true (gratuit, hors quota) : ~164 compétitions tous
+// sports confondus. Sélection volontairement ciblée ci-dessous plutôt
+// qu'exhaustive — ajouter cricket/lacrosse/golf/rugby/handball n'aurait
+// aucune pertinence pour notre marché (Tchad, culture foot) et gonflerait
+// la consommation de crédits pour rien. Choix : championnats de foot à
+// forte notoriété (dont La Liga et la CAN, absents jusqu'ici), quelques
+// championnats "2e division" européens pour le volume, tennis élargi aux
+// Grand Chelems + Masters 1000/WTA 1000, et WNBA/NCAAB en basket.
 const SPORTS_CONFIG = [
-  // ⚽ Football — les 17 championnats ciblés disponibles chez TheOddsAPI
+  // ⚽ Football — championnats domestiques majeurs
   { key: "soccer_epl",                           slug: "football", name: "Premier League",       country: "England",      icon: "⚽", sortOrder: 1 }, // 1. Angleterre
   { key: "soccer_france_ligue_one",              slug: "football", name: "Ligue 1",              country: "France",       icon: "⚽", sortOrder: 1 }, // 2. France
   { key: "soccer_italy_serie_a",                 slug: "football", name: "Serie A",              country: "Italy",        icon: "⚽", sortOrder: 1 }, // 3. Italie
   { key: "soccer_germany_bundesliga",            slug: "football", name: "Bundesliga",           country: "Germany",      icon: "⚽", sortOrder: 1 }, // 4. Allemagne
+  { key: "soccer_spain_la_liga",                 slug: "football", name: "La Liga",              country: "Spain",        icon: "⚽", sortOrder: 1 }, // Espagne — absent jusqu'ici malgré sa notoriété
   { key: "soccer_netherlands_eredivisie",        slug: "football", name: "Eredivisie",           country: "Netherlands",  icon: "⚽", sortOrder: 1 }, // 5. Pays-Bas
   { key: "soccer_spl",                           slug: "football", name: "Scottish Premiership",  country: "Scotland",     icon: "⚽", sortOrder: 1 }, // 6. Écosse
   { key: "soccer_norway_eliteserien",            slug: "football", name: "Eliteserien",          country: "Norway",       icon: "⚽", sortOrder: 1 }, // 7. Norvège
@@ -72,15 +82,55 @@ const SPORTS_CONFIG = [
   { key: "soccer_switzerland_superleague",       slug: "football", name: "Super League",         country: "Switzerland",  icon: "⚽", sortOrder: 1 }, // 13. Suisse
   { key: "soccer_portugal_primeira_liga",        slug: "football", name: "Primeira Liga",        country: "Portugal",     icon: "⚽", sortOrder: 1 }, // 14. Portugal
   { key: "soccer_russia_premier_league",         slug: "football", name: "Premier Liga",         country: "Russia",       icon: "⚽", sortOrder: 1 }, // 15. Russie
+  { key: "soccer_usa_mls",                       slug: "football", name: "MLS",                  country: "USA",          icon: "⚽", sortOrder: 1 },
+  { key: "soccer_brazil_campeonato",             slug: "football", name: "Brasileirão Série A",  country: "Brazil",       icon: "⚽", sortOrder: 1 },
+  { key: "soccer_argentina_primera_division",    slug: "football", name: "Primera División",     country: "Argentina",    icon: "⚽", sortOrder: 1 },
+  { key: "soccer_mexico_ligamx",                 slug: "football", name: "Liga MX",              country: "Mexico",       icon: "⚽", sortOrder: 1 },
+  { key: "soccer_japan_j_league",                slug: "football", name: "J1 League",            country: "Japan",        icon: "⚽", sortOrder: 1 },
+  { key: "soccer_korea_kleague1",                slug: "football", name: "K League 1",           country: "South Korea",  icon: "⚽", sortOrder: 1 },
+  // ⚽ Football — championnats "2e division" européens (volume de matchs)
+  { key: "soccer_efl_champ",                     slug: "football", name: "EFL Championship",     country: "England",      icon: "⚽", sortOrder: 1 },
+  { key: "soccer_germany_bundesliga2",           slug: "football", name: "2. Bundesliga",        country: "Germany",      icon: "⚽", sortOrder: 1 },
+  { key: "soccer_italy_serie_b",                 slug: "football", name: "Serie B",              country: "Italy",        icon: "⚽", sortOrder: 1 },
+  { key: "soccer_france_ligue_two",              slug: "football", name: "Ligue 2",              country: "France",       icon: "⚽", sortOrder: 1 },
+  { key: "soccer_spain_segunda_division",        slug: "football", name: "LaLiga 2",             country: "Spain",        icon: "⚽", sortOrder: 1 },
+  // ⚽ Football — compétitions internationales/continentales
   { key: "soccer_uefa_champs_league",            slug: "football", name: "Champions League",     country: "Europe",       icon: "⚽", sortOrder: 1 }, // 17. Ligue des Champions
   { key: "soccer_uefa_europa_league",            slug: "football", name: "Europa League",        country: "Europe",       icon: "⚽", sortOrder: 1 }, // 18. Europa League
   { key: "soccer_uefa_europa_conference_league", slug: "football", name: "Conference League",    country: "Europe",       icon: "⚽", sortOrder: 1 }, // 19. Conference League
+  { key: "soccer_fifa_world_cup",                slug: "football", name: "Coupe du Monde FIFA",  country: "World",        icon: "⚽", sortOrder: 1 },
+  { key: "soccer_fifa_club_world_cup",           slug: "football", name: "Coupe du Monde des Clubs", country: "World",    icon: "⚽", sortOrder: 1 },
+  { key: "soccer_uefa_european_championship",    slug: "football", name: "Euro (Championnat d'Europe)", country: "Europe", icon: "⚽", sortOrder: 1 },
+  { key: "soccer_africa_cup_of_nations",         slug: "football", name: "CAN (Coupe d'Afrique des Nations)", country: "Africa", icon: "⚽", sortOrder: 1 },
+  { key: "soccer_conmebol_copa_america",         slug: "football", name: "Copa América",         country: "South America", icon: "⚽", sortOrder: 1 },
+  { key: "soccer_conmebol_copa_libertadores",    slug: "football", name: "Copa Libertadores",    country: "South America", icon: "⚽", sortOrder: 1 },
+  { key: "soccer_conmebol_copa_sudamericana",    slug: "football", name: "Copa Sudamericana",    country: "South America", icon: "⚽", sortOrder: 1 },
+  { key: "soccer_concacaf_gold_cup",             slug: "football", name: "Gold Cup CONCACAF",    country: "North America", icon: "⚽", sortOrder: 1 },
   // 🏀 Basketball
   { key: "basketball_nba",               slug: "basketball", name: "NBA",                   country: "USA",      icon: "🏀", sortOrder: 2 },
   { key: "basketball_euroleague",        slug: "basketball", name: "Euroleague",             country: "Europe",   icon: "🏀", sortOrder: 2 },
-  // 🎾 Tennis
-  { key: "tennis_atp_french_open",       slug: "tennis",     name: "Roland Garros",         country: "France",   icon: "🎾", sortOrder: 3 },
-  { key: "tennis_atp_wimbledon",         slug: "tennis",     name: "Wimbledon",             country: "England",  icon: "🎾", sortOrder: 3 },
+  { key: "basketball_wnba",              slug: "basketball", name: "WNBA",                   country: "USA",      icon: "🏀", sortOrder: 2 },
+  { key: "basketball_ncaab",             slug: "basketball", name: "NCAA Basketball",         country: "USA",      icon: "🏀", sortOrder: 2 },
+  // 🎾 Tennis — Grand Chelems (ATP + WTA) et Masters 1000 / WTA 1000
+  { key: "tennis_atp_aus_open_singles",  slug: "tennis",     name: "Open d'Australie (ATP)", country: "Australia", icon: "🎾", sortOrder: 3 },
+  { key: "tennis_wta_aus_open_singles",  slug: "tennis",     name: "Open d'Australie (WTA)", country: "Australia", icon: "🎾", sortOrder: 3 },
+  { key: "tennis_atp_french_open",       slug: "tennis",     name: "Roland Garros (ATP)",   country: "France",   icon: "🎾", sortOrder: 3 },
+  { key: "tennis_wta_french_open",       slug: "tennis",     name: "Roland Garros (WTA)",   country: "France",   icon: "🎾", sortOrder: 3 },
+  { key: "tennis_atp_wimbledon",         slug: "tennis",     name: "Wimbledon (ATP)",       country: "England",  icon: "🎾", sortOrder: 3 },
+  { key: "tennis_wta_wimbledon",         slug: "tennis",     name: "Wimbledon (WTA)",       country: "England",  icon: "🎾", sortOrder: 3 },
+  { key: "tennis_atp_us_open",           slug: "tennis",     name: "US Open (ATP)",         country: "USA",      icon: "🎾", sortOrder: 3 },
+  { key: "tennis_wta_us_open",           slug: "tennis",     name: "US Open (WTA)",         country: "USA",      icon: "🎾", sortOrder: 3 },
+  { key: "tennis_atp_indian_wells",      slug: "tennis",     name: "Indian Wells (ATP)",    country: "USA",      icon: "🎾", sortOrder: 3 },
+  { key: "tennis_wta_indian_wells",      slug: "tennis",     name: "Indian Wells (WTA)",    country: "USA",      icon: "🎾", sortOrder: 3 },
+  { key: "tennis_atp_miami_open",        slug: "tennis",     name: "Miami Open (ATP)",      country: "USA",      icon: "🎾", sortOrder: 3 },
+  { key: "tennis_wta_miami_open",        slug: "tennis",     name: "Miami Open (WTA)",      country: "USA",      icon: "🎾", sortOrder: 3 },
+  { key: "tennis_atp_madrid_open",       slug: "tennis",     name: "Madrid Open (ATP)",     country: "Spain",    icon: "🎾", sortOrder: 3 },
+  { key: "tennis_wta_madrid_open",       slug: "tennis",     name: "Madrid Open (WTA)",     country: "Spain",    icon: "🎾", sortOrder: 3 },
+  { key: "tennis_atp_italian_open",      slug: "tennis",     name: "Rome / Italian Open (ATP)", country: "Italy", icon: "🎾", sortOrder: 3 },
+  { key: "tennis_wta_italian_open",      slug: "tennis",     name: "Rome / Italian Open (WTA)", country: "Italy", icon: "🎾", sortOrder: 3 },
+  { key: "tennis_atp_canadian_open",     slug: "tennis",     name: "Canada Masters (ATP)",  country: "Canada",   icon: "🎾", sortOrder: 3 },
+  { key: "tennis_wta_canadian_open",     slug: "tennis",     name: "Canada Open (WTA)",     country: "Canada",   icon: "🎾", sortOrder: 3 },
+  { key: "tennis_atp_cincinnati_open",   slug: "tennis",     name: "Cincinnati Masters (ATP)", country: "USA",   icon: "🎾", sortOrder: 3 },
   // 🏒 Ice Hockey
   { key: "icehockey_nhl",               slug: "hockey",     name: "NHL",                   country: "USA",      icon: "🏒", sortOrder: 4 },
   // 🏈 American Football
@@ -317,7 +367,9 @@ export async function syncExtraMarkets() {
         console.error("ODDS_API_KEY invalide ou quota dépassé");
         break;
       }
-      // 422 (pas de données additionnelles pour ce match) ou autre erreur : on ignore et on continue
+      // 422 (pas de données additionnelles pour ce match) ou autre erreur : on ignore et on continue,
+      // mais on logue pour pouvoir diagnostiquer un échec répété sur un match précis.
+      console.warn(`⚠️  Marchés additionnels — échec pour ${event.homeTeam} vs ${event.awayTeam} : ${err.response?.status ?? "?"} ${JSON.stringify(err.response?.data ?? err.message)}`);
     }
   }
 
@@ -542,7 +594,9 @@ export async function syncPropMarkets() {
         console.error("ODDS_API_KEY invalide ou quota dépassé");
         break;
       }
-      // 422 (marché non proposé pour ce match, ou clé invalide) ou autre erreur : on ignore et on continue
+      // 422 (marché non proposé pour ce match, ou clé invalide) ou autre erreur : on ignore et on continue,
+      // mais on logue pour pouvoir diagnostiquer un échec répété sur un match précis.
+      console.warn(`⚠️  Marchés stats — échec pour ${event.homeTeam} vs ${event.awayTeam} : ${err.response?.status ?? "?"} ${JSON.stringify(err.response?.data ?? err.message)}`);
     }
   }
 
@@ -701,7 +755,9 @@ export async function syncHalfMarkets() {
         console.error("ODDS_API_KEY invalide ou quota dépassé");
         break;
       }
-      // 422 (marché non proposé pour ce match, ou clé invalide) ou autre erreur : on ignore et on continue
+      // 422 (marché non proposé pour ce match, ou clé invalide) ou autre erreur : on ignore et on continue,
+      // mais on logue pour pouvoir diagnostiquer un échec répété sur un match précis.
+      console.warn(`⚠️  Marchés mi-temps — échec pour ${event.homeTeam} vs ${event.awayTeam} : ${err.response?.status ?? "?"} ${JSON.stringify(err.response?.data ?? err.message)}`);
     }
   }
 
