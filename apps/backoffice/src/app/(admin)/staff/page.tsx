@@ -2,10 +2,22 @@
 
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import { useAuthAdminStore } from "@/store/auth-admin.store";
 
 const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL ?? "https://seneritybet.onrender.com/api";
 
 type Role = "CASHIER" | "TRADER" | "FINANCE" | "ADMIN" | "SUPER_ADMIN";
+
+// Même hiérarchie que côté backend (voir users.routes.ts) — un ADMIN ne peut
+// pas agir sur un autre ADMIN ni sur un SUPER_ADMIN ; seul un SUPER_ADMIN le
+// peut. On s'en sert ici pour masquer les actions interdites plutôt que de
+// laisser l'appel API échouer silencieusement.
+const ROLE_RANK: Record<Role, number> = { CASHIER: 1, TRADER: 2, FINANCE: 2, ADMIN: 3, SUPER_ADMIN: 4 };
+function canManage(actorRole: Role | undefined, targetRole: Role): boolean {
+  if (!actorRole) return false;
+  if (actorRole === "SUPER_ADMIN") return true;
+  return ROLE_RANK[actorRole] > ROLE_RANK[targetRole];
+}
 
 interface Staff {
   id: string;
@@ -38,6 +50,8 @@ const ROLES: Role[] = ["CASHIER", "TRADER", "FINANCE", "ADMIN", "SUPER_ADMIN"];
 const EMPTY_FORM = { email: "", phone: "", firstName: "", lastName: "", password: "", role: "CASHIER" as Role };
 
 export default function StaffPage() {
+  const actorRole = useAuthAdminStore((s) => s.admin?.role) as Role | undefined;
+  const actorId = useAuthAdminStore((s) => s.admin?.id);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -139,7 +153,10 @@ export default function StaffPage() {
           <div className="p-12 text-center text-t-faint">Aucun membre d'équipe pour l'instant.</div>
         ) : (
           <div className="divide-y divide-bo-border">
-            {staff.map((s) => (
+            {staff.map((s) => {
+              const isSelf = s.id === actorId;
+              const manageable = !isSelf && canManage(actorRole, s.role);
+              return (
               <div key={s.id} className={`p-4 flex items-center justify-between gap-4 flex-wrap ${s.status === "SUSPENDED" ? "opacity-50" : ""}`}>
                 <div>
                   <div className="flex items-center gap-2">
@@ -154,23 +171,29 @@ export default function StaffPage() {
                       >
                         {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                       </select>
-                    ) : (
+                    ) : manageable && actorRole === "SUPER_ADMIN" ? (
                       <button className={`${ROLE_BADGE[s.role]} text-[10px]`} onClick={() => setRoleEditId(s.id)} title="Changer le rôle">
                         {ROLE_LABEL[s.role]} ✏️
                       </button>
+                    ) : (
+                      <span className={`${ROLE_BADGE[s.role]} text-[10px]`}>{ROLE_LABEL[s.role]}</span>
                     )}
                     {s.status === "SUSPENDED" && <span className="bo-badge-red text-[10px]">Suspendu</span>}
+                    {isSelf && <span className="bo-badge-blue text-[10px]">Vous</span>}
                   </div>
                   <p className="text-xs text-t-faint mt-0.5">{s.email} · {s.phone}</p>
                 </div>
-                <button
-                  className={`bo-btn-sm ${s.status === "SUSPENDED" ? "bo-btn-primary" : "bo-btn-danger"}`}
-                  onClick={() => toggleStatus(s)}
-                >
-                  {s.status === "SUSPENDED" ? "✅ Réactiver" : "🔴 Suspendre"}
-                </button>
+                {manageable && (
+                  <button
+                    className={`bo-btn-sm ${s.status === "SUSPENDED" ? "bo-btn-primary" : "bo-btn-danger"}`}
+                    onClick={() => toggleStatus(s)}
+                  >
+                    {s.status === "SUSPENDED" ? "✅ Réactiver" : "🔴 Suspendre"}
+                  </button>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
