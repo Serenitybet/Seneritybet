@@ -987,7 +987,12 @@ export async function getUpcomingEvents(sportSlug?: string, page = 1, limit = 50
 
   const where = {
     startTime: { gte: dateFrom, ...(dateTo ? { lte: dateTo } : {}) },
-    status:    { in: ["UPCOMING" as const, "LIVE" as const] },
+    // LIVE exclu : cette plateforme n'a pas de cotes in-play (voir
+    // markLiveEvents) — un match déjà commencé n'a plus de prix fiable à
+    // afficher, qu'il soit cherché par date "aujourd'hui" (qui couvre toute
+    // la journée calendaire, y compris les matchs déjà en cours) ou sans
+    // filtre de date du tout.
+    status:    "UPCOMING" as const,
     ...(sportSlug ? {
       competition: { sport: { slug: sportSlug } },
     } : {}),
@@ -1023,6 +1028,32 @@ export async function getUpcomingEvents(sportSlug?: string, page = 1, limit = 50
 // règle alors automatiquement dès que toutes ses sélections ont un résultat
 // (voir settleTicket dans tpe.service.ts).
 const DAYS_FROM_SCORES = 3;
+
+// Rien dans la synchronisation ne faisait jamais passer un match en LIVE —
+// il restait "UPCOMING" (même cotes pré-match vendables) du coup d'envoi
+// jusqu'à ce que TheOddsAPI rapporte le score final (parfois bien après la
+// fin réelle du match). Un parieur pouvait donc miser à des cotes figées
+// avant le match sur une rencontre déjà en cours, voire déjà jouée pour
+// l'essentiel — un vrai risque commercial, pas qu'un problème d'affichage.
+// Cette plateforme n'a pas de cotes live (pas de flux in-play), donc on ne
+// peut pas réévaluer le prix en cours de match : la seule option sûre est
+// de suspendre la vente dès le coup d'envoi, jusqu'au règlement final.
+// Purement interne (aucun appel API externe), donc peu coûteux à exécuter
+// fréquemment.
+export async function markLiveEvents() {
+  const started = await prisma.event.findMany({
+    where: { status: "UPCOMING", startTime: { lte: new Date() } },
+    select: { id: true },
+  });
+  if (started.length === 0) return;
+
+  const ids = started.map((e) => e.id);
+  await prisma.$transaction([
+    prisma.event.updateMany({ where: { id: { in: ids } }, data: { status: "LIVE" } }),
+    prisma.market.updateMany({ where: { eventId: { in: ids } }, data: { isSuspended: true } }),
+  ]);
+  console.log(`🔴 ${started.length} match(s) passé(s) en direct — cotes suspendues (coup d'envoi dépassé)`);
+}
 
 export async function syncScoresAndSettle() {
   if (!API_KEY) return;
