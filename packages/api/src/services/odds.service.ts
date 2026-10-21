@@ -233,6 +233,11 @@ export async function syncExtraMarkets() {
       extraMarketsVersion: { lt: EXTRA_MARKETS_VERSION },
     },
     include: { competition: true },
+    // Matchs les plus proches en premier — sans ça, un match capital du
+    // jour peut rester coincé derrière des centaines d'autres plus
+    // lointains dans une file sans ordre défini (comportement Prisma/
+    // Postgres par défaut).
+    orderBy: { startTime: "asc" },
     take: EXTRA_MARKETS_LIMIT,
   });
 
@@ -456,6 +461,7 @@ export async function syncPropMarkets() {
       propMarketsVersion: { lt: PROP_MARKETS_VERSION },
     },
     include: { competition: true },
+    orderBy: { startTime: "asc" }, // matchs les plus proches en premier — voir syncExtraMarkets
     take: PROP_MARKETS_LIMIT,
   });
 
@@ -613,6 +619,7 @@ export async function syncHalfMarkets() {
       halfMarketsVersion: { lt: HALF_MARKETS_VERSION },
     },
     include: { competition: true },
+    orderBy: { startTime: "asc" }, // matchs les plus proches en premier — voir syncExtraMarkets
     take: HALF_MARKETS_LIMIT,
   });
 
