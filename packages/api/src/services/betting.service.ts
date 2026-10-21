@@ -129,14 +129,29 @@ export async function settleBet(betId: string, adminId: string) {
   const hasAllResults = bet.items.every((item) => item.result !== null);
   if (!hasAllResults) throw new AppError(400, "Tous les résultats ne sont pas encore disponibles");
 
-  const won = bet.items.every((item) => item.result === "WON");
+  // Une sélection VOID (push, match reporté/annulé) ne doit pas faire perdre
+  // le pari : seule une sélection explicitement PERDUE le fait. S'il n'y a
+  // que des VOID, remboursement intégral ; sinon (au moins une WON, les
+  // autres WON ou VOID), le pari est gagnant.
+  const anyLost = bet.items.some((item) => item.result === "LOST");
   const voided = bet.items.every((item) => item.result === "VOID");
-  const status = won ? "WON" : voided ? "REFUNDED" : "LOST";
+  const won = !anyLost && !voided;
+  const status = anyLost ? "LOST" : voided ? "REFUNDED" : "WON";
+
+  // Une sélection VOID équivaut à une cote neutre de 1 — elle ne doit pas
+  // compter sa cote d'origine dans le gain. On recalcule donc le gain
+  // effectif au règlement en ne multipliant que les cotes des sélections
+  // WON, au lieu de garder potentialWin figé depuis la mise (qui
+  // inclurait à tort la cote d'une sélection ensuite annulée).
+  const effectiveOdds = won
+    ? bet.items.filter((item) => item.result === "WON").reduce((acc, item) => acc * Number(item.oddValue), 1)
+    : Number(bet.totalOdds);
+  const potentialWin = won ? BigInt(Math.floor(Number(bet.stake) * effectiveOdds)) : bet.potentialWin;
 
   await prisma.$transaction(async (tx) => {
     await tx.bet.update({
       where: { id: betId },
-      data: { status, settledAt: new Date(), isManualCheck: false },
+      data: { status, settledAt: new Date(), isManualCheck: false, totalOdds: effectiveOdds, potentialWin },
     });
 
     if (won) {
@@ -144,16 +159,16 @@ export async function settleBet(betId: string, adminId: string) {
       if (!wallet) return;
       await tx.wallet.update({
         where: { userId: bet.userId },
-        data: { balance: { increment: bet.potentialWin } },
+        data: { balance: { increment: potentialWin } },
       });
       await tx.transaction.create({
         data: {
           walletId: wallet.id,
           userId: bet.userId,
           type: "BET_WON",
-          amount: bet.potentialWin,
+          amount: potentialWin,
           balanceBefore: wallet.balance,
-          balanceAfter: wallet.balance + bet.potentialWin,
+          balanceAfter: wallet.balance + potentialWin,
           status: "COMPLETED",
           betId,
         },

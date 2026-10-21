@@ -250,7 +250,10 @@ export async function getCashierSummary(tpeId: string, cashierId: string, from: 
   // ou d'un remboursé (payé = mise) — on se base plutôt sur les résultats
   // de ses sélections, qui eux ne changent plus après le règlement.
   const paidTotal = paidTickets.reduce((acc, t) => {
-    const won = t.items.length > 0 && t.items.every((i) => i.result === "WON");
+    // Une sélection VOID (push, match annulé) ne change pas l'issue — voir
+    // settleTicket. On exclut seulement les tickets avec une sélection
+    // perdue, ou sans aucune sélection gagnante (tout VOID = remboursé).
+    const won = t.items.some((i) => i.result === "WON") && t.items.every((i) => i.result !== "LOST");
     return acc + (won ? t.potentialWin : t.stake);
   }, BigInt(0));
 
@@ -290,16 +293,33 @@ export async function settleTicket(ticketId: string) {
   const hasAllResults = ticket.items.every((item) => item.result !== null);
   if (!hasAllResults) throw new AppError(400, "Tous les résultats ne sont pas encore disponibles");
 
-  const won = ticket.items.every((item) => item.result === "WON");
-  const voided = ticket.items.every((item) => item.result === "VOID");
-  const status = won ? "WON" : voided ? "REFUNDED" : "LOST";
+  // Une sélection ANNULÉE (VOID — match reporté/annulé, push) ne doit pas
+  // faire perdre le ticket : seule une sélection explicitement PERDUE le
+  // fait. S'il n'y a que des VOID, le ticket est entièrement remboursé ;
+  // sinon (au moins une sélection WON, les autres WON ou VOID), il est
+  // gagnant.
+  const anyLost = ticket.items.some((item) => item.result === "LOST");
+  const allVoided = ticket.items.every((item) => item.result === "VOID");
+  const status = anyLost ? "LOST" : allVoided ? "REFUNDED" : "WON";
+
+  // Une sélection VOID équivaut à une cote neutre de 1 — elle ne doit pas
+  // compter sa cote d'origine dans le gain. On recalcule donc la cote et le
+  // gain effectifs au règlement en ne multipliant que les cotes des
+  // sélections WON, au lieu de garder potentialWin figé depuis la mise
+  // (qui inclurait à tort la cote d'une sélection ensuite annulée).
+  const effectiveOdds = status === "WON"
+    ? ticket.items.filter((item) => item.result === "WON").reduce((acc, item) => acc * Number(item.oddValue), 1)
+    : Number(ticket.totalOdds);
+  const potentialWin = status === "WON"
+    ? BigInt(Math.floor(Number(ticket.stake) * effectiveOdds))
+    : ticket.potentialWin;
 
   const threshold = await getSettingNumber(SETTING_KEYS.TPE_PAYOUT_APPROVAL_THRESHOLD_XAF);
-  const requiresApproval = won && Number(ticket.potentialWin) > threshold;
+  const requiresApproval = status === "WON" && Number(potentialWin) > threshold;
 
   const updated = await prisma.ticket.update({
     where: { id: ticketId },
-    data: { status, settledAt: new Date(), requiresApproval },
+    data: { status, settledAt: new Date(), requiresApproval, totalOdds: effectiveOdds, potentialWin },
   });
 
   return { ticketId: updated.id, status: updated.status, requiresApproval };
