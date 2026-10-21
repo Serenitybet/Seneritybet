@@ -271,7 +271,9 @@ async function upsertEvent(competitionId: string, game: any, sportSlug = "footba
         const side = outcome.name === game.home_team ? "1" : outcome.name === game.away_team ? "2" : outcome.name;
         label = `${side} (${point >= 0 ? "+" : ""}${point})`;
       } else if (apiMarket.key === "totals") {
-        label = `${outcome.name === "Over" ? "Plus" : "Moins"} ${outcome.point}`;
+        const point = Number(outcome.point);
+        if (isQuarterLine(point)) continue; // non réglable automatiquement — voir isQuarterLine
+        label = `${outcome.name === "Over" ? "Plus" : "Moins"} ${point}`;
       } else {
         label = outcome.name === game.home_team ? "1"
           : outcome.name === game.away_team ? "2"
@@ -650,7 +652,10 @@ async function upsertPropMarkets(eventId: string, homeTeam: string, awayTeam: st
       // toutes les lignes disponibles plutôt que de perdre le marché entier.
       let outcomes = apiMarket.outcomes;
       if (apiMarket.key === "alternate_totals_corners" || apiMarket.key === "alternate_totals_cards") {
-        const allPoints = [...new Set(outcomes.map((o: any) => o.point))].filter((p): p is number => typeof p === "number");
+        // Lignes au quart exclues — voir isQuarterLine — y compris dans le
+        // repli sur "toutes les lignes" quand aucune ligne à la demie n'existe.
+        const allPoints = [...new Set(outcomes.map((o: any) => o.point))]
+          .filter((p): p is number => typeof p === "number" && !isQuarterLine(p));
         const halfPoints = allPoints.filter((p) => p % 1 === 0.5).sort((a, b) => a - b);
         const points = (halfPoints.length > 0 ? halfPoints : allPoints.sort((a, b) => a - b)).slice(0, PROP_TOTALS_MAX_LINES);
         outcomes = outcomes.filter((o: any) => points.includes(o.point));
