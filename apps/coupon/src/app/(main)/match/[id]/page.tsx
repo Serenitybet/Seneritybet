@@ -154,21 +154,28 @@ export default function MatchPage() {
       }, {}),
   ).sort((a, b) => Number(a[0]) - Number(b[0]));
 
+  // (market.odds?.length > 0) : un marché peut exister sans aucune cote
+  // valide côté bookmaker (ligne filtrée, etc.) — évite d'afficher un
+  // sous-titre suivi de rien.
+  const firstHalfMarkets  = markets.filter((m: any) => ["FIRST_HALF_WINNER", "FIRST_HALF_TOTALS", "FIRST_HALF_HANDICAP", "FIRST_HALF_DOUBLE_CHANCE"].includes(m.type) && (m.odds?.length ?? 0) > 0);
+  const secondHalfMarkets = markets.filter((m: any) => ["SECOND_HALF_WINNER", "SECOND_HALF_TOTALS", "SECOND_HALF_HANDICAP", "SECOND_HALF_DOUBLE_CHANCE"].includes(m.type) && (m.odds?.length ?? 0) > 0);
+
   // Onglets générés depuis les marchés réellement disponibles sur ce match
   // (pas une liste figée) — tout type synchronisé par TheOddsAPI y apparaît.
   // OVER_UNDER/HANDICAP comptent comme disponibles dès qu'il y a au moins
   // une ligne fusionnée (y compris si elle vient uniquement du marché
   // alternatif), les autres types alternatifs n'ont pas d'onglet propre.
+  // HALF_TIME ne compte comme disponible que s'il reste au moins une cote
+  // après filtrage (voir firstHalfMarkets/secondHalfMarkets) — sinon
+  // l'onglet apparaîtrait vide.
   const availableTypes = new Set(markets.map((m: any) => m.type as string));
   if (totalsLines.length > 0) availableTypes.add("OVER_UNDER");
   if (handicapLines.length > 0) availableTypes.add("HANDICAP");
-  if (HALF_TIME_TYPES.some((t) => availableTypes.has(t))) availableTypes.add("HALF_TIME");
+  if (firstHalfMarkets.length > 0 || secondHalfMarkets.length > 0) availableTypes.add("HALF_TIME");
   const tabs = ["all", ...MARKET_TAB_ORDER.filter((t) => availableTypes.has(t))];
   const otherMarkets = markets.filter(
     (m: any) => !["HANDICAP", "ALTERNATE_SPREADS", "OVER_UNDER", "ALTERNATE_TOTALS", ...HALF_TIME_TYPES].includes(m.type),
   );
-  const firstHalfMarkets  = markets.filter((m: any) => ["FIRST_HALF_WINNER", "FIRST_HALF_TOTALS", "FIRST_HALF_HANDICAP", "FIRST_HALF_DOUBLE_CHANCE"].includes(m.type));
-  const secondHalfMarkets = markets.filter((m: any) => ["SECOND_HALF_WINNER", "SECOND_HALF_TOTALS", "SECOND_HALF_HANDICAP", "SECOND_HALF_DOUBLE_CHANCE"].includes(m.type));
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
