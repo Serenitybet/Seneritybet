@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useRef, useState } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 import type { IScannerControls } from "@zxing/browser";
+import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import toast, { Toaster } from "react-hot-toast";
 import { api } from "@/lib/api";
 import { useConfirm } from "@/components/ConfirmDialog";
@@ -113,7 +114,15 @@ export default function TpePayoutPage() {
       return;
     }
     try {
-      const reader = new BrowserMultiFormatReader();
+      // Les tickets ne sont imprimés qu'en CODE128 (voir tpe-ticket) — limiter
+      // le décodeur à ce seul format (au lieu de tous les formats 1D/2D connus
+      // par défaut) accélère nettement chaque tentative. On réduit aussi le
+      // délai entre deux tentatives (500ms par défaut) pour un scan quasi
+      // continu au lieu d'un scan perçu comme lent/saccadé.
+      const hints = new Map();
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128]);
+      hints.set(DecodeHintType.TRY_HARDER, false);
+      const reader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 50, delayBetweenScanSuccess: 50 });
       const controls = await reader.decodeFromConstraints(
         { video: { facingMode: "environment" } },
         videoRef.current,
