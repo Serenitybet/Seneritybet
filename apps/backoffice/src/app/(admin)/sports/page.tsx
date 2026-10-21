@@ -9,7 +9,7 @@ const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL ?? "https://seneritybet.o
 
 interface Odd      { id: string; label: string; value: number | string; isActive: boolean }
 interface Market   { id: string; name: string; type: string; isActive: boolean; isSuspended: boolean; odds: Odd[]; _count?: { betItems: number } }
-interface Event    { id: string; homeTeam: string; awayTeam: string; startTime: string; status: string; competition: { name: string; sport: { name: string } }; markets?: Market[]; _count?: { markets: number } }
+interface Event    { id: string; homeTeam: string; awayTeam: string; startTime: string; status: string; homeScore?: number | null; awayScore?: number | null; competition: { name: string; sport: { name: string } }; markets?: Market[]; _count?: { markets: number } }
 interface Competition { id: string; name: string; sport: { name: string } }
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -58,6 +58,13 @@ export default function SportsPage() {
   const [addingMarket, setAddMarket] = useState(false);
   const [newOdd, setNewOdd]          = useState({ marketId: "", label: "", value: "" });
 
+  // Réglage en masse des marchés stats (mi-temps, corners, cartons)
+  const [statsForm, setStatsForm] = useState({
+    homeScore: "", awayScore: "", htHome: "", htAway: "",
+    cornersHome: "", cornersAway: "", cardsHome: "", cardsAway: "",
+  });
+  const [settlingStats, setSettlingStats] = useState(false);
+
   const up = (f: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((p) => ({ ...p, [f]: e.target.value }));
 
@@ -96,7 +103,14 @@ export default function SportsPage() {
     try {
       const r = await fetch(`${API}/admin/sports/events/${event.id}`, { headers: authHeaders() });
       const d = await r.json();
-      if (d.data) setSelected(d.data);
+      if (d.data) {
+        setSelected(d.data);
+        setStatsForm({
+          homeScore: d.data.homeScore != null ? String(d.data.homeScore) : "",
+          awayScore: d.data.awayScore != null ? String(d.data.awayScore) : "",
+          htHome: "", htAway: "", cornersHome: "", cornersAway: "", cardsHome: "", cardsAway: "",
+        });
+      }
     } finally { setPanelLoad(false); }
   }
 
@@ -206,6 +220,36 @@ export default function SportsPage() {
     await fetch(`${API}/admin/sports/odds/${oddId}`, { method: "DELETE", headers: authHeaders() });
     toast.success("Cote supprimée");
     if (selectedEvent) await openPanel(selectedEvent);
+  }
+
+  // ── Réglage en masse des marchés stats ────────────────────────────────────────
+
+  async function settleStats() {
+    if (!selectedEvent) return;
+    const body: Record<string, number> = {};
+    if (statsForm.homeScore !== "" && statsForm.awayScore !== "") {
+      body.homeScore = Number(statsForm.homeScore); body.awayScore = Number(statsForm.awayScore);
+    }
+    if (statsForm.htHome !== "" && statsForm.htAway !== "") {
+      body.htHomeScore = Number(statsForm.htHome); body.htAwayScore = Number(statsForm.htAway);
+    }
+    if (statsForm.cornersHome !== "" && statsForm.cornersAway !== "") {
+      body.cornersHome = Number(statsForm.cornersHome); body.cornersAway = Number(statsForm.cornersAway);
+    }
+    if (statsForm.cardsHome !== "" && statsForm.cardsAway !== "") {
+      body.cardsHome = Number(statsForm.cardsHome); body.cardsAway = Number(statsForm.cardsAway);
+    }
+    setSettlingStats(true);
+    try {
+      const r = await fetch(`${API}/admin/sports/events/${selectedEvent.id}/settle-stats`, {
+        method: "POST", headers: authHeaders(), body: JSON.stringify(body),
+      });
+      const d = await r.json();
+      if (!r.ok) { toast.error(d.error ?? "Erreur"); return; }
+      toast.success(`✓ ${d.data.updatedItems} sélection(s) réglée(s) — ${d.data.settledTickets} ticket(s) soldé(s)`);
+      await openPanel(selectedEvent);
+    } catch { toast.error("Erreur réseau"); }
+    finally { setSettlingStats(false); }
   }
 
   // ── Changer type marché → pré-remplir cotes ───────────────────────────────────
@@ -369,6 +413,66 @@ export default function SportsPage() {
             <div className="bo-card p-8 text-center text-t-faint">Chargement des marchés…</div>
           ) : (
             <>
+              {/* ── Réglage en masse (mi-temps, corners, cartons) ── */}
+              <div className="bo-card border-dashed border-orange-500/30">
+                <div className="bo-card-header">
+                  <span className="bo-card-title text-sm">🧮 Régler les marchés stats</span>
+                </div>
+                <div className="bo-card-body space-y-2.5">
+                  <p className="text-[11px] text-t-faint -mt-1">
+                    Entre les données connues une seule fois — ça règle automatiquement toutes les
+                    sélections concernées, sur tous les tickets liés à ce match.
+                  </p>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1">Score final</label>
+                    <div className="flex items-center gap-1.5">
+                      <input className="bo-input w-16 text-xs py-1 font-mono text-center" type="number" min="0" placeholder="Dom."
+                        value={statsForm.homeScore} onChange={e => setStatsForm(p => ({ ...p, homeScore: e.target.value }))} />
+                      <span className="text-t-faint text-xs">–</span>
+                      <input className="bo-input w-16 text-xs py-1 font-mono text-center" type="number" min="0" placeholder="Ext."
+                        value={statsForm.awayScore} onChange={e => setStatsForm(p => ({ ...p, awayScore: e.target.value }))} />
+                      {selectedEvent.homeScore != null && <span className="text-[10px] text-green-400 ml-1">déjà connu ✓</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1">Score à la mi-temps</label>
+                    <div className="flex items-center gap-1.5">
+                      <input className="bo-input w-16 text-xs py-1 font-mono text-center" type="number" min="0" placeholder="Dom."
+                        value={statsForm.htHome} onChange={e => setStatsForm(p => ({ ...p, htHome: e.target.value }))} />
+                      <span className="text-t-faint text-xs">–</span>
+                      <input className="bo-input w-16 text-xs py-1 font-mono text-center" type="number" min="0" placeholder="Ext."
+                        value={statsForm.htAway} onChange={e => setStatsForm(p => ({ ...p, htAway: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1">Corners</label>
+                      <div className="flex items-center gap-1.5">
+                        <input className="bo-input w-14 text-xs py-1 font-mono text-center" type="number" min="0" placeholder="Dom."
+                          value={statsForm.cornersHome} onChange={e => setStatsForm(p => ({ ...p, cornersHome: e.target.value }))} />
+                        <span className="text-t-faint text-xs">–</span>
+                        <input className="bo-input w-14 text-xs py-1 font-mono text-center" type="number" min="0" placeholder="Ext."
+                          value={statsForm.cornersAway} onChange={e => setStatsForm(p => ({ ...p, cornersAway: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1">Cartons</label>
+                      <div className="flex items-center gap-1.5">
+                        <input className="bo-input w-14 text-xs py-1 font-mono text-center" type="number" min="0" placeholder="Dom."
+                          value={statsForm.cardsHome} onChange={e => setStatsForm(p => ({ ...p, cardsHome: e.target.value }))} />
+                        <span className="text-t-faint text-xs">–</span>
+                        <input className="bo-input w-14 text-xs py-1 font-mono text-center" type="number" min="0" placeholder="Ext."
+                          value={statsForm.cardsAway} onChange={e => setStatsForm(p => ({ ...p, cardsAway: e.target.value }))} />
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={settleStats} disabled={settlingStats}
+                    className="bo-btn-primary w-full text-sm disabled:opacity-50">
+                    {settlingStats ? "Règlement…" : "⚡ Régler les tickets concernés"}
+                  </button>
+                </div>
+              </div>
+
               {/* ── Marchés existants ── */}
               {selectedEvent.markets && selectedEvent.markets.length > 0 ? (
                 <div className="space-y-2">
