@@ -216,23 +216,72 @@ export async function syncOddsFromAPI() {
   if (totalEvents > 0) console.log(`📅 TheOddsAPI: ${totalEvents} événements synchronisés`);
 }
 
+// Fenêtre de détection d'une reprogrammation : TheOddsAPI réémet parfois un
+// nouvel externalId pour un match déjà en base quand son horaire change
+// (ex. décalage TV) — sans détection, upsertEvent créerait un second Event
+// en doublon pour la même rencontre, laissant l'ancien orphelin avec un ID
+// mort (jamais revisité, 404 en boucle sur les cotes additionnelles — voir
+// l'incident Hibernian/Celtic du 21/10/2026) ET affichant les deux dates
+// aux parieurs. Pire : un ticket déjà émis sur l'ancien ID resterait lié à
+// un match fantôme au lieu de suivre le match réel. 3 jours couvre les
+// décalages TV réalistes (observé : 22h) sans risquer de fusionner à tort
+// deux vraies rencontres aller/retour entre les mêmes équipes (toujours
+// espacées de plusieurs semaines).
+const RESCHEDULE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+
 async function upsertEvent(competitionId: string, game: any, sportSlug = "football") {
-  const event = await prisma.event.upsert({
-    where:  { externalId: game.id },
-    update: {
-      homeTeam:  game.home_team,
-      awayTeam:  game.away_team,
-      startTime: new Date(game.commence_time),
-    },
-    create: {
-      competitionId,
-      externalId: game.id,
-      homeTeam:   game.home_team,
-      awayTeam:   game.away_team,
-      startTime:  new Date(game.commence_time),
-      status:     "UPCOMING",
-    },
-  });
+  const commenceTime = new Date(game.commence_time);
+  let existing = await prisma.event.findUnique({ where: { externalId: game.id } });
+  let rescheduleMerge = false;
+
+  if (!existing) {
+    existing = await prisma.event.findFirst({
+      where: {
+        competitionId,
+        homeTeam:   game.home_team,
+        awayTeam:   game.away_team,
+        status:     "UPCOMING",
+        externalId: { not: game.id },
+        startTime:  {
+          gte: new Date(commenceTime.getTime() - RESCHEDULE_WINDOW_MS),
+          lte: new Date(commenceTime.getTime() + RESCHEDULE_WINDOW_MS),
+        },
+      },
+    });
+    if (existing) {
+      rescheduleMerge = true;
+      console.log(`🔁 Reprogrammation détectée : ${game.home_team} vs ${game.away_team} (ancien ID ${existing.externalId} → ${game.id})`);
+    }
+  }
+
+  const event = existing
+    ? await prisma.event.update({
+        where: { id: existing.id },
+        data: {
+          externalId: game.id,
+          homeTeam:   game.home_team,
+          awayTeam:   game.away_team,
+          startTime:  commenceTime,
+          // L'ancien ID est mort, les marchés additionnels (BTTS, mi-temps,
+          // corners...) doivent être rapatriés sous le nouveau — sans ça ils
+          // resteraient figés au dernier état connu de l'ancien match, ou
+          // jamais retentés s'ils avaient déjà échoué. On ne fait ça QUE sur
+          // une fusion de reprogrammation : remettre ces versions à 0 à
+          // chaque sync normal (externalId inchangé) gaspillerait des
+          // crédits en re-synchronisant tous les matchs à chaque cycle.
+          ...(rescheduleMerge ? { extraMarketsVersion: 0, propMarketsVersion: 0, halfMarketsVersion: 0 } : {}),
+        },
+      })
+    : await prisma.event.create({
+        data: {
+          competitionId,
+          externalId: game.id,
+          homeTeam:   game.home_team,
+          awayTeam:   game.away_team,
+          startTime:  commenceTime,
+          status:     "UPCOMING",
+        },
+      });
 
   // Prendre les cotes du meilleur bookmaker EU disponible
   const bookmaker = game.bookmakers?.find((b: any) =>
