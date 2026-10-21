@@ -11,6 +11,7 @@ const NAV = [
       { href: "/dashboard", label: "Dashboard",       icon: "▣", badge: null },
       { href: "/sports",    label: "Matchs & Cotes",  icon: "⚽", badge: null },
       { href: "/tpe-tickets", label: "Tickets TPE",    icon: "🎫", badge: null },
+      { href: "/risk",      label: "Gestion du risque", icon: "🛡️", badge: null },
     ],
   },
   {
