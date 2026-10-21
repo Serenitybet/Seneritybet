@@ -18,6 +18,24 @@ function isQuarterLine(point: number): boolean {
   return Math.abs(Math.round(point * 4) % 2) === 1;
 }
 
+// Filet de sécurité en LECTURE, en plus du blocage déjà fait en ÉCRITURE
+// (voir isQuarterLine ci-dessus, appliqué dans tous les upsert*) : la
+// synchronisation ne crée/ne met plus à jour de ligne au quart, mais elle ne
+// supprime jamais non plus les anciennes déjà en base (elle les ignore
+// simplement). Un déploiement du correctif d'écriture en retard sur le cycle
+// de sync peut donc laisser des lignes au quart fraîchement créées traîner
+// en base jusqu'au prochain nettoyage manuel (vécu en prod le 21/10/2026).
+// Ce filtre les masque systématiquement à l'affichage, quelle que soit leur
+// origine ou leur ancienneté — aucune cote au quart ne peut plus être
+// vendue, même en cas de nouvelle régression du même genre.
+const QUARTER_LINE_LABEL_RE = /^(?:Plus|Moins) ([\d.]+)(?: (?:corners|cartons))?$|^[12] \(([+-]?[\d.]+)\)$/;
+function isQuarterLineLabel(label: string): boolean {
+  const m = label.match(QUARTER_LINE_LABEL_RE);
+  if (!m) return false;
+  const point = parseFloat(m[1] ?? m[2]);
+  return !isNaN(point) && isQuarterLine(point);
+}
+
 // ─── Ordre d'affichage canonique des issues ────────────────────────────────
 //
 // TheOddsAPI ne garantit pas l'ordre des "outcomes" dans sa réponse (varie
@@ -38,9 +56,10 @@ export const ODD_LABEL_ORDER: Record<string, string[]> = {
 };
 
 export function sortOddsByCanonicalOrder<T extends { label: string }>(marketType: string, odds: T[]): T[] {
+  const filtered = odds.filter((o) => !isQuarterLineLabel(o.label));
   const order = ODD_LABEL_ORDER[marketType];
-  if (!order) return odds;
-  return [...odds].sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
+  if (!order) return filtered;
+  return [...filtered].sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
 }
 
 function sortEventMarketsOdds<T extends { markets: { type: string; odds: any[] }[] }>(event: T): T {
