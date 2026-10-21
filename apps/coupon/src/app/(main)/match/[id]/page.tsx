@@ -26,14 +26,18 @@ const MARKET_LABELS: Record<string, string> = {
   DRAW_NO_BET:         "🤝 Remboursé si match nul",
   ALTERNATE_TOTALS:    "📈 Plus/Moins (autres lignes)",
   ALTERNATE_SPREADS:   "📉 Handicap (autres lignes)",
-  FIRST_HALF_WINNER:   "⏱ Résultat 1ère mi-temps",
-  SECOND_HALF_WINNER:  "⏱ Résultat 2nde mi-temps",
-  FIRST_HALF_TOTALS:          "⏱ Plus/Moins 1ère mi-temps",
-  FIRST_HALF_HANDICAP:        "⏱ Handicap 1ère mi-temps",
-  FIRST_HALF_DOUBLE_CHANCE:   "⏱ Double chance 1ère mi-temps",
-  SECOND_HALF_TOTALS:         "⏱ Plus/Moins 2nde mi-temps",
-  SECOND_HALF_HANDICAP:       "⏱ Handicap 2nde mi-temps",
-  SECOND_HALF_DOUBLE_CHANCE:  "⏱ Double chance 2nde mi-temps",
+  // Libellés courts — affichés en sous-titres groupés sous l'onglet "Mi-temps"
+  // fusionné (voir HALF_TIME_TYPES), plus besoin de répéter "1ère/2nde mi-temps"
+  // dans chacun puisque le groupe parent le précise déjà.
+  FIRST_HALF_WINNER:   "Résultat",
+  SECOND_HALF_WINNER:  "Résultat",
+  FIRST_HALF_TOTALS:          "Plus/Moins",
+  FIRST_HALF_HANDICAP:        "Handicap",
+  FIRST_HALF_DOUBLE_CHANCE:   "Double chance",
+  SECOND_HALF_TOTALS:         "Plus/Moins",
+  SECOND_HALF_HANDICAP:       "Handicap",
+  SECOND_HALF_DOUBLE_CHANCE:  "Double chance",
+  HALF_TIME:           "⏱ Mi-temps",
   CORNERS_TOTAL:       "🚩 Plus/Moins de corners",
   CORNERS_HANDICAP:    "🚩 Handicap corners",
   CARDS_TOTAL:         "🟨 Plus/Moins de cartons",
@@ -46,13 +50,19 @@ const MARKET_LABELS: Record<string, string> = {
 // OVER_UNDER et HANDICAP représentent chacun un onglet fusionné avec leurs
 // lignes alternatives (ALTERNATE_TOTALS/ALTERNATE_SPREADS) — voir
 // combinedGroupOdds ci-dessous, même logique que apps/pos/tpe-ticket. Ces
-// deux types alternatifs n'ont donc pas leur propre onglet.
+// deux types alternatifs n'ont donc pas leur propre onglet. De même, les 8
+// marchés de mi-temps (résultat/plus-moins/handicap/double chance × 1ère et
+// 2nde mi-temps) sont regroupés sous un seul onglet "HALF_TIME" au lieu de
+// saturer la barre d'onglets avec 8 entrées quasi-identiques — voir
+// HALF_TIME_TYPES et son rendu dédié plus bas.
+const HALF_TIME_TYPES = [
+  "FIRST_HALF_WINNER", "FIRST_HALF_TOTALS", "FIRST_HALF_HANDICAP", "FIRST_HALF_DOUBLE_CHANCE",
+  "SECOND_HALF_WINNER", "SECOND_HALF_TOTALS", "SECOND_HALF_HANDICAP", "SECOND_HALF_DOUBLE_CHANCE",
+];
 const MARKET_TAB_ORDER = [
   "MATCH_WINNER", "DOUBLE_CHANCE", "OVER_UNDER", "BOTH_TEAMS_SCORE",
   "HANDICAP", "CORRECT_SCORE", "TEAM_TOTALS", "DRAW_NO_BET",
-  "FIRST_HALF_WINNER", "SECOND_HALF_WINNER",
-  "FIRST_HALF_TOTALS", "FIRST_HALF_HANDICAP", "FIRST_HALF_DOUBLE_CHANCE",
-  "SECOND_HALF_TOTALS", "SECOND_HALF_HANDICAP", "SECOND_HALF_DOUBLE_CHANCE",
+  "HALF_TIME",
   "CORNERS_TOTAL", "CORNERS_HANDICAP", "CARDS_TOTAL", "CARDS_HANDICAP",
   "FIRST_GOAL_SCORER", "HALF_TIME_RESULT",
 ];
@@ -152,10 +162,13 @@ export default function MatchPage() {
   const availableTypes = new Set(markets.map((m: any) => m.type as string));
   if (totalsLines.length > 0) availableTypes.add("OVER_UNDER");
   if (handicapLines.length > 0) availableTypes.add("HANDICAP");
+  if (HALF_TIME_TYPES.some((t) => availableTypes.has(t))) availableTypes.add("HALF_TIME");
   const tabs = ["all", ...MARKET_TAB_ORDER.filter((t) => availableTypes.has(t))];
   const otherMarkets = markets.filter(
-    (m: any) => !["HANDICAP", "ALTERNATE_SPREADS", "OVER_UNDER", "ALTERNATE_TOTALS"].includes(m.type),
+    (m: any) => !["HANDICAP", "ALTERNATE_SPREADS", "OVER_UNDER", "ALTERNATE_TOTALS", ...HALF_TIME_TYPES].includes(m.type),
   );
+  const firstHalfMarkets  = markets.filter((m: any) => ["FIRST_HALF_WINNER", "FIRST_HALF_TOTALS", "FIRST_HALF_HANDICAP", "FIRST_HALF_DOUBLE_CHANCE"].includes(m.type));
+  const secondHalfMarkets = markets.filter((m: any) => ["SECOND_HALF_WINNER", "SECOND_HALF_TOTALS", "SECOND_HALF_HANDICAP", "SECOND_HALF_DOUBLE_CHANCE"].includes(m.type));
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -233,40 +246,93 @@ export default function MatchPage() {
                   hasSelection={hasSelection} handleOdd={handleOdd} />
               );
             }
+            if (tab === "HALF_TIME") {
+              return (
+                <div key="HALF_TIME" className="bg-bg-secondary border border-bg-border rounded-xl overflow-hidden">
+                  <div className="px-4 py-2.5 bg-bg-card border-b border-bg-border">
+                    <p className="text-sm font-semibold text-txt-primary">{MARKET_LABELS.HALF_TIME}</p>
+                  </div>
+                  <div className="p-3 space-y-3">
+                    {firstHalfMarkets.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-bold text-txt-muted uppercase tracking-wide">1ère mi-temps</p>
+                        {firstHalfMarkets.map((market: any) => (
+                          <MarketOddsGrid key={market.id} market={market} hasSelection={hasSelection} handleOdd={handleOdd} />
+                        ))}
+                      </div>
+                    )}
+                    {secondHalfMarkets.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-bold text-txt-muted uppercase tracking-wide">2nde mi-temps</p>
+                        {secondHalfMarkets.map((market: any) => (
+                          <MarketOddsGrid key={market.id} market={market} hasSelection={hasSelection} handleOdd={handleOdd} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            }
             const market = otherMarkets.find((m: any) => m.type === tab);
             if (!market) return null;
-            return (
-              <div key={market.id} className="bg-bg-secondary border border-bg-border rounded-xl overflow-hidden">
-                <div className="px-4 py-2.5 bg-bg-card border-b border-bg-border">
-                  <p className="text-sm font-semibold text-txt-primary">
-                    {MARKET_LABELS[market.type] ?? market.name}
-                  </p>
-                </div>
-                <div className={`p-3 grid gap-2 ${
-                  (market.odds?.length ?? 0) === 3 ? "grid-cols-3" :
-                  (market.odds?.length ?? 0) <= 2 ? "grid-cols-2" :
-                  "grid-cols-2 sm:grid-cols-3"
-                }`}>
-                  {market.odds?.map((odd: any) => (
-                    <button key={odd.id}
-                      onClick={() => handleOdd(market.id, odd.id, Number(odd.value), odd.label, market.name)}
-                      className={`flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all ${
-                        hasSelection(odd.id)
-                          ? "bg-green-600/20 border-green-600/60 text-green-700"
-                          : "bg-bg-card border-bg-border hover:border-green-600/40 hover:bg-green-600/5"
-                      }`}>
-                      <span className="text-sm text-txt-secondary">{odd.label}</span>
-                      <span className={`text-sm font-black ${hasSelection(odd.id) ? "text-green-700" : "text-txt-primary"}`}>
-                        {Number(odd.value).toFixed(2)}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
+            return <MarketOddsGrid key={market.id} market={market} hasSelection={hasSelection} handleOdd={handleOdd} withHeader />;
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// Grille de cotes d'un marché simple — withHeader affiche la carte complète
+// avec son propre titre (usage standalone, un onglet = un marché) ; sans
+// withHeader, un simple sous-titre léger est utilisé à la place (usage
+// imbriqué, ex. sous l'onglet "Mi-temps" qui a déjà son propre titre).
+function MarketOddsGrid({
+  market, hasSelection, handleOdd, withHeader = false,
+}: {
+  market: any;
+  hasSelection: (oddId: string) => boolean;
+  handleOdd: (marketId: string, oddId: string, oddValue: number, oddLabel: string, marketName: string) => void;
+  withHeader?: boolean;
+}) {
+  const grid = (
+    <div className={`p-3 grid gap-2 ${
+      (market.odds?.length ?? 0) === 3 ? "grid-cols-3" :
+      (market.odds?.length ?? 0) <= 2 ? "grid-cols-2" :
+      "grid-cols-2 sm:grid-cols-3"
+    }`}>
+      {market.odds?.map((odd: any) => (
+        <button key={odd.id}
+          onClick={() => handleOdd(market.id, odd.id, Number(odd.value), odd.label, market.name)}
+          className={`flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all ${
+            hasSelection(odd.id)
+              ? "bg-green-600/20 border-green-600/60 text-green-700"
+              : "bg-bg-card border-bg-border hover:border-green-600/40 hover:bg-green-600/5"
+          }`}>
+          <span className="text-sm text-txt-secondary">{odd.label}</span>
+          <span className={`text-sm font-black ${hasSelection(odd.id) ? "text-green-700" : "text-txt-primary"}`}>
+            {Number(odd.value).toFixed(2)}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+
+  if (!withHeader) {
+    return (
+      <div>
+        <p className="text-xs text-txt-muted mb-1">{MARKET_LABELS[market.type] ?? market.name}</p>
+        {grid}
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-bg-secondary border border-bg-border rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 bg-bg-card border-b border-bg-border">
+        <p className="text-sm font-semibold text-txt-primary">{MARKET_LABELS[market.type] ?? market.name}</p>
+      </div>
+      {grid}
     </div>
   );
 }
