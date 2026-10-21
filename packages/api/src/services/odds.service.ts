@@ -372,6 +372,14 @@ export async function syncExtraMarkets() {
       // 422 (pas de données additionnelles pour ce match) ou autre erreur : on ignore et on continue,
       // mais on logue pour pouvoir diagnostiquer un échec répété sur un match précis.
       console.warn(`⚠️  Marchés additionnels — échec pour ${event.homeTeam} vs ${event.awayTeam} : ${err.response?.status ?? "?"} ${JSON.stringify(err.response?.data ?? err.message)}`);
+      // 404/422 = l'event n'existe plus ou pas valide côté TheOddsAPI (externalId
+      // périmé) — une erreur définitive, pas une panne temporaire. Sans ça, ce
+      // match est retenté à l'infini à chaque cycle, pour toujours (vu en prod
+      // avec un externalId obsolète), gaspillant des crédits sans jamais réussir.
+      // On marque donc comme traité pour arrêter les tentatives.
+      if (err.response?.status === 404 || err.response?.status === 422) {
+        await prisma.event.update({ where: { id: event.id }, data: { extraMarketsVersion: EXTRA_MARKETS_VERSION } }).catch(() => {});
+      }
     }
   }
 
@@ -599,6 +607,12 @@ export async function syncPropMarkets() {
       // 422 (marché non proposé pour ce match, ou clé invalide) ou autre erreur : on ignore et on continue,
       // mais on logue pour pouvoir diagnostiquer un échec répété sur un match précis.
       console.warn(`⚠️  Marchés stats — échec pour ${event.homeTeam} vs ${event.awayTeam} : ${err.response?.status ?? "?"} ${JSON.stringify(err.response?.data ?? err.message)}`);
+      // 404/422 = event inexistant/invalide côté TheOddsAPI — définitif, pas une
+      // panne temporaire (voir syncExtraMarkets) : on marque comme traité pour
+      // ne pas retenter à l'infini.
+      if (err.response?.status === 404 || err.response?.status === 422) {
+        await prisma.event.update({ where: { id: event.id }, data: { propMarketsVersion: PROP_MARKETS_VERSION } }).catch(() => {});
+      }
     }
   }
 
@@ -763,6 +777,12 @@ export async function syncHalfMarkets() {
       // 422 (marché non proposé pour ce match, ou clé invalide) ou autre erreur : on ignore et on continue,
       // mais on logue pour pouvoir diagnostiquer un échec répété sur un match précis.
       console.warn(`⚠️  Marchés mi-temps — échec pour ${event.homeTeam} vs ${event.awayTeam} : ${err.response?.status ?? "?"} ${JSON.stringify(err.response?.data ?? err.message)}`);
+      // 404/422 = event inexistant/invalide côté TheOddsAPI — définitif, pas une
+      // panne temporaire (voir syncExtraMarkets) : on marque comme traité pour
+      // ne pas retenter à l'infini.
+      if (err.response?.status === 404 || err.response?.status === 422) {
+        await prisma.event.update({ where: { id: event.id }, data: { halfMarketsVersion: HALF_MARKETS_VERSION } }).catch(() => {});
+      }
     }
   }
 
