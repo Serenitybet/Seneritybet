@@ -18,13 +18,16 @@ const STATS_MARKET_TYPES = [
   "CORNERS_TOTAL", "CORNERS_HANDICAP", "CARDS_TOTAL", "CARDS_HANDICAP",
 ] as const;
 
-// Le forfait gratuit (100 req/jour) limite aussi le DÉBIT, pas seulement le
-// quota journalier — un test manuel du 21/10/2026 a déclenché un 429 "Too
-// Many Requests" après une dizaine d'appels rapprochés. On espace donc les
-// appels et on plafonne le nombre d'évènements traités par cycle.
-const MAX_EVENTS_PER_RUN = 5;
-const REQUEST_DELAY_MS = 700;
-const MAX_ATTEMPTS = 3;
+// Valeurs relevées après passage au palier Pro (21/10/2026, 7 500 req/jour —
+// contre 100 sur le forfait gratuit, qui limitait aussi le DÉBIT : un test
+// manuel avait déclenché un 429 "Too Many Requests" après une dizaine
+// d'appels rapprochés). Le délai entre appels est réduit mais pas supprimé
+// par prudence (le palier Pro n'a pas de limite de débit documentée
+// confirmée) ; le plafond d'évènements et de tentatives est relevé pour
+// profiter du quota élargi sans attendre indéfiniment un match non couvert.
+const MAX_EVENTS_PER_RUN = 40;
+const REQUEST_DELAY_MS = 300;
+const MAX_ATTEMPTS = 6;
 
 function sleep(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
