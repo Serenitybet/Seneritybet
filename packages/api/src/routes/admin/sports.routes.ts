@@ -2,6 +2,8 @@ import { Router, Request, Response } from "express";
 import { requireRole } from "../../middleware/auth.middleware";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../lib/asyncHandler";
+import { STATS_MARKET_TYPES, computeStatsItemResult } from "../../lib/stats-settlement";
+import { settleTicket } from "../../services/tpe.service";
 
 export const adminSportsRouter = Router();
 
@@ -138,6 +140,106 @@ adminSportsRouter.patch("/events/:id/result",
       },
     });
     res.json({ success: true });
+  }),
+);
+
+// POST /api/admin/sports/events/:id/settle-stats — règle en masse les
+// marchés "statistiques" (mi-temps, corners, cartons) à partir de données
+// saisies UNE SEULE FOIS par le trader, au lieu d'une validation sélection
+// par sélection, ticket par ticket (voir Tickets TPE). Même calcul que le
+// règlement automatique via API-Football (stats-settlement.ts), appliqué à
+// toutes les sélections en attente de tous les tickets liés à ce match.
+adminSportsRouter.post("/events/:id/settle-stats",
+  requireRole("TRADER", "ADMIN", "SUPER_ADMIN"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { homeScore, awayScore, htHomeScore, htAwayScore, cornersHome, cornersAway, cardsHome, cardsAway } = req.body;
+
+    let event = await prisma.event.findUnique({ where: { id: req.params.id } });
+    if (!event) { res.status(404).json({ success: false, error: "Match introuvable" }); return; }
+
+    // Score final : requis pour calculer la 2nde mi-temps (score final -
+    // score mi-temps) — on le prend en base, ou on l'enregistre ici si le
+    // trader le saisit dans ce même formulaire pour éviter un aller-retour.
+    if (homeScore !== undefined && awayScore !== undefined) {
+      event = await prisma.event.update({
+        where: { id: event.id },
+        data: { homeScore: Number(homeScore), awayScore: Number(awayScore), result: `${homeScore}-${awayScore}` },
+      });
+    }
+    if (event.homeScore == null || event.awayScore == null) {
+      res.status(400).json({ success: false, error: "Le score final n'est pas encore connu — saisissez-le d'abord." }); return;
+    }
+
+    const isValidCount = (v: unknown) => Number.isInteger(Number(v)) && Number(v) >= 0;
+
+    let htHome: number | undefined, htAway: number | undefined;
+    if (htHomeScore !== undefined && htAwayScore !== undefined) {
+      if (!isValidCount(htHomeScore) || !isValidCount(htAwayScore)) {
+        res.status(400).json({ success: false, error: "Score mi-temps invalide" }); return;
+      }
+      htHome = Number(htHomeScore); htAway = Number(htAwayScore);
+      if (htHome > event.homeScore || htAway > event.awayScore) {
+        res.status(400).json({ success: false, error: "Le score mi-temps ne peut pas dépasser le score final" }); return;
+      }
+    }
+
+    let corners: { home: number; away: number } | null = null;
+    if (cornersHome !== undefined && cornersAway !== undefined) {
+      if (!isValidCount(cornersHome) || !isValidCount(cornersAway)) {
+        res.status(400).json({ success: false, error: "Corners invalides" }); return;
+      }
+      corners = { home: Number(cornersHome), away: Number(cornersAway) };
+    }
+
+    let cards: { home: number; away: number } | null = null;
+    if (cardsHome !== undefined && cardsAway !== undefined) {
+      if (!isValidCount(cardsHome) || !isValidCount(cardsAway)) {
+        res.status(400).json({ success: false, error: "Cartons invalides" }); return;
+      }
+      cards = { home: Number(cardsHome), away: Number(cardsAway) };
+    }
+
+    if (htHome === undefined && !corners && !cards) {
+      res.status(400).json({ success: false, error: "Renseignez au moins une donnée (mi-temps, corners ou cartons)" }); return;
+    }
+
+    const markets = await prisma.market.findMany({
+      where: { eventId: event.id, type: { in: STATS_MARKET_TYPES as unknown as string[] } },
+      include: { odds: { include: { ticketItems: true } } },
+    });
+
+    let updatedItems = 0;
+    const touchedTicketIds = new Set<string>();
+    for (const market of markets) {
+      const isHalfMarket = market.type.includes("HALF");
+      const isCornersOrCards = market.type.startsWith("CORNERS") || market.type.startsWith("CARDS");
+      if (isHalfMarket && htHome === undefined) continue; // pas de données saisies — laissé pour plus tard
+      if (isCornersOrCards && !corners && !cards) continue;
+
+      for (const odd of market.odds) {
+        const result = computeStatsItemResult(
+          market.type, odd.label, htHome ?? 0, htAway ?? 0, event.homeScore, event.awayScore, corners, cards,
+        );
+        if (!result) continue;
+        for (const item of odd.ticketItems) {
+          if (item.result !== null) continue;
+          await prisma.ticketItem.update({ where: { id: item.id }, data: { result } });
+          updatedItems++;
+          touchedTicketIds.add(item.ticketId);
+        }
+      }
+    }
+
+    let settledTickets = 0;
+    for (const ticketId of touchedTicketIds) {
+      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, include: { items: true } });
+      if (ticket && ticket.status === "PENDING" && ticket.items.every((i) => i.result !== null)) {
+        await settleTicket(ticketId);
+        settledTickets++;
+      }
+    }
+
+    res.json({ success: true, data: { updatedItems, settledTickets } });
   }),
 );
 
