@@ -2,10 +2,10 @@ import { prisma } from "../lib/prisma";
 import { AppError } from "../middleware/error.middleware";
 import { hashDeviceSecret } from "../middleware/tpe.middleware";
 import { getSettingNumber, SETTING_KEYS } from "../lib/settings";
-import type { Tpe, Ticket, TicketItem, TpeCreditAdjustment } from "@serenitybet/db";
+import type { Tpe, Ticket, TicketItem, TpeCreditAdjustment, Region } from "@serenitybet/db";
 
 /** Jamais renvoyer deviceSecretHash — c'est un secret d'authentification de l'appareil. */
-export function serializeTpe(tpe: Tpe) {
+export function serializeTpe(tpe: Tpe & { region?: Pick<Region, "id" | "name"> | null }) {
   const { deviceSecretHash: _omit, credit, ...rest } = tpe;
   return { ...rest, creditXAF: Number(credit) / 100 };
 }
@@ -125,12 +125,22 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
   const totalOdds = odds.reduce((acc, o) => acc * Number(o.value), 1);
   const potentialWin = BigInt(Math.floor(Number(stake) * totalOdds));
 
+  const placingTpe = await prisma.tpe.findUnique({ where: { id: tpeId }, include: { region: true } });
+  if (!placingTpe) throw new AppError(404, "TPE introuvable");
+  if (placingTpe.credit < stake) {
+    throw new AppError(400, "Crédit TPE insuffisant pour cette mise — contactez le backoffice");
+  }
+
   // Gestion de risque : refus à la source si le gain potentiel dépasse le
   // plafond configuré (backoffice → Gestion du risque), plutôt qu'un
   // paiement bloqué a posteriori — évite d'avoir à payer moins que ce que
   // les cotes affichées promettaient. Mise maximale suggérée renvoyée pour
-  // que le caissier puisse ajuster directement.
-  const maxWin = await getSettingNumber(SETTING_KEYS.TPE_MAX_WIN_XAF);
+  // que le caissier puisse ajuster directement. Le plafond de la région du
+  // TPE prévaut sur le réglage global quand il est explicitement défini
+  // (null = la région hérite du plafond global).
+  const maxWin = placingTpe.region?.maxWinXAF != null
+    ? Number(placingTpe.region.maxWinXAF)
+    : await getSettingNumber(SETTING_KEYS.TPE_MAX_WIN_XAF);
   if (maxWin > 0 && Number(potentialWin) > maxWin) {
     const maxStakeXAF = Math.floor(maxWin / totalOdds / 100);
     throw new AppError(
@@ -138,12 +148,6 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
       `Le gain potentiel de ce coupon dépasse le plafond autorisé (${(maxWin / 100).toLocaleString("fr-FR")} XAF). Mise maximale pour ce coupon : ${maxStakeXAF.toLocaleString("fr-FR")} XAF.`,
       { maxStakeXAF, maxWinXAF: maxWin / 100 },
     );
-  }
-
-  const placingTpe = await prisma.tpe.findUnique({ where: { id: tpeId } });
-  if (!placingTpe) throw new AppError(404, "TPE introuvable");
-  if (placingTpe.credit < stake) {
-    throw new AppError(400, "Crédit TPE insuffisant pour cette mise — contactez le backoffice");
   }
 
   let code = generateTicketCode();
