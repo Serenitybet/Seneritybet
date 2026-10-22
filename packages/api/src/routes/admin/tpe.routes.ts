@@ -11,6 +11,7 @@ export const adminTpeRouter = Router();
 adminTpeRouter.get("/", asyncHandler(async (_req: Request, res: Response) => {
   const tpes = await prisma.tpe.findMany({
     where: { status: { not: "DELETED" } },
+    include: { region: { select: { id: true, name: true } } },
     orderBy: { createdAt: "desc" },
   });
   res.json({ success: true, data: tpes.map(serializeTpe) });
@@ -72,14 +73,25 @@ adminTpeRouter.post("/:id/approve", requireRole("ADMIN", "SUPER_ADMIN"),
   }),
 );
 
-// PATCH /api/admin/tpe/:id — renommer
+// PATCH /api/admin/tpe/:id — renommer et/ou assigner à une région
+// (regionId: null explicite = retire le TPE de toute région ; omis = inchangé)
 adminTpeRouter.patch("/:id", requireRole("ADMIN", "SUPER_ADMIN"),
   asyncHandler(async (req: Request, res: Response) => {
-    const { name } = req.body;
+    const { name, regionId } = req.body;
     const trimmed = typeof name === "string" ? name.trim() : null;
+
+    if (regionId !== undefined && regionId !== null) {
+      const region = await prisma.region.findUnique({ where: { id: regionId } });
+      if (!region) throw new AppError(400, "Région introuvable");
+    }
+
     const tpe = await prisma.tpe.update({
       where: { id: req.params.id },
-      data: { ...(name !== undefined ? { name: trimmed || null } : {}) },
+      data: {
+        ...(name !== undefined ? { name: trimmed || null } : {}),
+        ...(regionId !== undefined ? { regionId } : {}),
+      },
+      include: { region: { select: { id: true, name: true } } },
     });
     res.json({ success: true, data: serializeTpe(tpe) });
   }),

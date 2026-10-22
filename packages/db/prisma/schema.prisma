@@ -571,6 +571,23 @@ model WithdrawalRequest {
 
 // ─── TPE (terminaux physiques — tickets anonymes) ────────────────────────────
 
+// Regroupement géographique des TPE (ex. agences par ville/quartier) —
+// permet de gérer le risque par zone : un plafond de gain propre à la
+// région prévaut sur le réglage global (Setting TPE_MAX_WIN_XAF) pour tous
+// les TPE qui lui sont rattachés.
+model Region {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  // centimes XAF — null = hérite du plafond global ; 0 = explicitement
+  // désactivé pour cette région (aucun plafond), même si un plafond global
+  // existe par ailleurs.
+  maxWinXAF BigInt?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tpes Tpe[]
+}
+
 model Tpe {
   id               String    @id @default(cuid())
   code             String    @unique // Ex: TPE-0001, affecté à l'appairage
@@ -579,6 +596,8 @@ model Tpe {
   pairingCode      String?   @unique // affiché sur l'appareil tant qu'en attente d'appairage
   status           TpeStatus @default(PENDING_PAIRING)
   credit           BigInt    @default(0) // centimes XAF — plafond de paiement alimenté par le backoffice
+  regionId         String?
+  region           Region?   @relation(fields: [regionId], references: [id])
   lastSeenAt       DateTime?
   pairedAt         DateTime?
   createdAt        DateTime  @default(now())
@@ -590,6 +609,7 @@ model Tpe {
 
   @@index([status])
   @@index([pairingCode])
+  @@index([regionId])
 }
 
 model TpeCreditAdjustment {
