@@ -323,7 +323,7 @@ export default function TpePayoutPage() {
 
       {receipt && (
         <div className="print-only">
-          <div style={{ fontFamily: "monospace", width: "100%", padding: "4px 6px", fontSize: 12, lineHeight: 1.4, fontWeight: 900 }}>
+          <div style={{ fontFamily: "monospace", width: "48mm", padding: "4px 6px", fontSize: 12, lineHeight: 1.4, fontWeight: 900 }}>
             <div style={{ textAlign: "center", borderBottom: "1px solid #000", paddingBottom: 4, marginBottom: 4 }}>
               <p style={{ fontSize: 14, fontWeight: "bold" }}>SERENITYBET</p>
               <p style={{ fontSize: 9 }}>Reçu de paiement</p>
