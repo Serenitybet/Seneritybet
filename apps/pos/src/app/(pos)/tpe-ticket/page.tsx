@@ -283,11 +283,17 @@ export default function TpeTicketPage() {
         </div>
 
         <div className="print-only">
-          {/* Rouleau thermique 58mm (~48mm imprimable) — largeur fluide sur
-              toute la page plutôt qu'une largeur fixe pensée pour du 80mm,
-              qui forçait un redécoupage imprévisible du ticket en plusieurs
-              pages côté impression Android. */}
-          <div style={{ fontFamily: "monospace", width: "100%", padding: "4px 6px", fontSize: 12, lineHeight: 1.4, fontWeight: 900 }}>
+          {/* Largeur fixe en mm (pas "100%") : sur certains pilotes
+              d'imprimante thermique Windows, le navigateur ne respecte pas
+              toujours la taille @page 58mm demandée (voir globals.css) et
+              retombe sur une page bien plus large — avec une largeur fluide,
+              tout le ticket s'étirait alors sur cette largeur inattendue,
+              et un champ aligné à droite (voir ci-dessous) pouvait se
+              retrouver poussé hors de la zone imprimable, donc jamais
+              réellement imprimé. 48mm = zone imprimable d'un rouleau 58mm,
+              tient aussi sans problème sur un rouleau 80mm (juste plus de
+              marge à droite). */}
+          <div style={{ fontFamily: "monospace", width: "48mm", padding: "4px 6px", fontSize: 12, lineHeight: 1.4, fontWeight: 900 }}>
             <div style={{ textAlign: "center", borderBottom: "1px solid #000", paddingBottom: 4, marginBottom: 4 }}>
               <p style={{ fontSize: 14, fontWeight: "bold" }}>SERENITYBET</p>
               <p style={{ fontSize: 9 }}>Ticket de pari sportif</p>
@@ -295,12 +301,10 @@ export default function TpeTicketPage() {
             <div style={{ marginBottom: 4 }}>
               <p><strong>Code:</strong> {ticket.code}</p>
               <p><strong>TPE:</strong> {ticket.tpe?.name ?? ticket.tpe?.code ?? "—"}</p>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span><strong>Imprimé le:</strong> {new Date(ticket.createdAt).toLocaleDateString("fr-FR")}</span>
-                {ticket.payoutCode && !codePrinted && (
-                  <span><strong>Code:</strong> {ticket.payoutCode}</span>
-                )}
-              </div>
+              <p><strong>Imprimé le:</strong> {new Date(ticket.createdAt).toLocaleDateString("fr-FR")}</p>
+              {ticket.payoutCode && !codePrinted && (
+                <p style={{ fontSize: 13 }}><strong>Code sécurité:</strong> {ticket.payoutCode}</p>
+              )}
             </div>
             <div style={{ borderTop: "1px dashed #000", borderBottom: "1px dashed #000", padding: "4px 0", marginBottom: 4 }}>
               <p style={{ fontWeight: "bold", marginBottom: 3 }}>SÉLECTIONS ({ticket.items.length})</p>

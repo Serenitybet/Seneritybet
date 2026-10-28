@@ -114,7 +114,7 @@ export default function CaissePage() {
 
       {/* ─── Reçu imprimable ─── */}
       {receipt && (
-        <div className="print-only font-mono font-black text-[12px] leading-snug" style={{ width: "100%", padding: "4px 6px" }}>
+        <div className="print-only font-mono font-black text-[12px] leading-snug" style={{ width: "48mm", padding: "4px 6px" }}>
           <div className="text-center border-b pb-1 mb-2">
             <div className="text-sm font-bold">SERENITYBET</div>
             <div>Reçu de {receipt.type === "DEPOT" ? "Dépôt" : "Retrait"}</div>
