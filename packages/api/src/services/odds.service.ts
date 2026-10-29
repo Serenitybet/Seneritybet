@@ -103,6 +103,7 @@ const SPORTS_CONFIG = [
   { key: "soccer_russia_premier_league",         slug: "football", name: "Premier Liga",         country: "Russia",       icon: "⚽", sortOrder: 1 }, // 15. Russie
   { key: "soccer_usa_mls",                       slug: "football", name: "MLS",                  country: "USA",          icon: "⚽", sortOrder: 1 },
   { key: "soccer_brazil_campeonato",             slug: "football", name: "Brasileirão Série A",  country: "Brazil",       icon: "⚽", sortOrder: 1 },
+  { key: "soccer_brazil_serie_b",                slug: "football", name: "Brasileirão Série B",  country: "Brazil",       icon: "⚽", sortOrder: 1 },
   { key: "soccer_argentina_primera_division",    slug: "football", name: "Primera División",     country: "Argentina",    icon: "⚽", sortOrder: 1 },
   { key: "soccer_mexico_ligamx",                 slug: "football", name: "Liga MX",              country: "Mexico",       icon: "⚽", sortOrder: 1 },
   { key: "soccer_japan_j_league",                slug: "football", name: "J1 League",            country: "Japan",        icon: "⚽", sortOrder: 1 },
@@ -113,10 +114,14 @@ const SPORTS_CONFIG = [
   { key: "soccer_italy_serie_b",                 slug: "football", name: "Serie B",              country: "Italy",        icon: "⚽", sortOrder: 1 },
   { key: "soccer_france_ligue_two",              slug: "football", name: "Ligue 2",              country: "France",       icon: "⚽", sortOrder: 1 },
   { key: "soccer_spain_segunda_division",        slug: "football", name: "LaLiga 2",             country: "Spain",        icon: "⚽", sortOrder: 1 },
+  // ⚽ Football — coupes nationales
+  { key: "soccer_england_efl_cup",               slug: "football", name: "EFL Cup",              country: "England",      icon: "⚽", sortOrder: 1 },
+  { key: "soccer_spain_copa_del_rey",            slug: "football", name: "Copa del Rey",         country: "Spain",        icon: "⚽", sortOrder: 1 },
   // ⚽ Football — compétitions internationales/continentales
   { key: "soccer_uefa_champs_league",            slug: "football", name: "Champions League",     country: "Europe",       icon: "⚽", sortOrder: 1 }, // 17. Ligue des Champions
   { key: "soccer_uefa_europa_league",            slug: "football", name: "Europa League",        country: "Europe",       icon: "⚽", sortOrder: 1 }, // 18. Europa League
   { key: "soccer_uefa_europa_conference_league", slug: "football", name: "Conference League",    country: "Europe",       icon: "⚽", sortOrder: 1 }, // 19. Conference League
+  { key: "soccer_uefa_nations_league",           slug: "football", name: "UEFA Nations League",  country: "Europe",       icon: "⚽", sortOrder: 1 },
   { key: "soccer_fifa_world_cup",                slug: "football", name: "Coupe du Monde FIFA",  country: "World",        icon: "⚽", sortOrder: 1 },
   { key: "soccer_fifa_club_world_cup",           slug: "football", name: "Coupe du Monde des Clubs", country: "World",    icon: "⚽", sortOrder: 1 },
   { key: "soccer_uefa_european_championship",    slug: "football", name: "Euro (Championnat d'Europe)", country: "Europe", icon: "⚽", sortOrder: 1 },
@@ -154,8 +159,9 @@ const SPORTS_CONFIG = [
   { key: "icehockey_nhl",               slug: "hockey",     name: "NHL",                   country: "USA",      icon: "🏒", sortOrder: 4 },
   // 🏈 American Football
   { key: "americanfootball_nfl",        slug: "american-football", name: "NFL",            country: "USA",      icon: "🏈", sortOrder: 5 },
-  // 🥊 MMA
+  // 🥊 MMA / Boxe — même catégorie "Sport" (slug "mma", déjà libellée "MMA / Boxe")
   { key: "mma_mixed_martial_arts",      slug: "mma",        name: "MMA",                   country: "World",    icon: "🥊", sortOrder: 6 },
+  { key: "boxing_boxing",               slug: "mma",        name: "Boxe",                  country: "World",    icon: "🥊", sortOrder: 6 },
   // ⚾ Baseball
   { key: "baseball_mlb",               slug: "baseball",   name: "MLB",                   country: "USA",      icon: "⚾", sortOrder: 7 },
 ];
