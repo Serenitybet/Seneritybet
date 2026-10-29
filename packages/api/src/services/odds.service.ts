@@ -2,6 +2,7 @@ import axios from "axios";
 import { prisma } from "../lib/prisma";
 import { updateCredits } from "../lib/credits.state";
 import { settleTicket } from "./tpe.service";
+import { fitLambdas, buildScoreGrid, devig, deriveLevel1Markets } from "../lib/goal-model";
 
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
 const API_KEY = process.env.ODDS_API_KEY;
@@ -360,6 +361,80 @@ async function upsertEvent(competitionId: string, game: any, sportSlug = "footba
         await prisma.odd.update({ where: { id: existing.id }, data: { value: outcome.price } });
       } else {
         await prisma.odd.create({ data: { marketId: market.id, label, value: outcome.price } });
+      }
+    }
+  }
+
+  // Marchés "Niveau 1" générés automatiquement à partir des vraies cotes
+  // 1X2/Plus-Moins qu'on vient de synchroniser — football uniquement (le
+  // modèle de buts de Poisson n'a pas de sens pour le tennis/basket/MMA).
+  // Isolé dans son propre try/catch : une anomalie sur ce calcul ne doit
+  // jamais empêcher la synchronisation des marchés "normaux" du reste du
+  // cycle (voir le même principe appliqué partout ailleurs dans ce fichier).
+  if (sportSlug === "football") {
+    try {
+      await generateLevel1Markets(event.id, event.homeTeam, event.awayTeam);
+    } catch (err) {
+      console.warn(`⚠️  Génération cotes Niveau 1 — échec pour ${event.homeTeam} vs ${event.awayTeam} :`, err);
+    }
+  }
+}
+
+const LEVEL1_MARGIN = 0.07; // marge bookmaker ~7%, cohérente avec les cotes réelles observées
+const LEVEL1_MARKET_NAMES: Record<string, string> = {
+  ODD_EVEN_TOTAL: "Total de buts pair/impair",
+  CLEAN_SHEET:    "Cage inviolée",
+  WIN_TO_NIL:     "Victoire à zéro",
+  WINNING_MARGIN: "Marge de victoire",
+  TEAM_GOALS:     "Buts par équipe (exact)",
+};
+
+/**
+ * Déduit (λ_domicile, λ_extérieur) des vraies cotes MATCH_WINNER + OVER_UNDER
+ * déjà en base pour cet évènement, puis génère/actualise les 5 marchés
+ * "Niveau 1" — voir lib/goal-model.ts pour le détail du modèle. Ne fait rien
+ * si l'une des deux cotes de base manque encore (ex. bookmaker n'ayant pas
+ * publié de ligne Plus/Moins pour ce match).
+ */
+async function generateLevel1Markets(eventId: string, homeTeam: string, awayTeam: string) {
+  const winnerMarket = await prisma.market.findFirst({ where: { eventId, type: "MATCH_WINNER" }, include: { odds: true } });
+  const totalsMarket = await prisma.market.findFirst({ where: { eventId, type: "OVER_UNDER" }, include: { odds: true } });
+  if (!winnerMarket || !totalsMarket) return;
+
+  const o1 = winnerMarket.odds.find((o) => o.label === "1");
+  const oX = winnerMarket.odds.find((o) => o.label === "X");
+  const o2 = winnerMarket.odds.find((o) => o.label === "2");
+  if (!o1 || !oX || !o2) return;
+
+  // Cherche une ligne Plus/Moins où les deux côtés sont publiés (n'importe
+  // quelle ligne fait l'affaire pour ancrer le total de buts attendu).
+  let overLine: number | null = null, overVal: number | null = null, underVal: number | null = null;
+  for (const odd of totalsMarket.odds) {
+    const m = odd.label.match(/^Plus ([\d.]+)$/);
+    if (!m) continue;
+    const underOdd = totalsMarket.odds.find((o) => o.label === `Moins ${m[1]}`);
+    if (underOdd) { overLine = parseFloat(m[1]); overVal = Number(odd.value); underVal = Number(underOdd.value); break; }
+  }
+  if (overLine === null || overVal === null || underVal === null) return;
+
+  const [p1, pX, p2] = devig([Number(o1.value), Number(oX.value), Number(o2.value)]);
+  const [pOver] = devig([overVal, underVal]);
+
+  const { lambdaHome, lambdaAway } = fitLambdas(p1, pX, p2, overLine, pOver);
+  const grid = buildScoreGrid(lambdaHome, lambdaAway);
+  const derivedMarkets = deriveLevel1Markets(grid, homeTeam, awayTeam, LEVEL1_MARGIN);
+
+  for (const [marketType, odds] of Object.entries(derivedMarkets)) {
+    let market = await prisma.market.findFirst({ where: { eventId, type: marketType as any } });
+    if (!market) {
+      market = await prisma.market.create({ data: { eventId, type: marketType as any, name: LEVEL1_MARKET_NAMES[marketType] } });
+    }
+    for (const { label, value } of odds) {
+      const existingOdd = await prisma.odd.findFirst({ where: { marketId: market.id, label } });
+      if (existingOdd) {
+        await prisma.odd.update({ where: { id: existingOdd.id }, data: { value } });
+      } else {
+        await prisma.odd.create({ data: { marketId: market.id, label, value } });
       }
     }
   }
