@@ -44,6 +44,16 @@ const MARKET_LABELS: Record<string, string> = {
   CARDS_HANDICAP:      "🟨 Handicap cartons",
   FIRST_GOAL_SCORER:   "🥅 Premier buteur",
   HALF_TIME_RESULT:    "⏱ Résultat à la mi-temps",
+  ODD_EVEN_TOTAL:      "🔢 Total buts pair/impair",
+  CLEAN_SHEET:         "🧤 Cage inviolée",
+  WIN_TO_NIL:          "🛡️ Victoire à zéro",
+  WINNING_MARGIN:      "📏 Marge de victoire",
+  TEAM_GOALS:          "⚽ Buts par équipe (exact)",
+  HALF_TIME_CORRECT_SCORE: "🔢 Score exact à la mi-temps",
+  HALF_TIME_FULL_TIME:     "🔁 Double résultat (mi-temps/fin)",
+  BOTH_HALVES_SCORE:       "⏱ Marque dans les 2 mi-temps",
+  SHOTS_ON_TARGET_TOTAL:   "🎯 Plus/Moins tirs cadrés",
+  FOULS_TOTAL:              "🟥 Plus/Moins fautes",
 };
 
 // Ordre d'affichage des onglets — les marchés les plus pariés en premier.
@@ -63,7 +73,10 @@ const MARKET_TAB_ORDER = [
   "MATCH_WINNER", "DOUBLE_CHANCE", "OVER_UNDER", "BOTH_TEAMS_SCORE",
   "HANDICAP", "CORRECT_SCORE", "TEAM_TOTALS", "DRAW_NO_BET",
   "HALF_TIME",
+  "ODD_EVEN_TOTAL", "CLEAN_SHEET", "WIN_TO_NIL", "WINNING_MARGIN", "TEAM_GOALS",
+  "HALF_TIME_CORRECT_SCORE", "HALF_TIME_FULL_TIME", "BOTH_HALVES_SCORE",
   "CORNERS_TOTAL", "CORNERS_HANDICAP", "CARDS_TOTAL", "CARDS_HANDICAP",
+  "SHOTS_ON_TARGET_TOTAL", "FOULS_TOTAL",
   "FIRST_GOAL_SCORER", "HALF_TIME_RESULT",
 ];
 

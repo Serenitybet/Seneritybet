@@ -1206,6 +1206,42 @@ function computeItemResult(
       if (teamScore === line) return "VOID";
       return (dir === "Plus") === (teamScore > line) ? "WON" : "LOST";
     }
+    // ─── Marchés additionnels calculables à partir du seul score final ───
+    case "ODD_EVEN_TOTAL": {
+      if (label !== "Pair" && label !== "Impair") return null;
+      const even = (homeScore + awayScore) % 2 === 0;
+      return (label === "Pair") === even ? "WON" : "LOST";
+    }
+    case "CLEAN_SHEET": {
+      const m = label.match(/^(.+) (Oui|Non)$/);
+      if (!m) return null;
+      const [, team, answer] = m;
+      const cleanSheet = team === homeTeam ? awayScore === 0 : team === awayTeam ? homeScore === 0 : null;
+      if (cleanSheet === null) return null;
+      return (answer === "Oui") === cleanSheet ? "WON" : "LOST";
+    }
+    case "WIN_TO_NIL": {
+      if (!["1", "2", "Non"].includes(label)) return null;
+      const homeToNil = homeScore > awayScore && awayScore === 0;
+      const awayToNil = awayScore > homeScore && homeScore === 0;
+      const winner = homeToNil ? "1" : awayToNil ? "2" : "Non";
+      return label === winner ? "WON" : "LOST";
+    }
+    case "WINNING_MARGIN": {
+      const diff = homeScore - awayScore;
+      const bucket = Math.abs(diff) >= 3 ? "3+" : String(Math.abs(diff));
+      const computed = diff === 0 ? "X" : `${diff > 0 ? "1" : "2"} (${bucket})`;
+      return label === computed ? "WON" : "LOST";
+    }
+    case "TEAM_GOALS": {
+      const m = label.match(/^(.+) (0|1|2|3\+)$/);
+      if (!m) return null;
+      const [, team, bucketLabel] = m;
+      const score = team === homeTeam ? homeScore : team === awayTeam ? awayScore : null;
+      if (score === null) return null;
+      const bucket = score >= 3 ? "3+" : String(score);
+      return bucketLabel === bucket ? "WON" : "LOST";
+    }
     default:
       return null; // FIRST_GOAL_SCORER, HALF_TIME_RESULT : non proposés à la vente, pas de calcul
   }
