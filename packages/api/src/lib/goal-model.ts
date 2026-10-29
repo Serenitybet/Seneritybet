@@ -145,11 +145,11 @@ export function deriveLevel1Markets(
   const pDraw0 = grid[0][0];
   const pHomeToNil = awayMarginal(0) - pDraw0;
   const pAwayToNil = homeMarginal(0) - pDraw0;
-  const pNeitherToNil = 1 - pHomeToNil - pAwayToNil;
   const WIN_TO_NIL: DerivedOdd[] = [
-    { label: "1", value: toOdd(pHomeToNil) },
-    { label: "2", value: toOdd(pAwayToNil) },
-    { label: "Non", value: toOdd(pNeitherToNil) },
+    { label: `${homeTeam} Oui`, value: toOdd(pHomeToNil) },
+    { label: `${homeTeam} Non`, value: toOdd(1 - pHomeToNil) },
+    { label: `${awayTeam} Oui`, value: toOdd(pAwayToNil) },
+    { label: `${awayTeam} Non`, value: toOdd(1 - pAwayToNil) },
   ];
 
   const marginBuckets: { label: string; predicate: (h: number, a: number) => boolean }[] = [
