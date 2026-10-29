@@ -105,11 +105,19 @@ export function devig(impliedOdds: number[]): number[] {
   return raw.map((p) => p / sum);
 }
 
-/** Probabilité → cote décimale, marge réintroduite, bornée à un minimum réaliste. */
+// Plafond volontaire : sur un match très déséquilibré, l'issue la plus rare
+// d'un marché comme "marge de victoire" peut avoir une cote "juste" de
+// plusieurs centaines (ex. l'outsider gagne par 3+ buts) — mathématiquement
+// correct, mais qui a l'air d'un bug pour un client et constitue un vrai
+// risque si le modèle est légèrement mal calibré sur un cas extrême. Les
+// bookmakers plafonnent eux aussi les marchés obscurs pour cette raison.
+const ODD_CEILING = 100;
+
+/** Probabilité → cote décimale, marge réintroduite, bornée entre un minimum et un maximum réalistes. */
 export function probabilityToOdd(probability: number, marginPct: number): number {
-  if (probability <= 0) return 999; // ne devrait jamais arriver en pratique (score grid tronquée large)
+  if (probability <= 0) return ODD_CEILING;
   const odd = 1 / (probability * (1 + marginPct));
-  return Math.max(1.01, Math.round(odd * 100) / 100);
+  return Math.min(ODD_CEILING, Math.max(1.01, Math.round(odd * 100) / 100));
 }
 
 export interface DerivedOdd { label: string; value: number }
