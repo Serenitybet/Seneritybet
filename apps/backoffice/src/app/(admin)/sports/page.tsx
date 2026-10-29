@@ -23,6 +23,23 @@ const MARKET_TYPES: { value: string; label: string; defaultOdds: { label: string
   { value: "CORRECT_SCORE",     label: "Score exact",              defaultOdds: [{ label: "1-0", value: "7.00" }, { label: "2-0", value: "8.00" }, { label: "2-1", value: "7.50" }, { label: "0-0", value: "9.00" }, { label: "1-1", value: "5.50" }, { label: "0-1", value: "9.00" }, { label: "0-2", value: "10.00" }, { label: "Autre", value: "5.00" }] },
   { value: "HANDICAP",          label: "Handicap",                 defaultOdds: [{ label: "-1 Dom.", value: "2.20" }, { label: "+1 Ext.", value: "1.70" }] },
   { value: "FIRST_GOAL_SCORER", label: "1er buteur (équipe)",      defaultOdds: [{ label: "Dom. marque 1er", value: "1.85" }, { label: "Ext. marque 1er", value: "2.10" }, { label: "Aucun but", value: "7.00" }] },
+  // Marchés calculés automatiquement à partir du seul score final — voir
+  // computeItemResult (odds.service.ts). "Domicile"/"Extérieur" dans les
+  // libellés par défaut DOIVENT être remplacés par le nom exact de l'équipe
+  // (tel qu'affiché sur le match), sinon le règlement auto ne reconnaît pas
+  // la sélection et le ticket reste en attente de saisie manuelle.
+  { value: "ODD_EVEN_TOTAL",    label: "Total de buts pair/impair", defaultOdds: [{ label: "Pair", value: "1.90" }, { label: "Impair", value: "1.90" }] },
+  { value: "CLEAN_SHEET",       label: "Cage inviolée",            defaultOdds: [{ label: "Domicile Oui", value: "2.20" }, { label: "Domicile Non", value: "1.65" }, { label: "Extérieur Oui", value: "3.00" }, { label: "Extérieur Non", value: "1.35" }] },
+  { value: "WIN_TO_NIL",        label: "Victoire à zéro",          defaultOdds: [{ label: "1", value: "2.80" }, { label: "2", value: "4.50" }, { label: "Non", value: "1.50" }] },
+  { value: "WINNING_MARGIN",    label: "Marge de victoire",        defaultOdds: [{ label: "1 (1)", value: "3.50" }, { label: "1 (2)", value: "5.00" }, { label: "1 (3+)", value: "7.00" }, { label: "X", value: "3.40" }, { label: "2 (1)", value: "4.50" }, { label: "2 (2)", value: "7.00" }, { label: "2 (3+)", value: "10.00" }] },
+  { value: "TEAM_GOALS",        label: "Buts par équipe (exact)",  defaultOdds: [{ label: "Domicile 0", value: "3.00" }, { label: "Domicile 1", value: "2.50" }, { label: "Domicile 2", value: "3.50" }, { label: "Domicile 3+", value: "4.50" }, { label: "Extérieur 0", value: "2.20" }, { label: "Extérieur 1", value: "3.00" }, { label: "Extérieur 2", value: "4.50" }, { label: "Extérieur 3+", value: "6.00" }] },
+  // Marchés réglés via le circuit "stats" existant (saisie manuelle du
+  // trader ou automatique via API-Football) — voir stats-settlement.ts.
+  { value: "HALF_TIME_CORRECT_SCORE", label: "Score exact à la mi-temps", defaultOdds: [{ label: "0-0", value: "2.20" }, { label: "1-0", value: "3.50" }, { label: "0-1", value: "4.50" }, { label: "1-1", value: "5.00" }, { label: "2-0", value: "7.00" }, { label: "0-2", value: "9.00" }, { label: "2-1", value: "9.00" }, { label: "1-2", value: "11.00" }] },
+  { value: "HALF_TIME_FULL_TIME",     label: "Double résultat (mi-temps/fin)", defaultOdds: [{ label: "1/1", value: "2.20" }, { label: "1/X", value: "7.00" }, { label: "1/2", value: "15.00" }, { label: "X/1", value: "4.50" }, { label: "X/X", value: "4.00" }, { label: "X/2", value: "5.50" }, { label: "2/1", value: "17.00" }, { label: "2/X", value: "7.50" }, { label: "2/2", value: "3.20" }] },
+  { value: "BOTH_HALVES_SCORE",       label: "Marque dans les 2 mi-temps", defaultOdds: [{ label: "Domicile Oui", value: "2.60" }, { label: "Domicile Non", value: "1.45" }, { label: "Extérieur Oui", value: "3.40" }, { label: "Extérieur Non", value: "1.25" }] },
+  { value: "SHOTS_ON_TARGET_TOTAL",   label: "Plus/Moins tirs cadrés",     defaultOdds: [{ label: "Plus 8.5", value: "1.90" }, { label: "Moins 8.5", value: "1.90" }] },
+  { value: "FOULS_TOTAL",             label: "Plus/Moins fautes",          defaultOdds: [{ label: "Plus 22.5", value: "1.90" }, { label: "Moins 22.5", value: "1.90" }] },
 ];
 
 const SPORTS = ["Football", "Basketball", "Tennis", "Rugby", "MMA", "Hockey", "Volleyball", "Handball"];
@@ -58,10 +75,11 @@ export default function SportsPage() {
   const [addingMarket, setAddMarket] = useState(false);
   const [newOdd, setNewOdd]          = useState({ marketId: "", label: "", value: "" });
 
-  // Réglage en masse des marchés stats (mi-temps, corners, cartons)
+  // Réglage en masse des marchés stats (mi-temps, corners, cartons, tirs, fautes)
   const [statsForm, setStatsForm] = useState({
     homeScore: "", awayScore: "", htHome: "", htAway: "",
     cornersHome: "", cornersAway: "", cardsHome: "", cardsAway: "",
+    shotsHome: "", shotsAway: "", foulsHome: "", foulsAway: "",
   });
   const [settlingStats, setSettlingStats] = useState(false);
 
@@ -109,6 +127,7 @@ export default function SportsPage() {
           homeScore: d.data.homeScore != null ? String(d.data.homeScore) : "",
           awayScore: d.data.awayScore != null ? String(d.data.awayScore) : "",
           htHome: "", htAway: "", cornersHome: "", cornersAway: "", cardsHome: "", cardsAway: "",
+          shotsHome: "", shotsAway: "", foulsHome: "", foulsAway: "",
         });
       }
     } finally { setPanelLoad(false); }
@@ -238,6 +257,12 @@ export default function SportsPage() {
     }
     if (statsForm.cardsHome !== "" && statsForm.cardsAway !== "") {
       body.cardsHome = Number(statsForm.cardsHome); body.cardsAway = Number(statsForm.cardsAway);
+    }
+    if (statsForm.shotsHome !== "" && statsForm.shotsAway !== "") {
+      body.shotsHome = Number(statsForm.shotsHome); body.shotsAway = Number(statsForm.shotsAway);
+    }
+    if (statsForm.foulsHome !== "" && statsForm.foulsAway !== "") {
+      body.foulsHome = Number(statsForm.foulsHome); body.foulsAway = Number(statsForm.foulsAway);
     }
     setSettlingStats(true);
     try {
@@ -466,6 +491,28 @@ export default function SportsPage() {
                         <span className="text-t-faint text-xs">–</span>
                         <input className="bo-input w-14 text-xs py-1 font-mono text-center" type="number" min="0" placeholder="Ext."
                           value={statsForm.cardsAway} onChange={e => setStatsForm(p => ({ ...p, cardsAway: e.target.value }))} />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1">Tirs cadrés</label>
+                      <div className="flex items-center gap-1.5">
+                        <input className="bo-input w-14 text-xs py-1 font-mono text-center" type="number" min="0" placeholder="Dom."
+                          value={statsForm.shotsHome} onChange={e => setStatsForm(p => ({ ...p, shotsHome: e.target.value }))} />
+                        <span className="text-t-faint text-xs">–</span>
+                        <input className="bo-input w-14 text-xs py-1 font-mono text-center" type="number" min="0" placeholder="Ext."
+                          value={statsForm.shotsAway} onChange={e => setStatsForm(p => ({ ...p, shotsAway: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1">Fautes</label>
+                      <div className="flex items-center gap-1.5">
+                        <input className="bo-input w-14 text-xs py-1 font-mono text-center" type="number" min="0" placeholder="Dom."
+                          value={statsForm.foulsHome} onChange={e => setStatsForm(p => ({ ...p, foulsHome: e.target.value }))} />
+                        <span className="text-t-faint text-xs">–</span>
+                        <input className="bo-input w-14 text-xs py-1 font-mono text-center" type="number" min="0" placeholder="Ext."
+                          value={statsForm.foulsAway} onChange={e => setStatsForm(p => ({ ...p, foulsAway: e.target.value }))} />
                       </div>
                     </div>
                   </div>

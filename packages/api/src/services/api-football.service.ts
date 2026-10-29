@@ -86,14 +86,20 @@ async function findFixture(event: { homeTeam: string; awayTeam: string; startTim
   return null;
 }
 
-function extractCornersCards(
+type StatPair = { home: number; away: number } | null;
+
+// Toutes ces stats viennent du MÊME appel /fixtures/statistics — déjà fait
+// pour corners/cartons — donc tirs cadrés et fautes sont "gratuits" (aucun
+// quota supplémentaire consommé) : il suffisait de lire d'autres champs de
+// la réponse déjà récupérée.
+function extractMatchStats(
   statsResponse: any[], homeTeam: string, awayTeam: string,
-): { corners: { home: number; away: number } | null; cards: { home: number; away: number } | null } {
-  if (!statsResponse || statsResponse.length < 2) return { corners: null, cards: null };
+): { corners: StatPair; cards: StatPair; shots: StatPair; fouls: StatPair } {
+  if (!statsResponse || statsResponse.length < 2) return { corners: null, cards: null, shots: null, fouls: null };
 
   const homeStats = statsResponse.find((t: any) => teamsMatch(t.team.name, homeTeam));
   const awayStats = statsResponse.find((t: any) => teamsMatch(t.team.name, awayTeam));
-  if (!homeStats || !awayStats) return { corners: null, cards: null };
+  if (!homeStats || !awayStats) return { corners: null, cards: null, shots: null, fouls: null };
 
   const statValue = (teamStats: any, type: string): number | null => {
     const s = teamStats.statistics?.find((s: any) => s.type?.toLowerCase() === type.toLowerCase());
@@ -103,12 +109,12 @@ function extractCornersCards(
     return null;
   };
 
-  let corners: { home: number; away: number } | null = null;
+  let corners: StatPair = null;
   const hc = statValue(homeStats, "Corner Kicks");
   const ac = statValue(awayStats, "Corner Kicks");
   if (hc !== null && ac !== null) corners = { home: hc, away: ac };
 
-  let cards: { home: number; away: number } | null = null;
+  let cards: StatPair = null;
   const hy = statValue(homeStats, "Yellow Cards");
   const ay = statValue(awayStats, "Yellow Cards");
   if (hy !== null || ay !== null) {
@@ -117,7 +123,17 @@ function extractCornersCards(
     cards = { home: (hy ?? 0) + hr, away: (ay ?? 0) + ar };
   }
 
-  return { corners, cards };
+  let shots: StatPair = null;
+  const hs = statValue(homeStats, "Shots on Goal");
+  const as_ = statValue(awayStats, "Shots on Goal");
+  if (hs !== null && as_ !== null) shots = { home: hs, away: as_ };
+
+  let fouls: StatPair = null;
+  const hf = statValue(homeStats, "Fouls");
+  const af = statValue(awayStats, "Fouls");
+  if (hf !== null && af !== null) fouls = { home: hf, away: af };
+
+  return { corners, cards, shots, fouls };
 }
 
 
@@ -186,20 +202,27 @@ export async function syncApiFootballSettlement() {
         m.odds.some((o) => o.ticketItems.some((ti) => ti.result === null));
       const needsCorners = event.markets.some((m) => (m.type === "CORNERS_TOTAL" || m.type === "CORNERS_HANDICAP") && hasPending(m));
       const needsCards   = event.markets.some((m) => (m.type === "CARDS_TOTAL"   || m.type === "CARDS_HANDICAP")   && hasPending(m));
+      const needsShots   = event.markets.some((m) => m.type === "SHOTS_ON_TARGET_TOTAL" && hasPending(m));
+      const needsFouls   = event.markets.some((m) => m.type === "FOULS_TOTAL"           && hasPending(m));
 
       let corners: { home: number; away: number } | null = null;
       let cards:   { home: number; away: number } | null = null;
-      if (needsCorners || needsCards) {
+      let shots:   { home: number; away: number } | null = null;
+      let fouls:   { home: number; away: number } | null = null;
+      if (needsCorners || needsCards || needsShots || needsFouls) {
         await sleep(REQUEST_DELAY_MS);
         const stats = await apiFootballGet("/fixtures/statistics", { fixture: fixture.fixture.id });
-        ({ corners, cards } = extractCornersCards(stats.response ?? [], event.homeTeam, event.awayTeam));
+        ({ corners, cards, shots, fouls } = extractMatchStats(stats.response ?? [], event.homeTeam, event.awayTeam));
       }
 
       matchedCount++;
       const touchedTicketIds = new Set<string>();
       for (const market of event.markets) {
         for (const odd of market.odds) {
-          const result = computeStatsItemResult(market.type, odd.label, htHome, htAway, ftHome, ftAway, corners, cards);
+          const result = computeStatsItemResult(
+            market.type, odd.label, event.homeTeam, event.awayTeam,
+            htHome, htAway, ftHome, ftAway, corners, cards, shots, fouls,
+          );
           if (!result) continue;
           for (const item of odd.ticketItems) {
             if (item.result !== null) continue;

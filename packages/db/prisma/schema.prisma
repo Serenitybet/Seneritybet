@@ -105,6 +105,21 @@ enum MarketType {
   SECOND_HALF_TOTALS
   SECOND_HALF_HANDICAP
   SECOND_HALF_DOUBLE_CHANCE
+  // Niveau 1 — calculables à partir du seul score final (odds.service.ts
+  // computeItemResult), réglage 100% automatique.
+  ODD_EVEN_TOTAL
+  CLEAN_SHEET
+  WIN_TO_NIL
+  WINNING_MARGIN
+  TEAM_GOALS
+  // Niveau 2 — nécessitent le score mi-temps (stats-settlement.ts),
+  // réglage auto via API-Football ou saisie manuelle du trader.
+  HALF_TIME_CORRECT_SCORE
+  HALF_TIME_FULL_TIME
+  BOTH_HALVES_SCORE
+  // Niveau 3 — extraits de la même réponse API-Football que corners/cartons.
+  SHOTS_ON_TARGET_TOTAL
+  FOULS_TOTAL
 }
 
 enum BetType {

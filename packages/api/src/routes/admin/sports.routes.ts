@@ -153,7 +153,7 @@ adminSportsRouter.patch("/events/:id/result",
 adminSportsRouter.post("/events/:id/settle-stats",
   requireRole("TRADER", "ADMIN", "SUPER_ADMIN"),
   asyncHandler(async (req: Request, res: Response) => {
-    const { homeScore, awayScore, htHomeScore, htAwayScore, cornersHome, cornersAway, cardsHome, cardsAway } = req.body;
+    const { homeScore, awayScore, htHomeScore, htAwayScore, cornersHome, cornersAway, cardsHome, cardsAway, shotsHome, shotsAway, foulsHome, foulsAway } = req.body;
 
     let event = await prisma.event.findUnique({ where: { id: req.params.id } });
     if (!event) { res.status(404).json({ success: false, error: "Match introuvable" }); return; }
@@ -207,6 +207,22 @@ adminSportsRouter.post("/events/:id/settle-stats",
       cards = { home: Number(cardsHome), away: Number(cardsAway) };
     }
 
+    let shots: { home: number; away: number } | null = null;
+    if (shotsHome !== undefined && shotsAway !== undefined) {
+      if (!isValidCount(shotsHome) || !isValidCount(shotsAway)) {
+        res.status(400).json({ success: false, error: "Tirs cadrés invalides" }); return;
+      }
+      shots = { home: Number(shotsHome), away: Number(shotsAway) };
+    }
+
+    let fouls: { home: number; away: number } | null = null;
+    if (foulsHome !== undefined && foulsAway !== undefined) {
+      if (!isValidCount(foulsHome) || !isValidCount(foulsAway)) {
+        res.status(400).json({ success: false, error: "Fautes invalides" }); return;
+      }
+      fouls = { home: Number(foulsHome), away: Number(foulsAway) };
+    }
+
     // Remarque : contrairement à avant, l'absence de données mi-temps/
     // corners/cartons n'est plus bloquante — un score final seul suffit
     // désormais à régler les marchés "classiques" (vainqueur, etc.) via
@@ -221,14 +237,19 @@ adminSportsRouter.post("/events/:id/settle-stats",
     let updatedItems = 0;
     const touchedTicketIds = new Set<string>();
     for (const market of markets) {
-      const isHalfMarket = market.type.includes("HALF");
+      // "BOTH_HALVES_SCORE" a besoin du score mi-temps mais ne contient pas
+      // "HALF" tel quel ("HALVES" ≠ "HALF") — vérifié explicitement.
+      const isHalfMarket = market.type.includes("HALF") || market.type === "BOTH_HALVES_SCORE";
       const isCornersOrCards = market.type.startsWith("CORNERS") || market.type.startsWith("CARDS");
+      const isShotsOrFouls = market.type === "SHOTS_ON_TARGET_TOTAL" || market.type === "FOULS_TOTAL";
       if (isHalfMarket && htHome === undefined) continue; // pas de données saisies — laissé pour plus tard
       if (isCornersOrCards && !corners && !cards) continue;
+      if (isShotsOrFouls && !shots && !fouls) continue;
 
       for (const odd of market.odds) {
         const result = computeStatsItemResult(
-          market.type, odd.label, htHome ?? 0, htAway ?? 0, event.homeScore, event.awayScore, corners, cards,
+          market.type, odd.label, event.homeTeam, event.awayTeam,
+          htHome ?? 0, htAway ?? 0, event.homeScore, event.awayScore, corners, cards, shots, fouls,
         );
         if (!result) continue;
         for (const item of odd.ticketItems) {
