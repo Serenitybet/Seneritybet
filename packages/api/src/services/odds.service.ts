@@ -55,7 +55,6 @@ export const ODD_LABEL_ORDER: Record<string, string[]> = {
   BOTH_TEAMS_SCORE:          ["Oui", "Non"],
   DRAW_NO_BET:               ["1", "2"],
   ODD_EVEN_TOTAL:            ["Pair", "Impair"],
-  WIN_TO_NIL:                ["1", "2", "Non"],
   WINNING_MARGIN:            ["1 (1)", "1 (2)", "1 (3+)", "X", "2 (1)", "2 (2)", "2 (3+)"],
   HALF_TIME_FULL_TIME:       ["1/1", "1/X", "1/2", "X/1", "X/X", "X/2", "2/1", "2/X", "2/2"],
   HALF_TIME_CORRECT_SCORE:   ["0-0", "1-0", "0-1", "1-1", "2-0", "0-2", "2-1", "1-2"],
@@ -69,6 +68,7 @@ export const ODD_LABEL_ORDER: Record<string, string[]> = {
 // de suffixe fixe ci-dessous.
 const TEAM_PREFIXED_SUFFIX_ORDER: Record<string, string[]> = {
   CLEAN_SHEET:        ["Oui", "Non"],
+  WIN_TO_NIL:         ["Oui", "Non"],
   BOTH_HALVES_SCORE:  ["Oui", "Non"],
   TEAM_GOALS:         ["0", "1", "2", "3+"],
 };
@@ -463,17 +463,28 @@ async function generateLevel1Markets(eventId: string, homeTeam: string, awayTeam
   const derivedMarkets = deriveLevel1Markets(grid, homeTeam, awayTeam, LEVEL1_MARGIN);
 
   for (const [marketType, odds] of Object.entries(derivedMarkets)) {
-    let market = await prisma.market.findFirst({ where: { eventId, type: marketType as any } });
+    let market = await prisma.market.findFirst({ where: { eventId, type: marketType as any }, include: { odds: true } });
     if (!market) {
-      market = await prisma.market.create({ data: { eventId, type: marketType as any, name: LEVEL1_MARKET_NAMES[marketType] } });
+      market = await prisma.market.create({ data: { eventId, type: marketType as any, name: LEVEL1_MARKET_NAMES[marketType] }, include: { odds: true } });
     }
+    const currentLabels = new Set(odds.map((o) => o.label));
     for (const { label, value } of odds) {
-      const existingOdd = await prisma.odd.findFirst({ where: { marketId: market.id, label } });
+      const existingOdd = market.odds.find((o) => o.label === label);
       if (existingOdd) {
-        await prisma.odd.update({ where: { id: existingOdd.id }, data: { value } });
+        await prisma.odd.update({ where: { id: existingOdd.id }, data: { value, isActive: true } });
       } else {
         await prisma.odd.create({ data: { marketId: market.id, label, value } });
       }
+    }
+    // Désactive les anciennes cotes dont le libellé ne correspond plus au
+    // format actuel (ex. le format de WIN_TO_NIL est passé de "1"/"2"/"Non"
+    // à "<équipe> Oui"/"<équipe> Non") — sans ça elles resteraient affichées
+    // en orphelines, jamais mises à jour. Désactivation plutôt que
+    // suppression : préserve l'intégrité référentielle si un ticket y fait
+    // déjà référence.
+    const stale = market.odds.filter((o) => o.isActive && !currentLabels.has(o.label));
+    for (const o of stale) {
+      await prisma.odd.update({ where: { id: o.id }, data: { isActive: false } });
     }
   }
 }
@@ -1334,11 +1345,14 @@ function computeItemResult(
       return (answer === "Oui") === cleanSheet ? "WON" : "LOST";
     }
     case "WIN_TO_NIL": {
-      if (!["1", "2", "Non"].includes(label)) return null;
-      const homeToNil = homeScore > awayScore && awayScore === 0;
-      const awayToNil = awayScore > homeScore && homeScore === 0;
-      const winner = homeToNil ? "1" : awayToNil ? "2" : "Non";
-      return label === winner ? "WON" : "LOST";
+      const m = label.match(/^(.+) (Oui|Non)$/);
+      if (!m) return null;
+      const [, team, answer] = m;
+      const winToNil = team === homeTeam ? homeScore > awayScore && awayScore === 0
+        : team === awayTeam ? awayScore > homeScore && homeScore === 0
+        : null;
+      if (winToNil === null) return null;
+      return (answer === "Oui") === winToNil ? "WON" : "LOST";
     }
     case "WINNING_MARGIN": {
       const diff = homeScore - awayScore;
