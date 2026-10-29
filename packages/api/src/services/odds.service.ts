@@ -54,10 +54,48 @@ export const ODD_LABEL_ORDER: Record<string, string[]> = {
   SECOND_HALF_DOUBLE_CHANCE: ["1X", "12", "X2"],
   BOTH_TEAMS_SCORE:          ["Oui", "Non"],
   DRAW_NO_BET:               ["1", "2"],
+  ODD_EVEN_TOTAL:            ["Pair", "Impair"],
+  WIN_TO_NIL:                ["1", "2", "Non"],
+  WINNING_MARGIN:            ["1 (1)", "1 (2)", "1 (3+)", "X", "2 (1)", "2 (2)", "2 (3+)"],
+  HALF_TIME_FULL_TIME:       ["1/1", "1/X", "1/2", "X/1", "X/X", "X/2", "2/1", "2/X", "2/2"],
+  HALF_TIME_CORRECT_SCORE:   ["0-0", "1-0", "0-1", "1-1", "2-0", "0-2", "2-1", "1-2"],
 };
+
+// Marchés dont le libellé commence par le nom de l'équipe (ex. "Lecce Oui",
+// "Frosinone 3+") — le nom exact n'est pas connu à l'avance (dépend du
+// match), donc pas de liste statique possible. On groupe par préfixe
+// (l'équipe), en conservant l'ordre dans lequel chaque équipe apparaît en
+// premier dans les données reçues, puis on trie chaque groupe selon l'ordre
+// de suffixe fixe ci-dessous.
+const TEAM_PREFIXED_SUFFIX_ORDER: Record<string, string[]> = {
+  CLEAN_SHEET:        ["Oui", "Non"],
+  BOTH_HALVES_SCORE:  ["Oui", "Non"],
+  TEAM_GOALS:         ["0", "1", "2", "3+"],
+};
+
+function sortTeamPrefixedOdds<T extends { label: string }>(odds: T[], suffixOrder: string[]): T[] {
+  const suffixOf = (label: string) => suffixOrder.find((s) => label.endsWith(` ${s}`)) ?? "";
+  const prefixOf = (label: string) => {
+    const s = suffixOf(label);
+    return s ? label.slice(0, label.length - s.length - 1) : label;
+  };
+  const prefixOrder: string[] = [];
+  for (const o of odds) {
+    const p = prefixOf(o.label);
+    if (!prefixOrder.includes(p)) prefixOrder.push(p);
+  }
+  return [...odds].sort((a, b) => {
+    const pa = prefixOrder.indexOf(prefixOf(a.label));
+    const pb = prefixOrder.indexOf(prefixOf(b.label));
+    if (pa !== pb) return pa - pb;
+    return suffixOrder.indexOf(suffixOf(a.label)) - suffixOrder.indexOf(suffixOf(b.label));
+  });
+}
 
 export function sortOddsByCanonicalOrder<T extends { label: string }>(marketType: string, odds: T[]): T[] {
   const filtered = odds.filter((o) => !isQuarterLineLabel(o.label));
+  const teamSuffixOrder = TEAM_PREFIXED_SUFFIX_ORDER[marketType];
+  if (teamSuffixOrder) return sortTeamPrefixedOdds(filtered, teamSuffixOrder);
   const order = ODD_LABEL_ORDER[marketType];
   if (!order) return filtered;
   return [...filtered].sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
