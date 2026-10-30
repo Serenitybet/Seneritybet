@@ -44,7 +44,7 @@ const MARKET_TYPES: { value: string; label: string; defaultOdds: { label: string
 
 const SPORTS = ["Football", "Basketball", "Tennis", "Rugby", "MMA", "Hockey", "Volleyball", "Handball"];
 const DATE_QUICK = [
-  { value: "all",   label: "Tous les matchs à venir" },
+  { value: "all",   label: "Toutes dates" },
   { value: "today", label: "Aujourd'hui" },
 ] as const;
 // "all" / "today" = raccourcis ; toute autre valeur = une date précise
@@ -362,7 +362,15 @@ export default function SportsPage() {
                 l'API externe n'a pas rapporté. */}
             <div className="flex gap-2">
               {STATUS_FILTERS.map(s => (
-                <button key={s.value} onClick={() => setStatus(s.value)}
+                <button key={s.value} onClick={() => {
+                  setStatus(s.value);
+                  // "Terminés" sans filtre de date affichait tout l'historique
+                  // mélangé (comme "Tous" le faisait pour les matchs à
+                  // venir) — on recadre par défaut sur aujourd'hui, les
+                  // raccourcis/sélecteur de date restant disponibles pour
+                  // naviguer jour par jour.
+                  if (s.value === "FINISHED" && dateRange === "all") setDateRange("today");
+                }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${filterStatus === s.value ? "bg-green-600 text-white" : "bg-bo-card text-t-muted hover:text-t-primary border border-bo-border2"}`}>
                   {s.label}
                 </button>
