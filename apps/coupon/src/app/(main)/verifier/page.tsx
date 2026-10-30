@@ -13,12 +13,13 @@ const COUPON_STATUS_LABEL: Record<string, { label: string; color: string }> = {
 };
 
 const TICKET_STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  PENDING:   { label: "En attente du résultat", color: "text-info" },
-  WON:       { label: "Gagné — à retirer en boutique", color: "text-green-700" },
-  LOST:      { label: "Perdu", color: "text-live" },
-  REFUNDED:  { label: "Remboursé", color: "text-info" },
-  CANCELLED: { label: "Annulé", color: "text-live" },
-  PAID:      { label: "Payé", color: "text-txt-muted" },
+  PENDING:            { label: "En attente du résultat", color: "text-info" },
+  WON:                { label: "Gagné — à retirer en boutique", color: "text-green-700" },
+  LOST:               { label: "Perdu", color: "text-live" },
+  REFUNDED:           { label: "Remboursé", color: "text-info" },
+  CANCELLED:          { label: "Annulé", color: "text-live" },
+  PAID:               { label: "Payé", color: "text-txt-muted" },
+  CASHED_OUT_PENDING: { label: "Cash-out accepté — à retirer en boutique", color: "text-green-700" },
 };
 
 const ITEM_RESULT_LABEL: Record<string, { label: string; color: string }> = {
@@ -45,6 +46,14 @@ interface TicketItem {
   odd: { label: string };
 }
 
+interface CashoutQuote {
+  eligible: boolean;
+  reason?: string;
+  fairValueXAF?: number;
+  offerXAF?: number;
+  marginPct?: number;
+}
+
 interface Ticket {
   id: string;
   code: string;
@@ -52,9 +61,11 @@ interface Ticket {
   stakeXAF: number;
   totalOdds: number;
   potentialWinXAF: number;
+  cashedOutAmountXAF: number | null;
   createdAt: string;
   paidAt: string | null;
   items: TicketItem[];
+  cashoutQuote?: CashoutQuote | null;
 }
 
 type Result =
@@ -132,7 +143,7 @@ export default function VerifierPage() {
       )}
 
       {result && "ticket" in result && (
-        <TicketResultView ticket={result.ticket} />
+        <TicketResultView ticket={result.ticket} onCashedOut={() => doSearch(code)} />
       )}
 
       {result && "selections" in result && (
@@ -150,7 +161,7 @@ export default function VerifierPage() {
                   ? `${result.tickets.length} tickets déjà retirés avec ce code`
                   : "1 ticket déjà retiré avec ce code"}
               </p>
-              {result.tickets.map((t) => <TicketResultView key={t.id} ticket={t} />)}
+              {result.tickets.map((t) => <TicketResultView key={t.id} ticket={t} onCashedOut={() => doSearch(code)} />)}
             </div>
           )}
         </>
@@ -189,7 +200,7 @@ function CouponResultView({
   );
 }
 
-function TicketResultView({ ticket }: { ticket: Ticket }) {
+function TicketResultView({ ticket, onCashedOut }: { ticket: Ticket; onCashedOut: () => void }) {
   const info = TICKET_STATUS_LABEL[ticket.status] ?? { label: ticket.status, color: "text-txt-primary" };
   return (
     <div className="card p-4 space-y-3">
@@ -225,6 +236,83 @@ function TicketResultView({ ticket }: { ticket: Ticket }) {
           Présentez ce ticket (ou son code) en boutique pour être payé.
         </p>
       )}
+      {ticket.status === "CASHED_OUT_PENDING" && (
+        <p className="text-xs text-green-700 text-center bg-green-600/10 border border-green-600/20 rounded-lg p-2">
+          Cash-out de {ticket.cashedOutAmountXAF?.toLocaleString()} XAF accepté — présentez ce ticket (ou son code) en
+          boutique pour être payé.
+        </p>
+      )}
+      {ticket.status === "PENDING" && ticket.cashoutQuote?.eligible && (
+        <CashoutOffer ticket={ticket} quote={ticket.cashoutQuote} onCashedOut={onCashedOut} />
+      )}
     </div>
+  );
+}
+
+function CashoutOffer({ ticket, quote, onCashedOut }: { ticket: Ticket; quote: CashoutQuote; onCashedOut: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [payoutCode, setPayoutCode] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function accept(e: React.FormEvent) {
+    e.preventDefault();
+    if (payoutCode.trim().length !== 4) { setError("Entrez le code à 4 chiffres imprimé sur votre ticket"); return; }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_URL}/web-coupons/${encodeURIComponent(ticket.code)}/cashout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payoutCode: payoutCode.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Erreur"); return; }
+      onCashedOut();
+    } catch {
+      setError("Erreur réseau");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <div className="bg-green-600/10 border border-green-600/20 rounded-lg p-3 space-y-2 text-center">
+        <p className="text-xs text-txt-muted">
+          Vous pouvez encaisser ce ticket maintenant, avant la fin, pour :
+        </p>
+        <p className="text-2xl font-black text-green-700">{quote.offerXAF?.toLocaleString()} XAF</p>
+        <button onClick={() => setOpen(true)} className="btn-green w-full py-2 text-sm">
+          💸 Encaisser maintenant
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={accept} className="bg-green-600/10 border border-green-600/20 rounded-lg p-3 space-y-2.5">
+      <p className="text-xs text-txt-muted text-center">
+        En confirmant, vous acceptez <strong className="text-txt-primary">{quote.offerXAF?.toLocaleString()} XAF</strong>{" "}
+        à la place du gain potentiel ({ticket.potentialWinXAF.toLocaleString()} XAF) — définitif, non annulable.
+      </p>
+      <input
+        className="field font-mono text-center tracking-widest"
+        placeholder="Code à 4 chiffres (sur votre ticket)"
+        maxLength={4}
+        inputMode="numeric"
+        value={payoutCode}
+        onChange={(e) => setPayoutCode(e.target.value.replace(/\D/g, ""))}
+      />
+      {error && <p className="text-xs text-live text-center">{error}</p>}
+      <div className="flex gap-2">
+        <button type="button" onClick={() => setOpen(false)} className="btn-outline flex-1 py-2 text-sm">
+          Annuler
+        </button>
+        <button type="submit" disabled={submitting} className="btn-green flex-1 py-2 text-sm">
+          {submitting ? "..." : "Confirmer"}
+        </button>
+      </div>
+    </form>
   );
 }

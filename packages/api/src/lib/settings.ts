@@ -7,11 +7,20 @@ export const SETTING_KEYS = {
   // plafond), pour ne pas bloquer de tickets tant qu'un admin n'a pas
   // explicitement choisi une valeur dans le backoffice.
   TPE_MAX_WIN_XAF: "TPE_MAX_WIN_XAF",
+  // Cash-out (voir cashout.service.ts) — % de marge retenue sur la valeur
+  // juste calculée (entier, ex. "20" = on verse 80% de la valeur juste), et
+  // cote maximum acceptée pour une sélection pas encore jouée d'un ticket
+  // (au-delà, trop incertain/outsider pour être intéressant à racheter —
+  // décimal, voir getSettingFloat).
+  CASHOUT_MARGIN_PCT: "CASHOUT_MARGIN_PCT",
+  CASHOUT_MAX_ODD_PENDING: "CASHOUT_MAX_ODD_PENDING",
 } as const;
 
 const DEFAULTS: Record<string, string> = {
   [SETTING_KEYS.TPE_PAYOUT_APPROVAL_THRESHOLD_XAF]: "5000000", // 50 000 XAF (centimes)
   [SETTING_KEYS.TPE_MAX_WIN_XAF]: "0", // désactivé par défaut (centimes)
+  [SETTING_KEYS.CASHOUT_MARGIN_PCT]: "20",
+  [SETTING_KEYS.CASHOUT_MAX_ODD_PENDING]: "1.80",
 };
 
 export async function getSetting(key: string): Promise<string> {
@@ -21,6 +30,10 @@ export async function getSetting(key: string): Promise<string> {
 
 export async function getSettingNumber(key: string): Promise<number> {
   return parseInt(await getSetting(key), 10);
+}
+
+export async function getSettingFloat(key: string): Promise<number> {
+  return parseFloat(await getSetting(key));
 }
 
 export async function setSetting(key: string, value: string, updatedBy: string): Promise<void> {
