@@ -43,6 +43,32 @@ const MARKET_TYPES: { value: string; label: string; defaultOdds: { label: string
 ];
 
 const SPORTS = ["Football", "Basketball", "Tennis", "Rugby", "MMA", "Hockey", "Volleyball", "Handball"];
+const DATE_RANGES = [
+  { value: "all",   label: "Tous les matchs à venir" },
+  { value: "today", label: "Aujourd'hui" },
+  { value: "week",  label: "7 prochains jours" },
+] as const;
+type DateRange = (typeof DATE_RANGES)[number]["value"];
+
+// Onglets de statut — notamment pour retrouver vite les matchs déjà en
+// direct ou déjà terminés (pas couverts par le filtre de date, qui ne porte
+// que sur l'heure de coup d'envoi) : nécessaire pour y entrer manuellement
+// un résultat que l'API externe n'a pas rapporté.
+const STATUS_FILTERS = [
+  { value: "",          label: "À venir + en direct" },
+  { value: "LIVE",      label: "🔴 En direct" },
+  { value: "FINISHED",  label: "✅ Terminés" },
+  { value: "CANCELLED", label: "Annulés" },
+] as const;
+
+function toYMD(d: Date) {
+  // Format local (pas d'UTC) — new Date().toISOString() décale la date
+  // autour de minuit selon le fuseau, ce qu'on veut éviter ici.
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 const STATUS_COLORS: Record<string, string> = {
   UPCOMING: "bo-badge-blue", LIVE: "bo-badge-red", FINISHED: "bo-badge-gray",
   CANCELLED: "bo-badge-gray", POSTPONED: "bo-badge-orange",
@@ -61,6 +87,10 @@ export default function SportsPage() {
   const [loading, setLoading]         = useState(true);
   const [search, setSearch]           = useState("");
   const [filterStatus, setStatus]     = useState("");
+  const [dateRange, setDateRange]     = useState<DateRange>("all");
+  const [page, setPage]               = useState(1);
+  const [totalPages, setTotalPages]   = useState(1);
+  const [totalEvents, setTotalEvents] = useState(0);
   const [selectedEvent, setSelected]  = useState<Event | null>(null);
   const [panelLoading, setPanelLoad]  = useState(false);
 
@@ -97,16 +127,30 @@ export default function SportsPage() {
   const loadEvents = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ limit: "50" });
+      const params = new URLSearchParams({ limit: "50", page: String(page) });
       if (search)       params.set("search", search);
       if (filterStatus) params.set("status", filterStatus);
+      if (dateRange === "today") {
+        const today = toYMD(new Date());
+        params.set("from", today); params.set("to", today);
+      } else if (dateRange === "week") {
+        params.set("from", toYMD(new Date()));
+        params.set("to", toYMD(new Date(Date.now() + 6 * 24 * 60 * 60 * 1000)));
+      }
       const r = await fetch(`${API}/admin/sports/events?${params}`, { headers: authHeaders() });
       const d = await r.json();
-      if (d.data?.events) setEvents(d.data.events);
+      if (d.data?.events) {
+        setEvents(d.data.events);
+        setTotalPages(d.data.totalPages ?? 1);
+        setTotalEvents(d.data.total ?? d.data.events.length);
+      }
     } finally { setLoading(false); }
-  }, [search, filterStatus]);
+  }, [search, filterStatus, dateRange, page]);
 
   useEffect(() => { loadEvents(); }, [loadEvents]);
+  // Revenir à la page 1 dès qu'un filtre change, sinon on peut se retrouver
+  // sur une page qui n'existe plus pour le nouveau filtre (liste vide).
+  useEffect(() => { setPage(1); }, [search, filterStatus, dateRange]);
 
   useEffect(() => {
     fetch(`${API}/admin/sports/competitions`, { headers: authHeaders() })
@@ -308,16 +352,36 @@ export default function SportsPage() {
             <div className="bo-filter-bar">
               <input className="bo-input flex-1" placeholder="🔍 Rechercher un match…"
                 value={search} onChange={e => setSearch(e.target.value)} />
-              <select className="bo-select" value={filterStatus} onChange={e => setStatus(e.target.value)}>
-                <option value="">À venir / en direct (défaut)</option>
-                {["UPCOMING", "LIVE", "FINISHED", "CANCELLED"].map(s => <option key={s}>{s}</option>)}
-              </select>
               <button onClick={loadEvents} className="bo-btn-secondary text-xs">↺ Actualiser</button>
+            </div>
+
+            {/* Statut — onglets dédiés pour retrouver vite les matchs déjà en
+                direct ou terminés, et y entrer manuellement un résultat que
+                l'API externe n'a pas rapporté. */}
+            <div className="flex gap-2">
+              {STATUS_FILTERS.map(s => (
+                <button key={s.value} onClick={() => setStatus(s.value)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${filterStatus === s.value ? "bg-green-600 text-white" : "bg-bo-card text-t-muted hover:text-t-primary border border-bo-border2"}`}>
+                  {s.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Période — sans ça, avec beaucoup de compétitions synchronisées,
+                les 50 matchs du jour seul remplissent déjà toute la page et
+                masquent ceux des jours suivants. */}
+            <div className="flex gap-2">
+              {DATE_RANGES.map(r => (
+                <button key={r.value} onClick={() => setDateRange(r.value)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${dateRange === r.value ? "bg-green-600 text-white" : "bg-bo-card text-t-muted hover:text-t-primary border border-bo-border2"}`}>
+                  {r.label}
+                </button>
+              ))}
             </div>
 
             <div className="bo-card">
               <div className="bo-card-header">
-                <span className="bo-card-title">📋 Matchs ({events.length})</span>
+                <span className="bo-card-title">📋 Matchs ({totalEvents})</span>
               </div>
               {loading ? (
                 <div className="p-8 text-center text-t-faint">Chargement…</div>
@@ -355,6 +419,17 @@ export default function SportsPage() {
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-3 py-2.5 border-t border-bo-border text-xs text-t-faint">
+                  <span>Page {page} / {totalPages}</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
+                      className="bo-btn-secondary text-xs disabled:opacity-40 disabled:cursor-not-allowed">← Précédent</button>
+                    <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
+                      className="bo-btn-secondary text-xs disabled:opacity-40 disabled:cursor-not-allowed">Suivant →</button>
+                  </div>
                 </div>
               )}
             </div>

@@ -26,6 +26,8 @@ adminSportsRouter.get("/events", asyncHandler(async (req: Request, res: Response
   const limit  = parseInt((req.query.limit as string) ?? "25", 10);
   const search = req.query.search as string | undefined;
   const status = req.query.status as string | undefined;
+  const from   = req.query.from as string | undefined; // YYYY-MM-DD
+  const to     = req.query.to   as string | undefined; // YYYY-MM-DD, inclus
 
   const where: any = {};
   // Sans filtre explicite, exclure les matchs terminés/annulés : triés du
@@ -34,6 +36,12 @@ adminSportsRouter.get("/events", asyncHandler(async (req: Request, res: Response
   // à venir en pages suivantes. Toujours accessibles via le filtre de
   // statut pour qui veut les consulter volontairement.
   where.status = status ? status : { notIn: ["FINISHED", "CANCELLED"] };
+  if (from || to) {
+    where.startTime = {
+      ...(from ? { gte: new Date(`${from}T00:00:00`) } : {}),
+      ...(to   ? { lte: new Date(`${to}T23:59:59.999`) } : {}),
+    };
+  }
   if (search) {
     where.OR = [
       { homeTeam: { contains: search, mode: "insensitive" } },
