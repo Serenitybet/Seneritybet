@@ -154,9 +154,11 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
   while (await prisma.ticket.findUnique({ where: { code } })) code = generateTicketCode();
   const payoutCode = generatePayoutCode();
 
-  // La mise est déduite du crédit du TPE (le caissier "immobilise" ce montant
-  // en l'encaissant) ; elle y revient, majorée du gain, au moment du paiement
-  // d'un ticket gagnant (voir payTicket). La vérification plus haut est une
+  // La mise est déduite du crédit du TPE à la vente — le paiement d'un
+  // ticket gagnant/remboursé n'y touche plus (voir payTicket, demande
+  // explicite du 30/10/2026) : le crédit ne reflète donc que les ventes, pas
+  // les paiements au guichet (qui restent visibles séparément sur la caisse
+  // du jour, voir getCashierSummary). La vérification plus haut est une
   // lecture faite avant la transaction — sous forte concurrence (plusieurs
   // tickets créés presque simultanément sur le même TPE), elle peut être
   // périmée au moment où la transaction s'exécute. La déduction ci-dessous
@@ -339,7 +341,7 @@ export async function settleTicket(ticketId: string) {
   return { ticketId: updated.id, status: updated.status, requiresApproval };
 }
 
-/** Encaissement — paie un ticket GAGNÉ/REMBOURSÉ au guichet, débite le crédit du TPE payeur. */
+/** Encaissement — paie un ticket GAGNÉ/REMBOURSÉ au guichet, en espèces, sans toucher au crédit du TPE. */
 export async function payTicket(code: string, tpeId: string, cashierId: string, payoutCode?: string) {
   const ticket = await prisma.ticket.findUnique({ where: { code: code.toUpperCase() } });
   if (!ticket) throw new AppError(404, "Code ticket introuvable");
@@ -370,34 +372,33 @@ export async function payTicket(code: string, tpeId: string, cashierId: string, 
   const payingTpe = await prisma.tpe.findUnique({ where: { id: tpeId } });
   if (!payingTpe) throw new AppError(404, "TPE payeur introuvable");
 
-  // Le paiement d'un ticket (gagnant ou remboursé) ravitaille le crédit du
-  // TPE payeur — c'est l'inverse de la mise déduite à la création du ticket
-  // (voir placeTicket) : le caissier récupère sa mise immobilisée, majorée
-  // du gain le cas échéant.
+  // Le paiement d'un ticket (gagnant ou remboursé) n'affecte plus le crédit
+  // du TPE payeur (demande explicite du 30/10/2026) : seule la vente déduit
+  // le crédit (voir placeTicket) — le paiement reste entièrement en espèces
+  // au guichet, hors du solde de crédit, mais reste visible séparément sur
+  // la caisse du jour (voir getCashierSummary, basé sur les tickets
+  // paidAt/paidByTpeId, pas sur le crédit).
   //
   // La mise à jour du statut est conditionnée (WHERE status = <statut lu
   // ci-dessus>) plutôt qu'inconditionnelle : sans ça, deux paiements envoyés
   // presque simultanément pour le même ticket passent tous les deux les
   // vérifications ci-dessus (toutes deux lues avant que l'une des deux
-  // n'ait validé le paiement), et créditeraient le TPE deux fois pour un
-  // seul gain. Seule la première des deux transactions à s'exécuter trouve
-  // encore le statut attendu ; la seconde touche 0 ligne et échoue proprement.
+  // n'ait validé le paiement), et marqueraient le ticket payé deux fois.
+  // Seule la première des deux transactions à s'exécuter trouve encore le
+  // statut attendu ; la seconde touche 0 ligne et échoue proprement.
   const paidAt = new Date();
-  await prisma.$transaction(async (tx) => {
-    const result = await tx.ticket.updateMany({
-      where: { id: ticket.id, status: ticket.status },
-      data: {
-        status: "PAID",
-        paidAt,
-        paidByTpeId: tpeId,
-        paidByCashierId: cashierId,
-      },
-    });
-    if (result.count === 0) {
-      throw new AppError(409, "Ce ticket vient d'être payé par une autre opération");
-    }
-    await tx.tpe.update({ where: { id: tpeId }, data: { credit: { increment: amountToPay } } });
+  const result = await prisma.ticket.updateMany({
+    where: { id: ticket.id, status: ticket.status },
+    data: {
+      status: "PAID",
+      paidAt,
+      paidByTpeId: tpeId,
+      paidByCashierId: cashierId,
+    },
   });
+  if (result.count === 0) {
+    throw new AppError(409, "Ce ticket vient d'être payé par une autre opération");
+  }
 
   return {
     ticketId: ticket.id,
