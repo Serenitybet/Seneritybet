@@ -114,7 +114,7 @@ export function CouponPanel() {
         </div>
       ) : (
         <div className="flex flex-col flex-1 min-h-0">
-          <div className="flex-1 min-h-0 overflow-y-auto px-2 pt-2 space-y-1.5">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-2 pt-2 space-y-1.5">
             {selections.map((sel) => (
               <div key={sel.oddId} className="bg-bg-card border border-bg-border rounded-lg p-2.5">
                 <div className="flex items-start justify-between gap-2 mb-1">

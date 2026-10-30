@@ -21,6 +21,25 @@ export function MobileCouponButton() {
     return () => clearTimeout(t);
   }, [selections.length]);
 
+  // Sans ça, un geste de défilement démarré sur le tiroir (overlay fixed)
+  // peut "remonter" jusqu'à la page en dessous sur mobile (la liste des
+  // matchs défile au lieu du tiroir) — la page derrière reste scrollable au
+  // toucher tant qu'elle n'est pas explicitement verrouillée pendant que le
+  // tiroir est ouvert (signalé en prod le 30/10/2026). html ET body : iOS
+  // Safari ignore parfois overflow:hidden posé seulement sur l'un des deux.
+  useEffect(() => {
+    if (!open) return;
+    const { body, documentElement: html } = document;
+    const prevBodyOverflow = body.style.overflow;
+    const prevHtmlOverflow = html.style.overflow;
+    body.style.overflow = "hidden";
+    html.style.overflow = "hidden";
+    return () => {
+      body.style.overflow = prevBodyOverflow;
+      html.style.overflow = prevHtmlOverflow;
+    };
+  }, [open]);
+
   // Ne jamais démonter ce composant tant que le tiroir est ouvert : après
   // l'enregistrement, clearSlip() vide les sélections — si on se basait
   // uniquement sur selections.length ici, tout le tiroir (et donc l'écran
