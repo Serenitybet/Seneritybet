@@ -264,7 +264,9 @@ adminSportsRouter.post("/events/:id/settle-stats",
     let settledTickets = 0;
     for (const ticketId of touchedTicketIds) {
       const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, include: { items: true } });
-      if (ticket && ticket.status === "PENDING" && ticket.items.every((i) => i.result !== null)) {
+      // Une sélection déjà PERDUE clôture le ticket sans attendre les autres.
+      const ready = ticket && (ticket.items.every((i) => i.result !== null) || ticket.items.some((i) => i.result === "LOST"));
+      if (ticket && ticket.status === "PENDING" && ready) {
         await settleTicket(ticketId);
         settledTickets++;
       }

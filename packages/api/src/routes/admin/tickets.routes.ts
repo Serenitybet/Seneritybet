@@ -54,6 +54,35 @@ adminTicketsRouter.get("/", asyncHandler(async (req: Request, res: Response) => 
   });
 }));
 
+// POST /api/admin/tickets/resettle-stuck — rattrapage ponctuel : règle tout
+// ticket PENDING déjà prêt (au moins une sélection PERDUE, ou tous les
+// résultats connus) mais jamais réglé — utile juste après le déploiement du
+// correctif "une perte clôture le ticket immédiatement" (30/10/2026), pour
+// les tickets déjà coincés "en cours" avant que le correctif n'existe, sans
+// attendre qu'un nouvel évènement les retouche.
+adminTicketsRouter.post("/resettle-stuck", requireRole("TRADER", "ADMIN", "SUPER_ADMIN"),
+  asyncHandler(async (_req: Request, res: Response) => {
+    const pending = await prisma.ticket.findMany({
+      where: { status: "PENDING" },
+      include: { items: true },
+    });
+    const candidates = pending.filter((t) =>
+      t.items.some((i) => i.result === "LOST") || t.items.every((i) => i.result !== null),
+    );
+    const settled: { id: string; code: string; status: string }[] = [];
+    for (const ticket of candidates) {
+      try {
+        const result = await tpeService.settleTicket(ticket.id);
+        settled.push({ id: ticket.id, code: ticket.code, status: result.status });
+      } catch {
+        // Déjà réglé entre-temps par un autre chemin, ou cas limite — on
+        // continue avec les tickets suivants plutôt que d'interrompre le lot.
+      }
+    }
+    res.json({ success: true, data: { scanned: pending.length, settled } });
+  }),
+);
+
 // PATCH /api/admin/tickets/:id/result — saisir le résultat d'une sélection
 adminTicketsRouter.patch("/:id/result", requireRole("TRADER", "ADMIN", "SUPER_ADMIN"),
   asyncHandler(async (req: Request, res: Response) => {
@@ -71,7 +100,9 @@ adminTicketsRouter.patch("/:id/result", requireRole("TRADER", "ADMIN", "SUPER_AD
       include: { items: true },
     });
     let settled: Awaited<ReturnType<typeof tpeService.settleTicket>> | null = null;
-    if (ticket && ticket.status === "PENDING" && ticket.items.every((i) => i.result !== null)) {
+    // Une sélection déjà PERDUE clôture le ticket sans attendre les autres.
+    const ready = ticket && (ticket.items.every((i) => i.result !== null) || ticket.items.some((i) => i.result === "LOST"));
+    if (ticket && ticket.status === "PENDING" && ready) {
       settled = await tpeService.settleTicket(ticket.id);
     }
     res.json({ success: true, data: { settled } });
