@@ -56,8 +56,16 @@ export function MobileCouponButton() {
               ici) : CouponPanel gère son propre défilement interne (liste des
               sélections uniquement), pour que le bouton "Enregistrer" reste
               toujours visible en bas du tiroir, quel que soit le nombre de
-              sélections. */}
-          <div className="absolute bottom-0 left-0 right-0 bg-bg-secondary rounded-t-2xl max-h-[85vh] flex flex-col">
+              sélections. dvh (et non vh) : sur mobile, "vh" se base sur la
+              hauteur maximale théorique de l'écran, pas sur la zone
+              réellement visible une fois la barre d'adresse du navigateur
+              repliée/dépliée — avec beaucoup de sélections (6-7+), le tiroir
+              pouvait alors dépasser l'écran réel et pousser le bouton
+              "Enregistrer" hors champ, impossible à faire défiler pour le
+              retrouver (signalé en prod le 30/10/2026). "dvh" (dynamic
+              viewport height) se recalcule en fonction de l'espace vraiment
+              visible à cet instant. */}
+          <div className="absolute bottom-0 left-0 right-0 bg-bg-secondary rounded-t-2xl max-h-[85dvh] flex flex-col">
             <div className="flex items-center justify-between px-4 py-3 border-b border-bg-border shrink-0">
               <span className="font-bold text-txt-primary">Mon coupon{selections.length > 0 ? ` (${selections.length})` : ""}</span>
               <button onClick={() => setOpen(false)} className="text-txt-muted text-2xl leading-none">
