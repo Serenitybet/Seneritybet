@@ -5,6 +5,7 @@ import { LeftSidebar } from "@/components/layout/LeftSidebar";
 import { CouponPanel } from "@/components/layout/CouponPanel";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { MobileCouponButton } from "@/components/layout/MobileCouponButton";
+import { InstallPrompt } from "@/components/layout/InstallPrompt";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -30,6 +31,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
         </aside>
       </div>
 
+      <InstallPrompt />
       <MobileCouponButton />
       <BottomNav />
     </div>
