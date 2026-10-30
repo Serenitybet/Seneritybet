@@ -279,8 +279,8 @@ function CashoutOffer({ ticket, quote, onCashedOut }: { ticket: Ticket; quote: C
   if (!open) {
     return (
       <div className="bg-green-600/10 border border-green-600/20 rounded-lg p-3 space-y-2 text-center">
-        <p className="text-xs text-txt-muted">
-          Vous pouvez encaisser ce ticket maintenant, avant la fin, pour :
+        <p className="text-xs text-txt-muted font-bold">
+          Cash-out
         </p>
         <p className="text-2xl font-black text-green-700">{quote.offerXAF?.toLocaleString()} XAF</p>
         <button onClick={() => setOpen(true)} className="btn-green w-full py-2 text-sm">
