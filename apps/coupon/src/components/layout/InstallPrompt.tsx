@@ -94,11 +94,6 @@ export function InstallPrompt() {
         <img src="/icons/icon-192.png" alt="" className="w-10 h-10 rounded-lg shrink-0" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-txt-primary">Installer Serenitybet</p>
-          <p className="text-xs text-txt-muted">
-            {variant === "android"
-              ? "Accédez plus vite à vos paris, comme une application."
-              : "Appuyez sur Partager puis « Sur l'écran d'accueil »."}
-          </p>
         </div>
         {variant === "android" && (
           <button onClick={install} className="btn-green px-3 py-1.5 text-xs shrink-0">
