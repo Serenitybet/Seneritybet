@@ -12,12 +12,15 @@ export function serializeTpe(tpe: Tpe & { region?: Pick<Region, "id" | "name"> |
 
 /** Ne jamais renvoyer payoutCode ici — c'est le secret qui protège contre le paiement d'une réimpression (voir placeTicket, qui le renvoie une seule fois, à part). */
 export function serializeTicket(ticket: Ticket & { items?: TicketItem[] }) {
-  const { stake, totalOdds, potentialWin, items, payoutCode: _omit, ...rest } = ticket;
+  const { stake, totalOdds, potentialWin, cashedOutAmount, items, payoutCode: _omit, ...rest } = ticket;
   return {
     ...rest,
     stakeXAF: Number(stake) / 100,
     totalOdds: Number(totalOdds),
     potentialWinXAF: Number(potentialWin) / 100,
+    // BigInt ne se sérialise pas nativement en JSON (res.json plante sinon)
+    // — même traitement que stake/potentialWin ci-dessus.
+    cashedOutAmountXAF: cashedOutAmount != null ? Number(cashedOutAmount) / 100 : null,
     ...(items ? { items: items.map((i) => ({ ...i, oddValue: Number(i.oddValue) })) } : {}),
   };
 }
@@ -246,7 +249,7 @@ export async function getCashierSummary(tpeId: string, cashierId: string, from: 
     }),
     prisma.ticket.findMany({
       where: { paidByTpeId: tpeId, paidByCashierId: cashierId, paidAt: { gte: from, lte: to } },
-      select: { stake: true, potentialWin: true, items: { select: { result: true } } },
+      select: { stake: true, potentialWin: true, cashedOutAmount: true, items: { select: { result: true } } },
     }),
   ]);
 
@@ -256,6 +259,9 @@ export async function getCashierSummary(tpeId: string, cashierId: string, from: 
   // ou d'un remboursé (payé = mise) — on se base plutôt sur les résultats
   // de ses sélections, qui eux ne changent plus après le règlement.
   const paidTotal = paidTickets.reduce((acc, t) => {
+    // Un cash-out verse un montant distinct (voir payCashout) — ni la mise
+    // ni le gain potentiel, qu'on ignore totalement dans ce cas.
+    if (t.cashedOutAmount != null) return acc + t.cashedOutAmount;
     // Une sélection VOID (push, match annulé) ne change pas l'issue — voir
     // settleTicket. On exclut seulement les tickets avec une sélection
     // perdue, ou sans aucune sélection gagnante (tout VOID = remboursé).
@@ -404,6 +410,46 @@ export async function payTicket(code: string, tpeId: string, cashierId: string, 
     ticketId: ticket.id,
     code: ticket.code,
     amountPaidXAF: Number(amountToPay) / 100,
+    paidAt,
+    tpe: { code: payingTpe.code, name: payingTpe.name },
+  };
+}
+
+/** Encaissement d'un cash-out accepté sur le site public (voir cashout.service.ts) — paie cashedOutAmount en espèces, sans toucher au crédit du TPE (même règle que payTicket). */
+export async function payCashout(code: string, tpeId: string, cashierId: string, payoutCode?: string) {
+  const ticket = await prisma.ticket.findUnique({ where: { code: code.toUpperCase() } });
+  if (!ticket) throw new AppError(404, "Code ticket introuvable");
+
+  if (ticket.status === "PAID") throw new AppError(400, "Ce cash-out a déjà été payé");
+  if (ticket.status !== "CASHED_OUT_PENDING") {
+    throw new AppError(400, "Ce ticket n'a pas de cash-out en attente de paiement");
+  }
+  if (ticket.payoutCode && ticket.payoutCode !== payoutCode) {
+    throw new AppError(403, "Code de validation incorrect");
+  }
+  if (ticket.cashedOutAmount == null) {
+    // Ne devrait jamais arriver (cashedOutAmount toujours posé en même
+    // temps que le statut CASHED_OUT_PENDING, voir requestCashout) — garde
+    // de cohérence plutôt qu'un payload silencieusement incorrect.
+    throw new AppError(500, "Montant du cash-out manquant — contactez le backoffice");
+  }
+
+  const payingTpe = await prisma.tpe.findUnique({ where: { id: tpeId } });
+  if (!payingTpe) throw new AppError(404, "TPE payeur introuvable");
+
+  const paidAt = new Date();
+  const result = await prisma.ticket.updateMany({
+    where: { id: ticket.id, status: "CASHED_OUT_PENDING" },
+    data: { status: "PAID", paidAt, paidByTpeId: tpeId, paidByCashierId: cashierId },
+  });
+  if (result.count === 0) {
+    throw new AppError(409, "Ce cash-out vient d'être payé par une autre opération");
+  }
+
+  return {
+    ticketId: ticket.id,
+    code: ticket.code,
+    amountPaidXAF: Number(ticket.cashedOutAmount) / 100,
     paidAt,
     tpe: { code: payingTpe.code, name: payingTpe.name },
   };

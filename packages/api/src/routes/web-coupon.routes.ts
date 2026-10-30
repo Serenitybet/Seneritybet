@@ -17,8 +17,18 @@ webCouponRouter.post("/", asyncHandler(async (req: Request, res: Response) => {
 }));
 
 // GET /api/web-coupons/:code — vérifier le statut d'un coupon (ou, une fois
-// retiré en boutique, du ticket qu'il est devenu)
+// retiré en boutique, du ticket qu'il est devenu — inclut alors l'offre de
+// cash-out courante si le ticket y est éligible)
 webCouponRouter.get("/:code", asyncHandler(async (req: Request, res: Response) => {
   const result = await webCouponService.getWebCouponStatus(req.params.code);
+  res.json({ success: true, data: result });
+}));
+
+// POST /api/web-coupons/:code/cashout — accepter l'offre de cash-out d'un
+// ticket, par code + code de sécurité (même protection anti-fraude que le
+// paiement normal en boutique)
+webCouponRouter.post("/:code/cashout", asyncHandler(async (req: Request, res: Response) => {
+  const { payoutCode } = req.body;
+  const result = await webCouponService.requestCashoutByCode(req.params.code, payoutCode);
   res.json({ success: true, data: result });
 }));

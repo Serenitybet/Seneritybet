@@ -1,6 +1,7 @@
 import { prisma } from "../lib/prisma";
 import { AppError } from "../middleware/error.middleware";
 import { serializeTicket } from "./tpe.service";
+import { getCashoutQuote, requestCashout } from "./cashout.service";
 
 const COUPON_TTL_MS = 24 * 60 * 60 * 1000; // 24h — à retirer en boutique avant expiration
 
@@ -102,6 +103,20 @@ export async function createWebCoupon(selections: { oddId: string }[]) {
  * retrait. `tickets` liste donc tous les tickets déjà émis à partir de ce
  * code (peut être vide, un, ou plusieurs).
  */
+const TICKET_INCLUDE = { items: { include: { market: { include: { event: true } }, odd: true } } };
+
+/** Résout un code tapé par un parieur en Ticket — tolère l'absence des tirets (voir reinsertTicketDashes). */
+async function resolveTicketByCode(cleanCode: string) {
+  let ticket = await prisma.ticket.findUnique({ where: { code: cleanCode }, include: TICKET_INCLUDE });
+  if (!ticket) {
+    const dashed = reinsertTicketDashes(cleanCode);
+    if (dashed && dashed !== cleanCode) {
+      ticket = await prisma.ticket.findUnique({ where: { code: dashed }, include: TICKET_INCLUDE });
+    }
+  }
+  return ticket;
+}
+
 export async function getWebCouponStatus(code: string) {
   const cleanCode = code.trim().toUpperCase();
   const coupon = await prisma.webCoupon.findUnique({
@@ -115,16 +130,13 @@ export async function getWebCouponStatus(code: string) {
   });
 
   if (!coupon) {
-    const ticketInclude = { items: { include: { market: { include: { event: true } }, odd: true } } };
-    let ticket = await prisma.ticket.findUnique({ where: { code: cleanCode }, include: ticketInclude });
-    if (!ticket) {
-      const dashed = reinsertTicketDashes(cleanCode);
-      if (dashed && dashed !== cleanCode) {
-        ticket = await prisma.ticket.findUnique({ where: { code: dashed }, include: ticketInclude });
-      }
-    }
+    const ticket = await resolveTicketByCode(cleanCode);
     if (!ticket) throw new AppError(404, "Code introuvable");
-    return { code: ticket.code, status: "USED" as const, ticket: serializeTicket(ticket) };
+    // Le devis n'a de sens que pour un ticket encore en attente — inutile
+    // (et potentiellement coûteux) de le recalculer pour un ticket déjà
+    // réglé/payé.
+    const cashoutQuote = ticket.status === "PENDING" ? await getCashoutQuote(ticket.id) : null;
+    return { code: ticket.code, status: "USED" as const, ticket: { ...serializeTicket(ticket), cashoutQuote } };
   }
 
   if (coupon.status === "PENDING" && new Date() > coupon.expiresAt) {
@@ -132,13 +144,26 @@ export async function getWebCouponStatus(code: string) {
     coupon.status = "EXPIRED";
   }
 
+  const tickets = await Promise.all(coupon.tickets.map(async (t) => ({
+    ...serializeTicket(t),
+    cashoutQuote: t.status === "PENDING" ? await getCashoutQuote(t.id) : null,
+  })));
+
   return {
     code: coupon.code,
     status: coupon.status,
     selections: coupon.selections,
     expiresAt: coupon.expiresAt,
-    tickets: coupon.tickets.map(serializeTicket),
+    tickets,
   };
+}
+
+/** Accepter l'offre de cash-out depuis le site public, par code de ticket + code de sécurité. */
+export async function requestCashoutByCode(code: string, payoutCode?: string) {
+  const ticket = await resolveTicketByCode(code.trim().toUpperCase());
+  if (!ticket) throw new AppError(404, "Code introuvable");
+  const result = await requestCashout(ticket.id, payoutCode);
+  return result;
 }
 
 /** Caissier (TPE) — revalide les sélections contre les cotes actuelles avant de les proposer à l'écran de mise. Réutilisable jusqu'à expiration : pas de contrôle "déjà utilisé". */

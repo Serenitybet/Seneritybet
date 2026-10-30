@@ -163,6 +163,11 @@ enum TicketStatus {
   REFUNDED
   CANCELLED
   PAID
+  // Cash-out accepté par le joueur depuis le site public (serenitybetcode.com)
+  // : montant figé (voir cashedOutAmount), en attente d'encaissement physique
+  // au TPE — bascule ensuite en PAID une fois réellement payé en espèces
+  // (voir payCashout, tpe.service.ts), comme un ticket gagnant classique.
+  CASHED_OUT_PENDING
 }
 
 // ─── Models ─────────────────────────────────────────────────────────────────
@@ -665,6 +670,12 @@ model Ticket {
   paidByTpe        Tpe?         @relation("TpeTicketsPaid", fields: [paidByTpeId], references: [id])
   paidByCashierId  String?
   paidByCashier    User?        @relation("TicketPaidBy", fields: [paidByCashierId], references: [id])
+  // Cash-out (voir enum TicketStatus.CASHED_OUT_PENDING) — montant figé au
+  // moment où le joueur l'accepte sur le site, en centimes XAF, distinct de
+  // potentialWin (qui reste la valeur d'un règlement normal, au cas où le
+  // joueur aurait plutôt attendu la fin du ticket).
+  cashedOutAmount  BigInt?
+  cashedOutAt      DateTime?
   createdAt        DateTime     @default(now())
   items            TicketItem[]
   // Coupon web d'origine, le cas échéant — un même coupon peut être retiré

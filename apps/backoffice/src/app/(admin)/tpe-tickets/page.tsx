@@ -6,7 +6,7 @@ import { useAuthAdminStore } from "@/store/auth-admin.store";
 
 const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL ?? "https://seneritybet.onrender.com/api";
 
-type Status = "PENDING" | "WON" | "LOST" | "REFUNDED" | "CANCELLED" | "PAID";
+type Status = "PENDING" | "WON" | "LOST" | "REFUNDED" | "CANCELLED" | "PAID" | "CASHED_OUT_PENDING";
 type ItemResult = "WON" | "LOST" | "VOID" | null;
 
 interface TicketItem {
@@ -39,10 +39,12 @@ interface Tpe { id: string; code: string; name: string | null }
 
 const STATUS_LABEL: Record<Status, string> = {
   PENDING: "En cours", WON: "Gagnant", LOST: "Perdant", REFUNDED: "Remboursé", CANCELLED: "Annulé", PAID: "Payé",
+  CASHED_OUT_PENDING: "Cash-out accepté",
 };
 const STATUS_BADGE: Record<Status, string> = {
   PENDING: "bo-badge-blue", WON: "bo-badge-green", LOST: "bo-badge-red",
   REFUNDED: "bo-badge-orange", CANCELLED: "bo-badge-gray", PAID: "bo-badge-yellow",
+  CASHED_OUT_PENDING: "bo-badge-yellow",
 };
 
 function fmtXAF(v: number) {

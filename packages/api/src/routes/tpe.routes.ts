@@ -59,3 +59,9 @@ tpeRouter.post("/tickets/:code/pay", asyncHandler(async (req: TpeRequest, res: R
   const result = await tpeService.payTicket(req.params.code, req.tpe!.id, req.user!.id, req.body?.payoutCode);
   res.json({ success: true, data: result });
 }));
+
+// POST /api/tpe/tickets/:code/pay-cashout — encaisser un cash-out accepté sur le site public
+tpeRouter.post("/tickets/:code/pay-cashout", asyncHandler(async (req: TpeRequest, res: Response) => {
+  const result = await tpeService.payCashout(req.params.code, req.tpe!.id, req.user!.id, req.body?.payoutCode);
+  res.json({ success: true, data: result });
+}));

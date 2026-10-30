@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { requireRole, AuthRequest } from "../../middleware/auth.middleware";
 import { asyncHandler } from "../../lib/asyncHandler";
 import { AppError } from "../../middleware/error.middleware";
-import { getSetting, setSetting, SETTING_KEYS } from "../../lib/settings";
+import { getSetting, getSettingFloat, setSetting, SETTING_KEYS } from "../../lib/settings";
 
 export const adminSettingsRouter = Router();
 
@@ -41,5 +41,30 @@ adminSettingsRouter.patch("/tpe-max-win", requireRole("ADMIN", "SUPER_ADMIN", "F
     const centimes = Math.round(Number(maxWinXAF) * 100);
     await setSetting(SETTING_KEYS.TPE_MAX_WIN_XAF, String(centimes), req.user!.id);
     res.json({ success: true, data: { maxWinXAF: Number(maxWinXAF) } });
+  }),
+);
+
+// GET /api/admin/settings/cashout — paramètres du cash-out (marge + cote max sélections à venir)
+adminSettingsRouter.get("/cashout", asyncHandler(async (_req: Request, res: Response) => {
+  const [marginPct, maxOddPending] = await Promise.all([
+    getSettingFloat(SETTING_KEYS.CASHOUT_MARGIN_PCT),
+    getSettingFloat(SETTING_KEYS.CASHOUT_MAX_ODD_PENDING),
+  ]);
+  res.json({ success: true, data: { marginPct, maxOddPending } });
+}));
+
+// PATCH /api/admin/settings/cashout
+adminSettingsRouter.patch("/cashout", requireRole("ADMIN", "SUPER_ADMIN", "FINANCE"),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { marginPct, maxOddPending } = req.body;
+    if (marginPct === undefined || isNaN(Number(marginPct)) || Number(marginPct) < 0 || Number(marginPct) > 100) {
+      throw new AppError(400, "Marge invalide (0 à 100)");
+    }
+    if (maxOddPending === undefined || isNaN(Number(maxOddPending)) || Number(maxOddPending) < 1.01) {
+      throw new AppError(400, "Cote maximum invalide (min 1.01)");
+    }
+    await setSetting(SETTING_KEYS.CASHOUT_MARGIN_PCT, String(Number(marginPct)), req.user!.id);
+    await setSetting(SETTING_KEYS.CASHOUT_MAX_ODD_PENDING, String(Number(maxOddPending)), req.user!.id);
+    res.json({ success: true, data: { marginPct: Number(marginPct), maxOddPending: Number(maxOddPending) } });
   }),
 );

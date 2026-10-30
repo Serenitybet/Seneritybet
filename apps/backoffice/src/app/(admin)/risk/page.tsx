@@ -11,18 +11,22 @@ export default function RiskPage() {
 
   const [approvalThreshold, setApprovalThreshold] = useState("");
   const [maxWin, setMaxWin]                       = useState("");
+  const [cashoutMargin, setCashoutMargin]         = useState("");
+  const [cashoutMaxOdd, setCashoutMaxOdd]         = useState("");
 
   function token() { return localStorage.getItem("bo_token"); }
 
   async function load() {
     setLoading(true);
     try {
-      const [t, m] = await Promise.all([
+      const [t, m, c] = await Promise.all([
         fetch(`${API}/admin/settings/tpe-payout-threshold`, { headers: { Authorization: `Bearer ${token()}` } }).then(r => r.json()),
         fetch(`${API}/admin/settings/tpe-max-win`, { headers: { Authorization: `Bearer ${token()}` } }).then(r => r.json()),
+        fetch(`${API}/admin/settings/cashout`, { headers: { Authorization: `Bearer ${token()}` } }).then(r => r.json()),
       ]);
       if (t.data) setApprovalThreshold(String(t.data.thresholdXAF));
       if (m.data) setMaxWin(String(m.data.maxWinXAF));
+      if (c.data) { setCashoutMargin(String(c.data.marginPct)); setCashoutMaxOdd(String(c.data.maxOddPending)); }
     } catch { toast.error("Erreur de chargement"); }
     finally { setLoading(false); }
   }
@@ -61,6 +65,27 @@ export default function RiskPage() {
       });
       if (!res.ok) { toast.error("Erreur"); return; }
       toast.success(Number(maxWin) === 0 ? "Plafond de gain désactivé ✓" : "Plafond de gain mis à jour ✓");
+    } catch { toast.error("Erreur réseau"); }
+    finally { setSaving(false); }
+  }
+
+  async function saveCashout(e: React.FormEvent) {
+    e.preventDefault();
+    if (cashoutMargin === "" || isNaN(Number(cashoutMargin)) || Number(cashoutMargin) < 0 || Number(cashoutMargin) > 100) {
+      toast.error("Marge invalide (0 à 100)"); return;
+    }
+    if (cashoutMaxOdd === "" || isNaN(Number(cashoutMaxOdd)) || Number(cashoutMaxOdd) < 1.01) {
+      toast.error("Cote maximum invalide (min 1.01)"); return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/admin/settings/cashout`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({ marginPct: Number(cashoutMargin), maxOddPending: Number(cashoutMaxOdd) }),
+      });
+      if (!res.ok) { toast.error("Erreur"); return; }
+      toast.success("Paramètres du cash-out mis à jour ✓");
     } catch { toast.error("Erreur réseau"); }
     finally { setSaving(false); }
   }
@@ -130,6 +155,44 @@ export default function RiskPage() {
               onChange={e => setApprovalThreshold(e.target.value)}
             />
           </div>
+          <button type="submit" disabled={saving} className="bo-btn-primary">
+            {saving ? "…" : "💾 Enregistrer"}
+          </button>
+        </div>
+      </form>
+
+      <form onSubmit={saveCashout} className="bo-card p-5 space-y-4">
+        <div>
+          <h2 className="font-bold text-[13px] text-t-primary flex items-center gap-2">
+            <span>💸</span> Cash-out
+          </h2>
+          <p className="text-[11px] text-t-faint mt-1 leading-relaxed">
+            Permet à un parieur d'encaisser un ticket en cours avant son règlement final (site public, puis paiement en
+            espèces au TPE). Proposé seulement si aucune sélection n'est en direct, aucune perdante, et si chaque
+            sélection pas encore jouée est un favori (cote ≤ seuil ci-dessous).
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-[10px] text-t-faint block mb-1">Marge retenue (%)</label>
+            <input
+              type="number" min="0" max="100" step="1"
+              className="bo-input w-full text-right font-mono"
+              value={cashoutMargin}
+              onChange={e => setCashoutMargin(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-[10px] text-t-faint block mb-1">Cote max. sélection à venir</label>
+            <input
+              type="number" min="1.01" step="0.05"
+              className="bo-input w-full text-right font-mono"
+              value={cashoutMaxOdd}
+              onChange={e => setCashoutMaxOdd(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="flex justify-end">
           <button type="submit" disabled={saving} className="bo-btn-primary">
             {saving ? "…" : "💾 Enregistrer"}
           </button>

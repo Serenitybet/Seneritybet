@@ -11,10 +11,11 @@ import { useConfirm } from "@/components/ConfirmDialog";
 
 interface TicketInfo {
   code: string;
-  status: "PENDING" | "WON" | "LOST" | "REFUNDED" | "CANCELLED" | "PAID";
+  status: "PENDING" | "WON" | "LOST" | "REFUNDED" | "CANCELLED" | "PAID" | "CASHED_OUT_PENDING";
   stakeXAF: number;
   totalOdds: number;
   potentialWinXAF: number;
+  cashedOutAmountXAF: number | null;
   items: { oddValue: number; result: string | null; market: { name: string; event: { homeTeam: string; awayTeam: string } }; odd: { label: string } }[];
 }
 
@@ -32,6 +33,7 @@ const STATUS_LABEL: Record<TicketInfo["status"], string> = {
   REFUNDED: "↩️ Remboursé",
   CANCELLED: "🚫 Annulé",
   PAID: "💵 Déjà payé",
+  CASHED_OUT_PENDING: "💸 Cash-out accepté",
 };
 
 // Un code ticket ressemble à "ABX-739-KLP" — sert à valider le contenu
@@ -166,11 +168,14 @@ export default function TpePayoutPage() {
   async function payTicket() {
     if (!ticket) return;
     if (!/^\d{4}$/.test(payoutCodeInput)) { toast.error("Entrez le code de validation à 4 chiffres (imprimé sur le ticket original)"); return; }
-    const ok = await confirm(`Payer ${ticket.status === "WON" ? ticket.potentialWinXAF.toLocaleString("fr-FR") : ticket.stakeXAF.toLocaleString("fr-FR")} XAF pour le ticket ${ticket.code} ?`);
+    const isCashout = ticket.status === "CASHED_OUT_PENDING";
+    const amount = isCashout ? ticket.cashedOutAmountXAF! : ticket.status === "WON" ? ticket.potentialWinXAF : ticket.stakeXAF;
+    const ok = await confirm(`Payer ${amount.toLocaleString("fr-FR")} XAF pour le ${isCashout ? "cash-out du " : ""}ticket ${ticket.code} ?`);
     if (!ok) return;
     setPaying(true);
     try {
-      const res = await api.post(`/tpe/tickets/${ticket.code}/pay`, { payoutCode: payoutCodeInput });
+      const endpoint = isCashout ? "pay-cashout" : "pay";
+      const res = await api.post(`/tpe/tickets/${ticket.code}/${endpoint}`, { payoutCode: payoutCodeInput });
       setPaidAmount(res.data.data.amountPaidXAF);
       setReceipt(res.data.data);
       toast.success("Paiement effectué ✅");
@@ -182,7 +187,7 @@ export default function TpePayoutPage() {
     }
   }
 
-  const canPay = ticket && (ticket.status === "WON" || ticket.status === "REFUNDED");
+  const canPay = ticket && (ticket.status === "WON" || ticket.status === "REFUNDED" || ticket.status === "CASHED_OUT_PENDING");
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
@@ -283,10 +288,17 @@ export default function TpePayoutPage() {
                 <span className="text-gray-600">Mise :</span>
                 <span className="font-bold">{ticket.stakeXAF.toLocaleString("fr-FR")} XAF</span>
               </div>
-              <div className="flex justify-between font-black text-lg text-green-700">
-                <span>Gain potentiel :</span>
-                <span>{ticket.potentialWinXAF.toLocaleString("fr-FR")} XAF</span>
-              </div>
+              {ticket.status === "CASHED_OUT_PENDING" ? (
+                <div className="flex justify-between font-black text-lg text-green-700">
+                  <span>Cash-out à payer :</span>
+                  <span>{ticket.cashedOutAmountXAF?.toLocaleString("fr-FR")} XAF</span>
+                </div>
+              ) : (
+                <div className="flex justify-between font-black text-lg text-green-700">
+                  <span>Gain potentiel :</span>
+                  <span>{ticket.potentialWinXAF.toLocaleString("fr-FR")} XAF</span>
+                </div>
+              )}
             </div>
 
             {paidAmount !== null ? (
