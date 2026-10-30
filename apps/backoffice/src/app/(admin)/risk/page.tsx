@@ -13,6 +13,7 @@ export default function RiskPage() {
   const [maxWin, setMaxWin]                       = useState("");
   const [cashoutMargin, setCashoutMargin]         = useState("");
   const [cashoutMaxOdd, setCashoutMaxOdd]         = useState("");
+  const [cashoutMaxLegs, setCashoutMaxLegs]       = useState("");
 
   function token() { return localStorage.getItem("bo_token"); }
 
@@ -26,7 +27,11 @@ export default function RiskPage() {
       ]);
       if (t.data) setApprovalThreshold(String(t.data.thresholdXAF));
       if (m.data) setMaxWin(String(m.data.maxWinXAF));
-      if (c.data) { setCashoutMargin(String(c.data.marginPct)); setCashoutMaxOdd(String(c.data.maxOddPending)); }
+      if (c.data) {
+        setCashoutMargin(String(c.data.marginPct));
+        setCashoutMaxOdd(String(c.data.maxOddPending));
+        setCashoutMaxLegs(String(c.data.maxPendingLegs));
+      }
     } catch { toast.error("Erreur de chargement"); }
     finally { setLoading(false); }
   }
@@ -77,12 +82,15 @@ export default function RiskPage() {
     if (cashoutMaxOdd === "" || isNaN(Number(cashoutMaxOdd)) || Number(cashoutMaxOdd) < 1.01) {
       toast.error("Cote maximum invalide (min 1.01)"); return;
     }
+    if (cashoutMaxLegs === "" || !Number.isInteger(Number(cashoutMaxLegs)) || Number(cashoutMaxLegs) < 0) {
+      toast.error("Nombre de sélections à venir invalide (entier >= 0)"); return;
+    }
     setSaving(true);
     try {
       const res = await fetch(`${API}/admin/settings/cashout`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token()}` },
-        body: JSON.stringify({ marginPct: Number(cashoutMargin), maxOddPending: Number(cashoutMaxOdd) }),
+        body: JSON.stringify({ marginPct: Number(cashoutMargin), maxOddPending: Number(cashoutMaxOdd), maxPendingLegs: Number(cashoutMaxLegs) }),
       });
       if (!res.ok) { toast.error("Erreur"); return; }
       toast.success("Paramètres du cash-out mis à jour ✓");
@@ -168,11 +176,12 @@ export default function RiskPage() {
           </h2>
           <p className="text-[11px] text-t-faint mt-1 leading-relaxed">
             Permet à un parieur d'encaisser un ticket en cours avant son règlement final (site public, puis paiement en
-            espèces au TPE). Proposé seulement si aucune sélection n'est en direct, aucune perdante, et si chaque
-            sélection pas encore jouée est un favori (cote ≤ seuil ci-dessous).
+            espèces au TPE). Proposé seulement si aucune sélection n'est en direct, aucune perdante, si chaque
+            sélection pas encore jouée est un favori (cote ≤ seuil ci-dessous), et s'il n'en reste pas plus que le
+            nombre maximum ci-dessous (un combiné où presque rien n'a encore été joué reste trop spéculatif).
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="text-[10px] text-t-faint block mb-1">Marge retenue (%)</label>
             <input
@@ -189,6 +198,15 @@ export default function RiskPage() {
               className="bo-input w-full text-right font-mono"
               value={cashoutMaxOdd}
               onChange={e => setCashoutMaxOdd(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="text-[10px] text-t-faint block mb-1">Sélections à venir max.</label>
+            <input
+              type="number" min="0" step="1"
+              className="bo-input w-full text-right font-mono"
+              value={cashoutMaxLegs}
+              onChange={e => setCashoutMaxLegs(e.target.value)}
             />
           </div>
         </div>

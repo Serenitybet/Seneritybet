@@ -1,6 +1,6 @@
 import { prisma } from "../lib/prisma";
 import { AppError } from "../middleware/error.middleware";
-import { getSettingFloat, SETTING_KEYS } from "../lib/settings";
+import { getSettingFloat, getSettingNumber, SETTING_KEYS } from "../lib/settings";
 
 export interface CashoutQuote {
   eligible: boolean;
@@ -28,7 +28,11 @@ export interface CashoutQuote {
  *   saisi manuellement est logiquement aussi "pas pricable") ;
  * - chaque sélection non jouée a une cote actuelle <= seuil configuré
  *   (CASHOUT_MAX_ODD_PENDING) — trop d'incertitude sur un outsider pour que
- *   le rachat soit intéressant pour l'établissement (demande explicite).
+ *   le rachat soit intéressant pour l'établissement (demande explicite) ;
+ * - au plus CASHOUT_MAX_PENDING_LEGS sélections ne sont pas encore jouées
+ *   — un combiné où presque rien n'a encore été joué reste trop spéculatif
+ *   pour être intéressant à racheter, même si chaque sélection prise
+ *   individuellement est un favori (demande explicite).
  *
  * Valeur juste = mise × (cotes verrouillées des sélections déjà GAGNÉES) ×
  * (cotes ACTUELLES des sélections pas encore jouées — pas la cote figée à
@@ -60,10 +64,15 @@ export async function getCashoutQuote(ticketId: string): Promise<CashoutQuote> {
     return { eligible: false, reason: "Cash-out indisponible pour ce ticket actuellement" };
   }
 
-  const [marginPct, maxOddPending] = await Promise.all([
+  const [marginPct, maxOddPending, maxPendingLegs] = await Promise.all([
     getSettingFloat(SETTING_KEYS.CASHOUT_MARGIN_PCT),
     getSettingFloat(SETTING_KEYS.CASHOUT_MAX_ODD_PENDING),
+    getSettingNumber(SETTING_KEYS.CASHOUT_MAX_PENDING_LEGS),
   ]);
+
+  if (pendingItems.length > maxPendingLegs) {
+    return { eligible: false, reason: "Cash-out indisponible : trop de sélections de ce ticket ne sont pas encore jouées" };
+  }
 
   const tooRisky = pendingItems.find((i) => Number(i.odd.value) > maxOddPending);
   if (tooRisky) {
