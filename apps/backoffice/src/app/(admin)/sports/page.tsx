@@ -420,7 +420,13 @@ export default function SportsPage() {
 
       {/* ── Panel droit : Gestion marchés ── */}
       {selectedEvent && (
-        <div className="w-[410px] shrink-0 space-y-3 overflow-y-auto max-h-[calc(100vh-120px)] pr-1">
+        // sticky top-6 : le panneau doit rester visible à l'écran quelle que
+        // soit la position de défilement dans la (longue) liste des matchs à
+        // gauche — sans ça, cliquer sur "Marchés" pour un match situé plus
+        // bas ouvre le panneau hors champ, en haut du conteneur, invisible
+        // sans remonter manuellement (signalé en prod le 30/10/2026).
+        // top-6 correspond au padding-top (p-6) du <main> parent.
+        <div className="w-[410px] shrink-0 space-y-3 overflow-y-auto max-h-[calc(100vh-120px)] pr-1 sticky top-6 self-start">
           {/* Header panel */}
           <div className="bo-card sticky top-0 z-10">
             <div className="bo-card-body py-3">
