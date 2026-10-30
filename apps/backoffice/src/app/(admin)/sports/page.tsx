@@ -43,12 +43,14 @@ const MARKET_TYPES: { value: string; label: string; defaultOdds: { label: string
 ];
 
 const SPORTS = ["Football", "Basketball", "Tennis", "Rugby", "MMA", "Hockey", "Volleyball", "Handball"];
-const DATE_RANGES = [
+const DATE_QUICK = [
   { value: "all",   label: "Tous les matchs à venir" },
   { value: "today", label: "Aujourd'hui" },
-  { value: "week",  label: "7 prochains jours" },
 ] as const;
-type DateRange = (typeof DATE_RANGES)[number]["value"];
+// "all" / "today" = raccourcis ; toute autre valeur = une date précise
+// (YYYY-MM-DD) choisie via le sélecteur de date, pour naviguer jour par
+// jour plutôt que de voir plusieurs jours mélangés en vrac.
+type DateRange = "all" | "today" | string;
 
 // Onglets de statut — notamment pour retrouver vite les matchs déjà en
 // direct ou déjà terminés (pas couverts par le filtre de date, qui ne porte
@@ -133,9 +135,9 @@ export default function SportsPage() {
       if (dateRange === "today") {
         const today = toYMD(new Date());
         params.set("from", today); params.set("to", today);
-      } else if (dateRange === "week") {
-        params.set("from", toYMD(new Date()));
-        params.set("to", toYMD(new Date(Date.now() + 6 * 24 * 60 * 60 * 1000)));
+      } else if (dateRange !== "all") {
+        // Une date précise (YYYY-MM-DD) choisie via le sélecteur.
+        params.set("from", dateRange); params.set("to", dateRange);
       }
       const r = await fetch(`${API}/admin/sports/events?${params}`, { headers: authHeaders() });
       const d = await r.json();
@@ -369,14 +371,19 @@ export default function SportsPage() {
 
             {/* Période — sans ça, avec beaucoup de compétitions synchronisées,
                 les 50 matchs du jour seul remplissent déjà toute la page et
-                masquent ceux des jours suivants. */}
-            <div className="flex gap-2">
-              {DATE_RANGES.map(r => (
+                masquent ceux des jours suivants. Le sélecteur de date permet
+                de naviguer jour par jour plutôt que de voir plusieurs jours
+                mélangés en vrac. */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {DATE_QUICK.map(r => (
                 <button key={r.value} onClick={() => setDateRange(r.value)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${dateRange === r.value ? "bg-green-600 text-white" : "bg-bo-card text-t-muted hover:text-t-primary border border-bo-border2"}`}>
                   {r.label}
                 </button>
               ))}
+              <input type="date" className="bo-input text-xs py-1.5"
+                value={dateRange !== "all" && dateRange !== "today" ? dateRange : ""}
+                onChange={e => setDateRange(e.target.value || "all")} />
             </div>
 
             <div className="bo-card">
