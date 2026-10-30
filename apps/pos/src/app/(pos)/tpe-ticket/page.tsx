@@ -303,7 +303,7 @@ export default function TpeTicketPage() {
               <p><strong>TPE:</strong> {ticket.tpe?.name ?? ticket.tpe?.code ?? "—"}</p>
               <p><strong>Imprimé le:</strong> {new Date(ticket.createdAt).toLocaleDateString("fr-FR")}</p>
               {ticket.payoutCode && !codePrinted && (
-                <p style={{ fontSize: 13 }}><strong>Code sécurité:</strong> {ticket.payoutCode}</p>
+                <p style={{ fontSize: 13 }}><strong>Code de sécurité:</strong> {ticket.payoutCode}</p>
               )}
             </div>
             <div style={{ borderTop: "1px dashed #000", borderBottom: "1px dashed #000", padding: "4px 0", marginBottom: 4 }}>
