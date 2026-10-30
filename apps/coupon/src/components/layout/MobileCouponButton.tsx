@@ -25,18 +25,36 @@ export function MobileCouponButton() {
   // peut "remonter" jusqu'à la page en dessous sur mobile (la liste des
   // matchs défile au lieu du tiroir) — la page derrière reste scrollable au
   // toucher tant qu'elle n'est pas explicitement verrouillée pendant que le
-  // tiroir est ouvert (signalé en prod le 30/10/2026). html ET body : iOS
-  // Safari ignore parfois overflow:hidden posé seulement sur l'un des deux.
+  // tiroir est ouvert (signalé en prod le 30/10/2026).
+  //
+  // "overflow: hidden" seul (1er essai) a été trop loin sur certains
+  // navigateurs mobiles : poser overflow:hidden sur <html> désactive aussi
+  // le défilement tactile des DESCENDANTS (le tiroir ne défilait plus du
+  // tout). On utilise plutôt la technique "position: fixed" sur <body> —
+  // standard pour verrouiller une page sous une modale sans toucher au
+  // défilement interne de la modale elle-même (ancre body à la position de
+  // défilement actuelle, la retire du flux, puis la restaure à la
+  // fermeture).
   useEffect(() => {
     if (!open) return;
-    const { body, documentElement: html } = document;
-    const prevBodyOverflow = body.style.overflow;
-    const prevHtmlOverflow = html.style.overflow;
-    body.style.overflow = "hidden";
-    html.style.overflow = "hidden";
+    const { body } = document;
+    const scrollY = window.scrollY;
+    const prev = {
+      position: body.style.position, top: body.style.top,
+      left: body.style.left, right: body.style.right, width: body.style.width,
+    };
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
     return () => {
-      body.style.overflow = prevBodyOverflow;
-      html.style.overflow = prevHtmlOverflow;
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.left = prev.left;
+      body.style.right = prev.right;
+      body.style.width = prev.width;
+      window.scrollTo(0, scrollY);
     };
   }, [open]);
 
