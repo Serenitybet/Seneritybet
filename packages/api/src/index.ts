@@ -2,6 +2,7 @@ import { app } from "./app";
 import { redis } from "./lib/redis";
 import { prisma } from "./lib/prisma";
 import { startOddsSyncWorker } from "./workers/odds-sync.worker";
+import { startCreditResetWorker } from "./workers/credit-reset.worker";
 
 const PORT = parseInt(process.env.API_PORT ?? "4000", 10);
 
@@ -29,6 +30,12 @@ async function bootstrap() {
       console.log("✅ Worker de sync des cotes démarré");
     } catch (err) {
       console.warn("⚠️  Worker cotes non démarré :", err);
+    }
+    try {
+      startCreditResetWorker();
+      console.log("✅ Worker palier journalier TPE démarré");
+    } catch (err) {
+      console.warn("⚠️  Worker palier journalier non démarré :", err);
     }
   }
 

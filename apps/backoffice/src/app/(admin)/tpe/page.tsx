@@ -12,6 +12,7 @@ interface Tpe {
   pairingCode: string | null;
   status: "PENDING_PAIRING" | "ACTIVE" | "BLOCKED" | "DELETED";
   creditXAF: number;
+  dailyCreditXAF: number | null; // null = pas de palier journalier (recharge manuelle uniquement)
   regionId: string | null;
   region: { id: string; name: string } | null;
   lastSeenAt: string | null;
@@ -138,6 +139,27 @@ export default function TpePage() {
       });
       if (res.ok) { toast.success("Nom mis à jour ✓"); loadAll(); }
       else toast.error("Erreur");
+    } catch { toast.error("Erreur réseau"); }
+  }
+
+  async function editDailyCredit(tpe: Tpe) {
+    const current = tpe.dailyCreditXAF != null ? String(tpe.dailyCreditXAF) : "";
+    const input = prompt(
+      `Palier journalier pour "${tpe.name ?? tpe.code}" (XAF) — le crédit y est remis automatiquement chaque jour à ` +
+      `minuit, à la place d'une recharge manuelle. Laisser vide pour désactiver (recharge manuelle uniquement) :`,
+      current,
+    );
+    if (input === null) return;
+    const trimmed = input.trim();
+    try {
+      const res = await fetch(`${API}/admin/tpe/${tpe.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ dailyCreditXAF: trimmed === "" ? null : Number(trimmed) }),
+      });
+      const d = await res.json();
+      if (!res.ok) { toast.error(d.error ?? "Erreur"); return; }
+      toast.success(trimmed === "" ? "Palier journalier désactivé ✓" : "Palier journalier mis à jour ✓");
+      loadAll();
     } catch { toast.error("Erreur réseau"); }
   }
 
@@ -400,9 +422,16 @@ export default function TpePage() {
                         <p className="text-[10px] text-t-faint uppercase tracking-wide">Crédit</p>
                         <p className="text-sm font-black text-green-400">{fmtXAF(t.creditXAF)}</p>
                       </div>
+                      <div className="text-right">
+                        <p className="text-[10px] text-t-faint uppercase tracking-wide">Palier journalier</p>
+                        <p className="text-sm font-black text-gold">
+                          {t.dailyCreditXAF != null ? fmtXAF(t.dailyCreditXAF) : "Désactivé"}
+                        </p>
+                      </div>
                       <div className="flex gap-2">
                         <button className="bo-btn-secondary bo-btn-sm" onClick={() => renameTpe(t)}>✏️ Renommer</button>
                         <button className="bo-btn-secondary bo-btn-sm" onClick={() => setCreditModal(t)}>💰 Crédit</button>
+                        <button className="bo-btn-secondary bo-btn-sm" onClick={() => editDailyCredit(t)}>📅 Palier</button>
                         <button
                           className={`bo-btn-sm ${t.status === "BLOCKED" ? "bo-btn-primary" : "bo-btn-danger"}`}
                           onClick={() => toggleBlock(t)}
