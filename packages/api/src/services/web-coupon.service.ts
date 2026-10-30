@@ -40,9 +40,22 @@ interface CouponSelection {
 }
 
 /** Composé depuis le site public, sans compte — resalidé puis converti en Ticket en boutique (voir tpe.service.placeTicket). */
-export async function createWebCoupon(selections: { oddId: string }[]) {
+export async function createWebCoupon(selections: { oddId: string }[], stakeXAF?: number) {
   if (!selections?.length) throw new AppError(400, "Aucune sélection");
   if (selections.length > 15) throw new AppError(400, "Maximum 15 événements par coupon");
+
+  // Mise suggérée optionnelle — simple pré-remplissage côté caissier,
+  // revalidée (et modifiable) à la prise réelle du ticket (placeTicket),
+  // donc une vérification sommaire suffit ici (même minimum que
+  // placeTicket, pour éviter d'afficher une suggestion qui serait de toute
+  // façon rejetée en boutique).
+  let stake: bigint | undefined;
+  if (stakeXAF !== undefined && stakeXAF !== null) {
+    if (isNaN(Number(stakeXAF)) || Number(stakeXAF) < 100) {
+      throw new AppError(400, "Mise suggérée invalide (minimum 100 XAF)");
+    }
+    stake = BigInt(Math.round(Number(stakeXAF) * 100));
+  }
 
   const oddIds = selections.map((s) => s.oddId);
   const odds = await prisma.odd.findMany({
@@ -86,7 +99,7 @@ export async function createWebCoupon(selections: { oddId: string }[]) {
 
   const expiresAt = new Date(Date.now() + COUPON_TTL_MS);
   const coupon = await prisma.webCoupon.create({
-    data: { code, selections: snapshot, expiresAt },
+    data: { code, selections: snapshot, expiresAt, stake },
   });
 
   return { code: coupon.code, selectionsCount: snapshot.length, expiresAt: coupon.expiresAt };
@@ -202,5 +215,11 @@ export async function getWebCouponForCashier(code: string) {
     }
   }
 
-  return { code: coupon.code, selections: valid, droppedCount, expiresAt: coupon.expiresAt };
+  return {
+    code: coupon.code,
+    selections: valid,
+    droppedCount,
+    expiresAt: coupon.expiresAt,
+    suggestedStakeXAF: coupon.stake != null ? Number(coupon.stake) / 100 : null,
+  };
 }

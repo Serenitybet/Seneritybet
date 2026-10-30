@@ -8,11 +8,11 @@ import * as webCouponService from "../services/web-coupon.service";
 // /web-coupons/:code côté caissier, et placeTicket qui le consomme).
 export const webCouponRouter = Router();
 
-// POST /api/web-coupons — composer et enregistrer un coupon
+// POST /api/web-coupons — composer et enregistrer un coupon (mise suggérée optionnelle)
 webCouponRouter.post("/", asyncHandler(async (req: Request, res: Response) => {
-  const { selections } = req.body;
+  const { selections, stakeXAF } = req.body;
   if (!Array.isArray(selections)) throw new AppError(400, "Sélections invalides");
-  const result = await webCouponService.createWebCoupon(selections);
+  const result = await webCouponService.createWebCoupon(selections, stakeXAF);
   res.status(201).json({ success: true, data: result });
 }));
 
