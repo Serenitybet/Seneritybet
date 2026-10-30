@@ -391,7 +391,15 @@ export default function SportsPage() {
               ))}
               <input type="date" className="bo-input text-xs py-1.5"
                 value={dateRange !== "all" && dateRange !== "today" ? dateRange : ""}
-                onChange={e => setDateRange(e.target.value || "all")} />
+                onChange={e => {
+                  // Le champ natif peut émettre un événement avec une valeur
+                  // vide pendant la saisie (avant qu'une date complète soit
+                  // entrée) — ignorer ces états intermédiaires au lieu de
+                  // réinitialiser silencieusement sur "Toutes dates"
+                  // (bug signalé en prod le 30/10/2026 : choisir une date
+                  // affichait quand même tous les matchs, sans filtre).
+                  if (e.target.value) setDateRange(e.target.value);
+                }} />
             </div>
 
             <div className="bo-card">
