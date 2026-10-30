@@ -84,25 +84,26 @@ export function MobileCouponButton() {
         // barre de navigation du bas — rendue après dans le DOM, donc
         // gagnante à z-index égal — recouvre en permanence le bas du tiroir
         // (et donc le bouton "Enregistrer mon coupon").
-        <div className="fixed inset-0 z-[60] md:hidden">
+        // flex + justify-end (plutôt que absolute bottom-0 + max-h-[85dvh])
+        // : les unités de hauteur de viewport (vh/dvh) se sont révélées peu
+        // fiables sur certains navigateurs mobiles (bug persistant malgré
+        // deux correctifs successifs, signalé en prod le 30/10/2026). Ce
+        // conteneur "fixed inset-0" correspond, lui, toujours exactement à
+        // la fenêtre visible du navigateur — un pourcentage (85%) de SA
+        // hauteur est donc fiable sans dépendre d'aucune unité de viewport.
+        <div className="fixed inset-0 z-[60] md:hidden flex flex-col justify-end">
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setOpen(false)}
           />
-          {/* flex-col + hauteur bornée (pas de overflow-y-auto directement
-              ici) : CouponPanel gère son propre défilement interne (liste des
-              sélections uniquement), pour que le bouton "Enregistrer" reste
-              toujours visible en bas du tiroir, quel que soit le nombre de
-              sélections. dvh (et non vh) : sur mobile, "vh" se base sur la
-              hauteur maximale théorique de l'écran, pas sur la zone
-              réellement visible une fois la barre d'adresse du navigateur
-              repliée/dépliée — avec beaucoup de sélections (6-7+), le tiroir
-              pouvait alors dépasser l'écran réel et pousser le bouton
-              "Enregistrer" hors champ, impossible à faire défiler pour le
-              retrouver (signalé en prod le 30/10/2026). "dvh" (dynamic
-              viewport height) se recalcule en fonction de l'espace vraiment
-              visible à cet instant. */}
-          <div className="absolute bottom-0 left-0 right-0 bg-bg-secondary rounded-t-2xl max-h-[85dvh] flex flex-col">
+          {/* relative (pas absolute) : dans ce flex-col justify-end, le
+              tiroir se place naturellement en bas sans positionnement
+              manuel. flex-col + hauteur bornée (pas de overflow-y-auto
+              directement ici) : CouponPanel gère son propre défilement
+              interne (liste des sélections uniquement), pour que le bouton
+              "Enregistrer" reste toujours visible en bas du tiroir, quel
+              que soit le nombre de sélections. */}
+          <div className="relative w-full bg-bg-secondary rounded-t-2xl flex flex-col" style={{ maxHeight: "85%" }}>
             <div className="flex items-center justify-between px-4 py-3 border-b border-bg-border shrink-0">
               <span className="font-bold text-txt-primary">Mon coupon{selections.length > 0 ? ` (${selections.length})` : ""}</span>
               <button onClick={() => setOpen(false)} className="text-txt-muted text-2xl leading-none">
