@@ -5,21 +5,28 @@ import toast from "react-hot-toast";
 import { useState } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
+const QUICK_STAKES = [500, 1000, 2000, 5000, 10000, 25000];
 
 export function CouponPanel() {
   const { selections, removeSelection, clearSlip, totalOdds } = useCouponStore();
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState<{ code: string; validUntil: string } | null>(null);
+  const [saved, setSaved] = useState<{ code: string; validUntil: string; stakeXAF?: number } | null>(null);
+  // Optionnelle — simple suggestion pré-remplie côté caissier (il reste
+  // libre de la modifier selon l'espèce réellement reçue), pas une mise
+  // engagée ni payée ici (toujours en espèces en boutique).
+  const [stakeInput, setStakeInput] = useState("");
 
   async function handleSaveCoupon() {
     if (selections.length === 0) { toast.error("Coupon vide"); return; }
     setSaving(true);
     try {
+      const stakeXAF = stakeInput && parseFloat(stakeInput) > 0 ? parseFloat(stakeInput) : undefined;
       const res = await fetch(`${API_URL}/web-coupons`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           selections: selections.map((s) => ({ oddId: s.oddId })),
+          ...(stakeXAF !== undefined ? { stakeXAF } : {}),
         }),
       });
       const data = await res.json();
@@ -35,8 +42,9 @@ export function CouponPanel() {
       const expiresAt = data.data.expiresAt as string;
       const validUntil = earliestStart && earliestStart < expiresAt ? earliestStart : expiresAt;
 
-      setSaved({ code: data.data.code, validUntil });
+      setSaved({ code: data.data.code, validUntil, stakeXAF });
       clearSlip();
+      setStakeInput("");
       toast.success("Coupon enregistré !");
     } catch {
       toast.error("Erreur réseau");
@@ -62,9 +70,14 @@ export function CouponPanel() {
           </div>
           <p className="text-xs text-txt-muted mb-1">Votre code coupon</p>
           <p className="font-mono text-5xl font-black text-green-700 tracking-widest mb-3">{saved.code}</p>
-          <p className="text-xs text-txt-muted mb-4">
+          <p className="text-xs text-txt-muted mb-1">
             Valable jusqu'au {validUntil.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
           </p>
+          {saved.stakeXAF && (
+            <p className="text-xs text-txt-muted mb-4">
+              Mise suggérée : <span className="font-bold text-green-700">{saved.stakeXAF.toLocaleString("fr-FR")} XAF</span>
+            </p>
+          )}
           <button onClick={handleNewCoupon} className="btn-outline w-full py-2 text-sm">
             Composer un nouveau coupon
           </button>
@@ -101,7 +114,7 @@ export function CouponPanel() {
         </div>
       ) : (
         <div className="flex flex-col flex-1 min-h-0">
-          <div className="flex-1 min-h-0 overflow-y-auto px-2 pt-2 space-y-1.5">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-2 pt-2 space-y-1.5">
             {selections.map((sel) => (
               <div key={sel.oddId} className="bg-bg-card border border-bg-border rounded-lg p-2.5">
                 <div className="flex items-start justify-between gap-2 mb-1">
@@ -132,9 +145,34 @@ export function CouponPanel() {
               </div>
             )}
 
-            <p className="text-[11px] text-txt-muted text-center">
-              Aucune mise à saisir ici — elle sera décidée et payée en espèces en boutique.
-            </p>
+            <div>
+              <label className="text-[11px] text-txt-muted block mb-1.5">
+                Mise souhaitée (optionnel) — payée en espèces en boutique, le caissier pourra l'ajuster
+              </label>
+              <input
+                type="number" min="0" step="100" inputMode="numeric"
+                className="field font-mono text-center"
+                placeholder="Laisser vide = décidé en boutique"
+                value={stakeInput}
+                onChange={(e) => setStakeInput(e.target.value)}
+              />
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {QUICK_STAKES.map((s) => (
+                  <button key={s} type="button" onClick={() => setStakeInput(String(s))}
+                    className="px-2 py-1 bg-bg-card border border-bg-border rounded-md text-[11px] text-txt-secondary hover:border-green-600/40 hover:text-green-700 transition-colors">
+                    {s.toLocaleString()}
+                  </button>
+                ))}
+              </div>
+              {stakeInput && parseFloat(stakeInput) > 0 && (
+                <p className="text-[11px] text-txt-muted mt-1.5 text-center">
+                  Gain potentiel estimé :{" "}
+                  <span className="font-bold text-green-700">
+                    {(parseFloat(stakeInput) * totalOdds).toLocaleString("fr-FR")} XAF
+                  </span>
+                </p>
+              )}
+            </div>
 
             <button
               className="btn-green w-full py-2.5 text-sm"

@@ -735,6 +735,12 @@ model WebCoupon {
   id         String          @id @default(cuid())
   code       String          @unique
   selections Json            // snapshot [{ eventId, eventLabel, marketId, marketName, oddId, oddLabel, oddValue }]
+  // Mise que le parieur a choisi de prédéfinir en composant son coupon sur
+  // le site (centimes XAF, comme Ticket.stake) — optionnel, null si laissé
+  // à décider en boutique comme avant. Simple suggestion pré-remplie côté
+  // caissier (web-coupon.service.getWebCouponForCashier) : n'engage à
+  // rien, le caissier reste libre de la modifier selon l'espèce reçue.
+  stake      BigInt?
   status     WebCouponStatus @default(PENDING)
   tickets    Ticket[]
   createdAt  DateTime        @default(now())

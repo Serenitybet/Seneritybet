@@ -202,7 +202,7 @@ export default function TpeTicketPage() {
     setCouponLoading(true);
     try {
       const res = await api.get(`/tpe/web-coupons/${encodeURIComponent(code)}`);
-      const data = res.data.data as { code: string; selections: WebCouponSelection[]; droppedCount: number };
+      const data = res.data.data as { code: string; selections: WebCouponSelection[]; droppedCount: number; suggestedStakeXAF: number | null };
       if (data.selections.length === 0) {
         toast.error("Aucune sélection valide dans ce coupon (cotes changées ou matchs déjà commencés)");
         return;
@@ -212,10 +212,17 @@ export default function TpeTicketPage() {
       })));
       setLoadedWebCouponCode(data.code);
       setCouponCode("");
+      // Pré-remplissage uniquement — simple suggestion du parieur, le
+      // caissier reste libre de l'ajuster selon l'espèce réellement reçue.
+      if (data.suggestedStakeXAF) setStakeXAF(String(data.suggestedStakeXAF));
       if (data.droppedCount > 0) {
         toast.error(`${data.droppedCount} sélection(s) retirée(s) — cote changée ou match déjà commencé`);
       } else {
-        toast.success(`Coupon ${data.code} chargé — ${data.selections.length} sélection(s)`);
+        toast.success(
+          data.suggestedStakeXAF
+            ? `Coupon ${data.code} chargé — ${data.selections.length} sélection(s), mise suggérée ${data.suggestedStakeXAF.toLocaleString("fr-FR")} XAF`
+            : `Coupon ${data.code} chargé — ${data.selections.length} sélection(s)`,
+        );
       }
     } catch (err: any) {
       toast.error(err.response?.data?.error ?? "Code coupon introuvable");
