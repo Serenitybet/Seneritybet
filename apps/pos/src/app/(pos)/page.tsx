@@ -47,7 +47,6 @@ export default function PosHomePage() {
   const router = useRouter();
   const { token, cashier, logout } = useAuthStore();
   const [device, setDevice] = useState<DeviceInfo | null>(null);
-  const [hideCredit, setHideCredit] = useState(false);
   const [showDeviceInfo, setShowDeviceInfo] = useState(false);
 
   useEffect(() => {
@@ -74,26 +73,14 @@ export default function PosHomePage() {
             <p className="text-slate-400 text-xs uppercase tracking-widest">Bienvenue</p>
             <h1 className="text-xl font-black text-green-400">{cashier?.firstName} {cashier?.lastName}</h1>
           </div>
-          <button
-            onClick={() => setHideCredit(!hideCredit)}
-            className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1"
-          >
-            {hideCredit ? "👁 Afficher" : "🙈 Masquer"}
-          </button>
         </div>
 
-        {/* Stat cards */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-4">
-            <p className="text-slate-400 text-[10px] uppercase tracking-widest mb-1">TPE</p>
-            <p className="font-mono font-black text-lg text-white">{device?.code ?? "—"}</p>
-          </div>
-          <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-4">
-            <p className="text-slate-400 text-[10px] uppercase tracking-widest mb-1">Crédit disponible</p>
-            <p className="font-black text-lg text-green-400">
-              {hideCredit ? "•••••" : device ? `${device.creditXAF.toLocaleString("fr-FR")} XAF` : "…"}
-            </p>
-          </div>
+        {/* Stat cards — le crédit disponible du TPE n'est volontairement pas
+            affiché ici : c'est une information de gestion du risque réservée
+            au backoffice, pas aux caissières (demande explicite). */}
+        <div className="bg-slate-800/70 border border-slate-700 rounded-2xl p-4">
+          <p className="text-slate-400 text-[10px] uppercase tracking-widest mb-1">TPE</p>
+          <p className="font-mono font-black text-lg text-white">{device?.code ?? "—"}</p>
         </div>
 
         {/* Actions principales */}

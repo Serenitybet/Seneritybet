@@ -68,6 +68,21 @@ export default function HistoryPage() {
 
   const today = format(new Date(), "EEEE d MMMM yyyy", { locale: fr });
 
+  // Toute l'app utilise par défaut une page d'impression 58mm (rouleau
+  // thermique, voir globals.css) pour les tickets/reçus — mais cette page
+  // est un rapport normal (tableau), pas un reçu. On bascule donc
+  // temporairement le format de page sur une feuille standard juste pour
+  // cette impression, via une balise <style> injectée (la seule façon
+  // fiable de surcharger ponctuellement une règle @page, qui ne peut pas
+  // être ciblée par un simple sélecteur CSS).
+  function handlePrint() {
+    const style = document.createElement("style");
+    style.textContent = "@media print { @page { size: auto; margin: 12mm; } }";
+    document.head.appendChild(style);
+    window.print();
+    document.head.removeChild(style);
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
@@ -76,16 +91,18 @@ export default function HistoryPage() {
           <p className="text-gray-500 capitalize">{today}</p>
         </div>
         <button
-          onClick={() => window.print()}
+          onClick={handlePrint}
           className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-semibold text-sm no-print"
         >
           🖨️ Imprimer la clôture
         </button>
       </div>
 
-      {/* Synthèse tickets TPE + dépôts/retraits + solde net combiné */}
+      {/* Synthèse tickets TPE + dépôts/retraits + solde net combiné — c'est
+          l'essentiel d'une clôture de caisse, elle DOIT apparaître à
+          l'impression (pas de no-print ici, contrairement au bouton). */}
       {(tpeSummary || stats) && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 no-print">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {tpeSummary && (
             <>
               <div className="bg-white rounded-2xl p-5 shadow-sm">
