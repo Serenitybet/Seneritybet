@@ -276,7 +276,13 @@ export default function TpePayoutPage() {
                 </div>
                 <div className="text-right shrink-0 ml-3">
                   <p className="font-black text-green-600 text-lg">{it.oddValue.toFixed(2)}</p>
-                  {it.result && <p className="text-xs text-gray-400">{it.result}</p>}
+                  {it.result && (
+                    <p className={`text-xs font-bold ${
+                      it.result === "WON" ? "text-green-600" : it.result === "LOST" ? "text-red-500" : "text-gray-400"
+                    }`}>
+                      {it.result}
+                    </p>
+                  )}
                 </div>
               </div>
             ))}
