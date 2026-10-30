@@ -1250,9 +1250,14 @@ export async function settleEventTickets(
     include: { odd: true, market: true, ticket: true },
   });
 
+  // Pas de filtre sur le statut du ticket ici : même si le ticket est déjà
+  // réglé LOST (une autre sélection a perdu avant celle-ci), CHAQUE match
+  // doit quand même afficher son vrai résultat une fois terminé — un match
+  // encore en cours reste non renseigné, un match gagné affiche "Gagné"
+  // normalement, etc. Seul le réglage du TICKET (plus bas) est conditionné
+  // à PENDING, pas l'enregistrement du résultat de chaque sélection.
   const touchedTicketIds = new Set<string>();
   for (const item of items) {
-    if (item.ticket.status !== "PENDING") continue;
     const result = computeItemResult(item.market.type, item.odd.label, homeTeam, awayTeam, homeScore, awayScore);
     if (!result) continue; // type de marché ou libellé non calculable automatiquement — laissé pour saisie manuelle
     await prisma.ticketItem.update({ where: { id: item.id }, data: { result } });
@@ -1262,7 +1267,10 @@ export async function settleEventTickets(
   let settledCount = 0;
   for (const ticketId of touchedTicketIds) {
     const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, include: { items: true } });
-    if (ticket && ticket.status === "PENDING" && ticket.items.every((i) => i.result !== null)) {
+    // Une sélection déjà PERDUE clôture le ticket sans attendre les autres
+    // (voir settleTicket, tpe.service.ts) — pas besoin que tout soit résolu.
+    const ready = ticket && (ticket.items.every((i) => i.result !== null) || ticket.items.some((i) => i.result === "LOST"));
+    if (ticket && ticket.status === "PENDING" && ready) {
       await settleTicket(ticketId);
       settledCount++;
     }

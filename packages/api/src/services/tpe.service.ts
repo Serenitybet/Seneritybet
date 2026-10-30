@@ -294,16 +294,26 @@ export async function settleTicket(ticketId: string) {
   if (!ticket) throw new AppError(404, "Ticket introuvable");
   if (ticket.status !== "PENDING") throw new AppError(400, "Ce ticket est déjà réglé");
 
+  // Une seule sélection PERDUE suffit à clôturer tout le ticket en LOST,
+  // même si d'autres sélections du combiné ne sont pas encore jouées —
+  // inutile d'attendre le résultat de matchs qui ne changeront plus rien à
+  // l'issue. Sans ce court-circuit, un ticket avec une sélection déjà
+  // perdue restait affiché "en cours" jusqu'à ce que TOUTES les autres
+  // rencontres se terminent, parfois des jours plus tard (signalé en prod
+  // le 30/10/2026).
+  const anyLost = ticket.items.some((item) => item.result === "LOST");
   const hasAllResults = ticket.items.every((item) => item.result !== null);
-  if (!hasAllResults) throw new AppError(400, "Tous les résultats ne sont pas encore disponibles");
+  if (!hasAllResults && !anyLost) {
+    throw new AppError(400, "Tous les résultats ne sont pas encore disponibles");
+  }
 
   // Une sélection ANNULÉE (VOID — match reporté/annulé, push) ne doit pas
   // faire perdre le ticket : seule une sélection explicitement PERDUE le
-  // fait. S'il n'y a que des VOID, le ticket est entièrement remboursé ;
-  // sinon (au moins une sélection WON, les autres WON ou VOID), il est
-  // gagnant.
-  const anyLost = ticket.items.some((item) => item.result === "LOST");
-  const allVoided = ticket.items.every((item) => item.result === "VOID");
+  // fait. S'il n'y a que des VOID (match bien complet), le ticket est
+  // entièrement remboursé ; sinon (au moins une sélection WON, les autres
+  // WON ou VOID), il est gagnant. "allVoided" n'a de sens que si tous les
+  // résultats sont connus — jamais vrai sur un règlement anticipé (anyLost).
+  const allVoided = hasAllResults && ticket.items.every((item) => item.result === "VOID");
   const status = anyLost ? "LOST" : allVoided ? "REFUNDED" : "WON";
 
   // Une sélection VOID équivaut à une cote neutre de 1 — elle ne doit pas
