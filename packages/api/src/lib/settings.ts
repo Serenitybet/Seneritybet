@@ -14,6 +14,13 @@ export const SETTING_KEYS = {
   // décimal, voir getSettingFloat).
   CASHOUT_MARGIN_PCT: "CASHOUT_MARGIN_PCT",
   CASHOUT_MAX_ODD_PENDING: "CASHOUT_MAX_ODD_PENDING",
+  // Nombre maximum de sélections encore non jouées tolérées (plafond) pour
+  // qu'un ticket reste éligible au cash-out, et nombre minimum de
+  // sélections total requis pour être éligible du tout (demande explicite)
+  // — voir cashout.service.ts pour la formule exacte (plus le ticket est
+  // petit — proche du minimum — moins on tolère de sélections restantes).
+  CASHOUT_MAX_PENDING_LEGS: "CASHOUT_MAX_PENDING_LEGS",
+  CASHOUT_MIN_TOTAL_LEGS: "CASHOUT_MIN_TOTAL_LEGS",
 } as const;
 
 const DEFAULTS: Record<string, string> = {
@@ -21,6 +28,8 @@ const DEFAULTS: Record<string, string> = {
   [SETTING_KEYS.TPE_MAX_WIN_XAF]: "0", // désactivé par défaut (centimes)
   [SETTING_KEYS.CASHOUT_MARGIN_PCT]: "20",
   [SETTING_KEYS.CASHOUT_MAX_ODD_PENDING]: "1.80",
+  [SETTING_KEYS.CASHOUT_MAX_PENDING_LEGS]: "2",
+  [SETTING_KEYS.CASHOUT_MIN_TOTAL_LEGS]: "5",
 };
 
 export async function getSetting(key: string): Promise<string> {

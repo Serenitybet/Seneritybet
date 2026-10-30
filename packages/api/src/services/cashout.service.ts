@@ -1,6 +1,6 @@
 import { prisma } from "../lib/prisma";
 import { AppError } from "../middleware/error.middleware";
-import { getSettingFloat, SETTING_KEYS } from "../lib/settings";
+import { getSettingFloat, getSettingNumber, SETTING_KEYS } from "../lib/settings";
 
 export interface CashoutQuote {
   eligible: boolean;
@@ -28,7 +28,16 @@ export interface CashoutQuote {
  *   saisi manuellement est logiquement aussi "pas pricable") ;
  * - chaque sélection non jouée a une cote actuelle <= seuil configuré
  *   (CASHOUT_MAX_ODD_PENDING) — trop d'incertitude sur un outsider pour que
- *   le rachat soit intéressant pour l'établissement (demande explicite).
+ *   le rachat soit intéressant pour l'établissement (demande explicite) ;
+ * - le ticket comporte au moins CASHOUT_MIN_TOTAL_LEGS sélections au total,
+ *   et il n'en reste pas plus que min(CASHOUT_MAX_PENDING_LEGS, total -
+ *   CASHOUT_MIN_TOTAL_LEGS + 1) non jouées — un combiné où presque rien n'a
+ *   encore été joué reste trop spéculatif pour être intéressant à racheter,
+ *   même si chaque sélection prise individuellement est un favori. Plus le
+ *   ticket est proche du minimum, moins on tolère de sélections restantes
+ *   (ex. avec les valeurs par défaut 5/2 : 5 sélections → 1 restante max,
+ *   6 à 10 sélections → 2 restantes max, moins de 5 → jamais éligible —
+ *   demande explicite).
  *
  * Valeur juste = mise × (cotes verrouillées des sélections déjà GAGNÉES) ×
  * (cotes ACTUELLES des sélections pas encore jouées — pas la cote figée à
@@ -60,10 +69,24 @@ export async function getCashoutQuote(ticketId: string): Promise<CashoutQuote> {
     return { eligible: false, reason: "Cash-out indisponible pour ce ticket actuellement" };
   }
 
-  const [marginPct, maxOddPending] = await Promise.all([
+  const [marginPct, maxOddPending, maxPendingLegsCeiling, minTotalLegs] = await Promise.all([
     getSettingFloat(SETTING_KEYS.CASHOUT_MARGIN_PCT),
     getSettingFloat(SETTING_KEYS.CASHOUT_MAX_ODD_PENDING),
+    getSettingNumber(SETTING_KEYS.CASHOUT_MAX_PENDING_LEGS),
+    getSettingNumber(SETTING_KEYS.CASHOUT_MIN_TOTAL_LEGS),
   ]);
+
+  const totalLegs = ticket.items.length;
+  if (totalLegs < minTotalLegs) {
+    return { eligible: false, reason: `Cash-out indisponible : ce ticket comporte moins de ${minTotalLegs} sélections` };
+  }
+  // Plus le ticket est proche du minimum de sélections, moins on tolère de
+  // sélections restantes (voir formule en commentaire plus haut) — plafonné
+  // dans tous les cas par maxPendingLegsCeiling.
+  const maxPendingLegs = Math.min(maxPendingLegsCeiling, totalLegs - minTotalLegs + 1);
+  if (pendingItems.length > maxPendingLegs) {
+    return { eligible: false, reason: "Cash-out indisponible : trop de sélections de ce ticket ne sont pas encore jouées" };
+  }
 
   const tooRisky = pendingItems.find((i) => Number(i.odd.value) > maxOddPending);
   if (tooRisky) {
