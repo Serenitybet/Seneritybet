@@ -616,6 +616,18 @@ model Tpe {
   pairingCode      String?   @unique // affiché sur l'appareil tant qu'en attente d'appairage
   status           TpeStatus @default(PENDING_PAIRING)
   credit           BigInt    @default(0) // centimes XAF — plafond de paiement alimenté par le backoffice
+  // Palier journalier (centimes XAF) — si défini, credit est remis à cette
+  // valeur automatiquement chaque jour à minuit (heure du Tchad, UTC+1), à
+  // la place d'une recharge manuelle ponctuelle (demande explicite du
+  // 30/10/2026) : un caissier ne se retrouve plus bloqué en pleine journée
+  // en attendant qu'un admin recharge manuellement. null = désactivé
+  // (comportement historique, recharge manuelle uniquement).
+  dailyCreditXAF   BigInt?
+  // Dernière réinitialisation automatique effectuée (voir
+  // resetDailyCreditsIfDue, tpe.service.ts) — sert à savoir si celle
+  // d'aujourd'hui a déjà eu lieu, et à rattraper celles manquées après un
+  // redémarrage/une panne du serveur ayant couvert minuit.
+  lastDailyResetAt DateTime?
   regionId         String?
   region           Region?   @relation(fields: [regionId], references: [id])
   lastSeenAt       DateTime?
@@ -638,8 +650,10 @@ model TpeCreditAdjustment {
   tpe       Tpe      @relation(fields: [tpeId], references: [id])
   amount    BigInt   // centimes XAF — positif = recharge, négatif = retrait
   reason    String?
-  adminId   String
-  admin     User     @relation(fields: [adminId], references: [id])
+  // null = réinitialisation automatique du palier journalier (voir
+  // Tpe.dailyCreditXAF), pas d'admin à l'origine de ce mouvement-là.
+  adminId   String?
+  admin     User?    @relation(fields: [adminId], references: [id])
   createdAt DateTime @default(now())
 
   @@index([tpeId])

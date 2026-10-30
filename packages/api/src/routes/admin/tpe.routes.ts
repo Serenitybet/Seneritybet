@@ -73,11 +73,11 @@ adminTpeRouter.post("/:id/approve", requireRole("ADMIN", "SUPER_ADMIN"),
   }),
 );
 
-// PATCH /api/admin/tpe/:id — renommer et/ou assigner à une région
-// (regionId: null explicite = retire le TPE de toute région ; omis = inchangé)
+// PATCH /api/admin/tpe/:id — renommer, assigner à une région et/ou définir le palier journalier
+// (regionId/dailyCreditXAF: null explicite = retire/désactive ; omis = inchangé)
 adminTpeRouter.patch("/:id", requireRole("ADMIN", "SUPER_ADMIN"),
   asyncHandler(async (req: Request, res: Response) => {
-    const { name, regionId } = req.body;
+    const { name, regionId, dailyCreditXAF } = req.body;
     const trimmed = typeof name === "string" ? name.trim() : null;
 
     if (regionId !== undefined && regionId !== null) {
@@ -85,11 +85,22 @@ adminTpeRouter.patch("/:id", requireRole("ADMIN", "SUPER_ADMIN"),
       if (!region) throw new AppError(400, "Région introuvable");
     }
 
+    let dailyCreditCents: bigint | null | undefined;
+    if (dailyCreditXAF === null) {
+      dailyCreditCents = null;
+    } else if (dailyCreditXAF !== undefined) {
+      if (isNaN(Number(dailyCreditXAF)) || Number(dailyCreditXAF) < 0) {
+        throw new AppError(400, "Palier journalier invalide");
+      }
+      dailyCreditCents = BigInt(Math.round(Number(dailyCreditXAF) * 100));
+    }
+
     const tpe = await prisma.tpe.update({
       where: { id: req.params.id },
       data: {
         ...(name !== undefined ? { name: trimmed || null } : {}),
         ...(regionId !== undefined ? { regionId } : {}),
+        ...(dailyCreditCents !== undefined ? { dailyCreditXAF: dailyCreditCents } : {}),
       },
       include: { region: { select: { id: true, name: true } } },
     });

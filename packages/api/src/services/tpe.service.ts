@@ -6,8 +6,14 @@ import type { Tpe, Ticket, TicketItem, TpeCreditAdjustment, Region } from "@sere
 
 /** Jamais renvoyer deviceSecretHash — c'est un secret d'authentification de l'appareil. */
 export function serializeTpe(tpe: Tpe & { region?: Pick<Region, "id" | "name"> | null }) {
-  const { deviceSecretHash: _omit, credit, ...rest } = tpe;
-  return { ...rest, creditXAF: Number(credit) / 100 };
+  const { deviceSecretHash: _omit, credit, dailyCreditXAF, ...rest } = tpe;
+  return {
+    ...rest,
+    creditXAF: Number(credit) / 100,
+    // BigInt ne se sérialise pas nativement en JSON — même traitement que
+    // credit ci-dessus.
+    dailyCreditXAF: dailyCreditXAF != null ? Number(dailyCreditXAF) / 100 : null,
+  };
 }
 
 /** Ne jamais renvoyer payoutCode ici — c'est le secret qui protège contre le paiement d'une réimpression (voir placeTicket, qui le renvoie une seule fois, à part). */
@@ -28,6 +34,55 @@ export function serializeTicket(ticket: Ticket & { items?: TicketItem[] }) {
 export function serializeCreditAdjustment(adj: TpeCreditAdjustment) {
   const { amount, ...rest } = adj;
   return { ...rest, amountXAF: Number(amount) / 100 };
+}
+
+// Tchad = UTC+1 toute l'année (pas d'heure d'été) — décalage fixe, pas besoin
+// d'une bibliothèque de fuseaux horaires pour ce seul calcul.
+const CHAD_UTC_OFFSET_MS = 60 * 60 * 1000;
+
+/** Instant UTC correspondant à minuit (heure du Tchad) du jour courant. */
+function todayMidnightChad(): Date {
+  const chadNow = new Date(Date.now() + CHAD_UTC_OFFSET_MS);
+  const chadMidnightAsUTC = Date.UTC(chadNow.getUTCFullYear(), chadNow.getUTCMonth(), chadNow.getUTCDate());
+  return new Date(chadMidnightAsUTC - CHAD_UTC_OFFSET_MS);
+}
+
+/**
+ * Remet le crédit de chaque TPE ayant un palier journalier configuré
+ * (dailyCreditXAF) à cette valeur, une fois par jour à partir de minuit
+ * (heure du Tchad) — demande explicite du 30/10/2026 : un caissier ne doit
+ * plus se retrouver bloqué en pleine journée en attendant une recharge
+ * manuelle, il reçoit un palier frais chaque jour.
+ *
+ * C'est une REMISE À ZÉRO (pas un ajout) : le crédit est posé exactement à
+ * dailyCreditXAF, quel que soit ce qu'il restait. Appelé périodiquement
+ * (voir credit-reset.worker.ts) plutôt que programmé précisément à minuit :
+ * plus simple et rattrape automatiquement toute réinitialisation manquée
+ * (panne/redémarrage du serveur ayant couvert minuit), au prix d'un délai
+ * de quelques minutes au pire.
+ */
+export async function resetDailyCreditsIfDue() {
+  const dueSince = todayMidnightChad();
+  const due = await prisma.tpe.findMany({
+    where: {
+      dailyCreditXAF: { not: null },
+      OR: [{ lastDailyResetAt: null }, { lastDailyResetAt: { lt: dueSince } }],
+    },
+  });
+
+  for (const tpe of due) {
+    const target = tpe.dailyCreditXAF!;
+    const delta = target - tpe.credit;
+    const now = new Date();
+    await prisma.$transaction([
+      prisma.tpe.update({ where: { id: tpe.id }, data: { credit: target, lastDailyResetAt: now } }),
+      prisma.tpeCreditAdjustment.create({
+        data: { tpeId: tpe.id, amount: delta, reason: "Réinitialisation journalière automatique (00h, heure du Tchad)" },
+      }),
+    ]);
+  }
+
+  return { resetCount: due.length };
 }
 
 const PAIRING_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
