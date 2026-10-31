@@ -367,6 +367,73 @@ export async function getCashierSummary(tpeId: string, cashierId: string, from: 
   };
 }
 
+/**
+ * Rapport consolidé — une ligne par TPE (ventes, tickets, paiements) sur une
+ * période, tous TPE confondus — demande explicite du 31/10/2026 : exporter
+ * les données de TOUS les TPE en une seule fois plutôt qu'un TPE à la fois.
+ * Mêmes règles de calcul que getCashierSummary (cash-out = montant versé
+ * distinct de la mise/du gain, VOID neutre), agrégées ici par TPE plutôt que
+ * par TPE+caissier individuel.
+ */
+export async function getTpeSummaryReport(from: Date, to: Date) {
+  const [tpes, issuedTickets, paidTickets] = await Promise.all([
+    prisma.tpe.findMany({
+      where: { status: { not: "DELETED" } },
+      include: { region: { select: { name: true } } },
+      orderBy: { code: "asc" },
+    }),
+    prisma.ticket.findMany({
+      where: { createdAt: { gte: from, lte: to } },
+      select: { tpeId: true, stake: true },
+    }),
+    prisma.ticket.findMany({
+      where: { paidByTpeId: { not: null }, paidAt: { gte: from, lte: to } },
+      select: { paidByTpeId: true, stake: true, potentialWin: true, cashedOutAmount: true, items: { select: { result: true } } },
+    }),
+  ]);
+
+  const issuedByTpe = new Map<string, { count: number; total: bigint }>();
+  for (const t of issuedTickets) {
+    const cur = issuedByTpe.get(t.tpeId) ?? { count: 0, total: BigInt(0) };
+    cur.count += 1;
+    cur.total += t.stake;
+    issuedByTpe.set(t.tpeId, cur);
+  }
+
+  const paidByTpe = new Map<string, { count: number; total: bigint }>();
+  for (const t of paidTickets) {
+    const tpeId = t.paidByTpeId!;
+    const cur = paidByTpe.get(tpeId) ?? { count: 0, total: BigInt(0) };
+    let amount: bigint;
+    if (t.cashedOutAmount != null) {
+      amount = t.cashedOutAmount;
+    } else {
+      const won = t.items.some((i) => i.result === "WON") && t.items.every((i) => i.result !== "LOST");
+      amount = won ? t.potentialWin : t.stake;
+    }
+    cur.count += 1;
+    cur.total += amount;
+    paidByTpe.set(tpeId, cur);
+  }
+
+  return tpes.map((tpe) => {
+    const issued = issuedByTpe.get(tpe.id) ?? { count: 0, total: BigInt(0) };
+    const paid = paidByTpe.get(tpe.id) ?? { count: 0, total: BigInt(0) };
+    return {
+      tpeId: tpe.id,
+      tpeCode: tpe.code,
+      tpeName: tpe.name,
+      regionName: tpe.region?.name ?? null,
+      status: tpe.status,
+      issuedCount: issued.count,
+      issuedTotalXAF: Number(issued.total) / 100,
+      paidCount: paid.count,
+      paidTotalXAF: Number(paid.total) / 100,
+      netXAF: Number(issued.total - paid.total) / 100,
+    };
+  });
+}
+
 export async function getTicketByCode(code: string) {
   const ticket = await prisma.ticket.findUnique({
     where: { code: code.toUpperCase() },
