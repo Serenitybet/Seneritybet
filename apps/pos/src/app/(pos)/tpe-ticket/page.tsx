@@ -108,7 +108,41 @@ export default function TpeTicketPage() {
   const [dayOffset, setDayOffset] = useState(0);
   const [competitionFilter, setCompetitionFilter] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Panneau "coupon en cours" en tiroir sur mobile/tablette — en grille à 1
+  // colonne, ce panneau (dont le champ "Code coupon client") ne se trouvait
+  // qu'après TOUTE la liste des matchs du jour, obligeant à défiler jusqu'en
+  // bas pour y accéder (signalé en prod le 31/10/2026, pénible pour le
+  // travail des caissières). Au-delà de lg:, le panneau reste affiché tel
+  // quel dans la colonne latérale (sticky), ce bouton/tiroir n'apparaît pas.
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const { confirm, ConfirmDialog } = useConfirm();
+
+  // Même technique de verrouillage de défilement que le tiroir "Mon coupon"
+  // du site public (MobileCouponButton.tsx) — position:fixed sur <body>
+  // plutôt que overflow:hidden, qui bloquerait aussi le défilement interne
+  // du tiroir lui-même.
+  useEffect(() => {
+    if (!mobilePanelOpen) return;
+    const { body } = document;
+    const scrollY = window.scrollY;
+    const prev = {
+      position: body.style.position, top: body.style.top,
+      left: body.style.left, right: body.style.right, width: body.style.width,
+    };
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    return () => {
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.left = prev.left;
+      body.style.right = prev.right;
+      body.style.width = prev.width;
+      window.scrollTo(0, scrollY);
+    };
+  }, [mobilePanelOpen]);
 
   useEffect(() => {
     api.get("/sports/events?date=week&limit=200").then((r) => setEvents(r.data.data.events))
@@ -251,6 +285,11 @@ export default function TpeTicketPage() {
       setCodePrinted(false);
       setSelections([]);
       setStakeXAF("");
+      // Sans ça, le verrouillage de défilement du tiroir mobile (voir
+      // l'effet lié à mobilePanelOpen) resterait actif sur l'écran "Ticket
+      // créé" qui suit — ce tiroir n'y est plus rendu, mais son état restait
+      // à true puisqu'on crée le ticket depuis l'intérieur de ce même tiroir.
+      setMobilePanelOpen(false);
       setLoadedWebCouponCode(null);
       // Pas de toast ici — il reste visible à l'écran pendant l'impression
       // et se superpose à l'aperçu du ticket.
@@ -270,6 +309,108 @@ export default function TpeTicketPage() {
       setPlacing(false);
     }
   }
+
+  // Contenu du panneau "coupon en cours" — extrait en une seule fois pour
+  // être rendu à la fois dans la colonne latérale (desktop, lg:+) et dans le
+  // tiroir mobile ci-dessous, sans dupliquer tout ce JSX.
+  const couponPanel = (
+    <>
+      <div className="mb-4 pb-4 border-b border-gray-100">
+        <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+          Code coupon client (serenitybetcode.com)
+        </label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={couponCode}
+            onChange={(e) => setCouponCode(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && loadCoupon()}
+            placeholder="Ex: 4821"
+            className="flex-1 min-w-0 px-3 py-2 text-sm font-mono border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
+          />
+          <button
+            onClick={loadCoupon}
+            disabled={couponLoading || !couponCode.trim()}
+            className="px-3 py-2 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold rounded-lg disabled:opacity-40 shrink-0"
+          >
+            {couponLoading ? "…" : "Charger"}
+          </button>
+        </div>
+        {loadedWebCouponCode && (
+          <p className="text-[11px] text-green-700 font-semibold mt-1.5">
+            ✓ Coupon {loadedWebCouponCode} chargé
+          </p>
+        )}
+      </div>
+
+      <h3 className="font-bold text-gray-800 mb-3">🧾 Sélections ({selections.length})</h3>
+      {selections.length === 0 ? (
+        <p className="text-sm text-gray-400">Cliquez sur une cote pour l'ajouter</p>
+      ) : (
+        <div className="space-y-2 mb-4">
+          {selections.map((s) => (
+            <div key={s.oddId} className="flex items-center justify-between bg-gray-50 hover:bg-green-50 rounded-lg px-3 py-2 cursor-pointer"
+              onClick={() => goToSelection(s)} title="Modifier cette sélection">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-gray-800 truncate">{s.eventLabel}</p>
+                <p className="text-[11px] text-gray-500">{s.marketName} — {s.oddLabel} @ {s.oddValue.toFixed(2)}</p>
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); setSelections(selections.filter((x) => x.oddId !== s.oddId)); }}
+                className="text-red-400 hover:text-red-600 shrink-0 ml-2"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {selections.length > 0 && (
+        <>
+          <div className="mb-3">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Mise (XAF)</label>
+            <input
+              type="number"
+              value={stakeXAF}
+              onChange={(e) => setStakeXAF(e.target.value)}
+              placeholder="Montant misé"
+              className="w-full px-4 py-3 text-xl font-bold border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none"
+            />
+            <div className="flex gap-2 mt-2 flex-wrap">
+              {QUICK_STAKES.map((s) => (
+                <button key={s} onClick={() => setStakeXAF(String(s))}
+                  className="px-2.5 py-1 bg-gray-100 hover:bg-green-100 text-gray-700 rounded-lg text-xs font-semibold">
+                  {s.toLocaleString("fr-FR")}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {stakeXAF && parseFloat(stakeXAF) > 0 && (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4 text-sm">
+              <div className="flex justify-between mb-1">
+                <span className="text-gray-600">Cote totale :</span>
+                <span className="font-bold">x{totalOdds.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between font-black text-green-700">
+                <span>Gain potentiel :</span>
+                <span>{(parseFloat(stakeXAF) * totalOdds).toLocaleString("fr-FR")} XAF</span>
+              </div>
+            </div>
+          )}
+
+          <button
+            onClick={placeTicket}
+            disabled={placing || !stakeXAF || parseFloat(stakeXAF) <= 0}
+            className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl disabled:opacity-50"
+          >
+            {placing ? "Création…" : "🎫 Créer & Imprimer"}
+          </button>
+        </>
+      )}
+    </>
+  );
 
   if (ticket) {
     return (
@@ -649,104 +790,46 @@ export default function TpeTicketPage() {
           )}
         </div>
 
-        {/* Coupon en cours */}
-        <div className="bg-white rounded-2xl shadow-sm p-4 h-fit sticky top-4">
-          <div className="mb-4 pb-4 border-b border-gray-100">
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-              Code coupon client (serenitybetcode.com)
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={couponCode}
-                onChange={(e) => setCouponCode(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && loadCoupon()}
-                placeholder="Ex: 4821"
-                className="flex-1 min-w-0 px-3 py-2 text-sm font-mono border-2 border-gray-200 rounded-lg focus:border-green-500 focus:outline-none"
-              />
-              <button
-                onClick={loadCoupon}
-                disabled={couponLoading || !couponCode.trim()}
-                className="px-3 py-2 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold rounded-lg disabled:opacity-40 shrink-0"
-              >
-                {couponLoading ? "…" : "Charger"}
-              </button>
-            </div>
-            {loadedWebCouponCode && (
-              <p className="text-[11px] text-green-700 font-semibold mt-1.5">
-                ✓ Coupon {loadedWebCouponCode} chargé
-              </p>
-            )}
-          </div>
-
-          <h3 className="font-bold text-gray-800 mb-3">🧾 Sélections ({selections.length})</h3>
-          {selections.length === 0 ? (
-            <p className="text-sm text-gray-400">Cliquez sur une cote pour l'ajouter</p>
-          ) : (
-            <div className="space-y-2 mb-4">
-              {selections.map((s) => (
-                <div key={s.oddId} className="flex items-center justify-between bg-gray-50 hover:bg-green-50 rounded-lg px-3 py-2 cursor-pointer"
-                  onClick={() => goToSelection(s)} title="Modifier cette sélection">
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-gray-800 truncate">{s.eventLabel}</p>
-                    <p className="text-[11px] text-gray-500">{s.marketName} — {s.oddLabel} @ {s.oddValue.toFixed(2)}</p>
-                  </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setSelections(selections.filter((x) => x.oddId !== s.oddId)); }}
-                    className="text-red-400 hover:text-red-600 shrink-0 ml-2"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {selections.length > 0 && (
-            <>
-              <div className="mb-3">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Mise (XAF)</label>
-                <input
-                  type="number"
-                  value={stakeXAF}
-                  onChange={(e) => setStakeXAF(e.target.value)}
-                  placeholder="Montant misé"
-                  className="w-full px-4 py-3 text-xl font-bold border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none"
-                />
-                <div className="flex gap-2 mt-2 flex-wrap">
-                  {QUICK_STAKES.map((s) => (
-                    <button key={s} onClick={() => setStakeXAF(String(s))}
-                      className="px-2.5 py-1 bg-gray-100 hover:bg-green-100 text-gray-700 rounded-lg text-xs font-semibold">
-                      {s.toLocaleString("fr-FR")}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {stakeXAF && parseFloat(stakeXAF) > 0 && (
-                <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-4 text-sm">
-                  <div className="flex justify-between mb-1">
-                    <span className="text-gray-600">Cote totale :</span>
-                    <span className="font-bold">x{totalOdds.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between font-black text-green-700">
-                    <span>Gain potentiel :</span>
-                    <span>{(parseFloat(stakeXAF) * totalOdds).toLocaleString("fr-FR")} XAF</span>
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={placeTicket}
-                disabled={placing || !stakeXAF || parseFloat(stakeXAF) <= 0}
-                className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl disabled:opacity-50"
-              >
-                {placing ? "Création…" : "🎫 Créer & Imprimer"}
-              </button>
-            </>
-          )}
+        {/* Coupon en cours — masqué sur mobile/tablette (grid-cols-1, voir
+            mobilePanelOpen ci-dessous) : repris à l'identique dans le tiroir. */}
+        <div className="hidden lg:block bg-white rounded-2xl shadow-sm p-4 h-fit sticky top-4">
+          {couponPanel}
         </div>
       </div>
+
+      {/* Bouton flottant + tiroir "coupon en cours" — mobile/tablette
+          uniquement. Toujours visible, même sans sélection : c'est là que se
+          trouve le champ "Code coupon client", qui doit rester accessible
+          sans avoir à défiler toute la liste des matchs du jour. */}
+      <button
+        onClick={() => setMobilePanelOpen(true)}
+        className="lg:hidden fixed bottom-4 right-4 z-40 flex items-center gap-2 bg-green-600 text-white px-4 py-2.5 rounded-full shadow-xl shadow-green-900/40 font-bold text-sm active:scale-95 transition-transform"
+      >
+        {selections.length > 0 && (
+          <span className="w-5 h-5 bg-white text-green-600 rounded-full text-xs font-black flex items-center justify-center">
+            {selections.length}
+          </span>
+        )}
+        <span>🧾 Coupon</span>
+        {loadedWebCouponCode && !mobilePanelOpen && <span className="text-green-200 font-mono text-xs">✓</span>}
+      </button>
+
+      {mobilePanelOpen && (
+        <div className="lg:hidden fixed inset-0 z-[60] flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobilePanelOpen(false)} />
+          <div className="relative w-full bg-white rounded-t-2xl flex flex-col" style={{ maxHeight: "85%" }}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
+              <span className="font-bold text-gray-800">Coupon en cours</span>
+              <button onClick={() => setMobilePanelOpen(false)} className="text-gray-400 text-2xl leading-none">
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto p-4">
+              {couponPanel}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
