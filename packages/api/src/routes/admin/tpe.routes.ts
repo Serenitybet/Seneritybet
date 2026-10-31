@@ -25,8 +25,17 @@ adminTpeRouter.get("/", asyncHandler(async (_req: Request, res: Response) => {
 adminTpeRouter.get("/reports/summary", asyncHandler(async (req: Request, res: Response) => {
   const now = new Date();
   const defaultFrom = new Date(now); defaultFrom.setDate(now.getDate() - 6); defaultFrom.setHours(0, 0, 0, 0);
-  const from = req.query.from ? new Date(req.query.from as string) : defaultFrom;
-  const to   = req.query.to   ? new Date(req.query.to as string)   : now;
+  // "YYYY-MM-DD" tel quel (sans heure) est interprété comme minuit UTC — pour
+  // "to", ça tombe au tout DÉBUT du jour demandé plutôt qu'à sa fin, donc la
+  // fenêtre ne couvrait presque aucune donnée (signalé en prod le
+  // 31/10/2026 : rapport du jour vide alors que des tickets avaient été
+  // vendus). Même correctif déjà appliqué à la liste des tickets TPE
+  // (admin/tickets.routes.ts) : ancrer explicitement "from" à 00:00:00 et
+  // "to" à 23:59:59.999 du jour indiqué.
+  const fromStr = req.query.from as string | undefined;
+  const toStr   = req.query.to   as string | undefined;
+  const from = fromStr ? new Date(`${fromStr}T00:00:00`) : defaultFrom;
+  const to   = toStr   ? new Date(`${toStr}T23:59:59.999`) : now;
   const result = await getTpeSummaryReport(from, to);
   res.json({ success: true, data: result });
 }));
