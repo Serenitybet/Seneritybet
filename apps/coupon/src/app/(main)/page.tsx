@@ -2,6 +2,7 @@ import Link from "next/link";
 import { EventCard, ODDS_COLUMNS_WIDTH } from "@/components/sports/EventCard";
 import { SportNav } from "@/components/sports/SportNav";
 import { DateTabs } from "@/components/sports/DateTabs";
+import { LeagueSearch } from "@/components/sports/LeagueSearch";
 import { PromoCarousel } from "@/components/layout/PromoCarousel";
 import type { EventDTO } from "@serenitybet/shared";
 
@@ -15,11 +16,12 @@ const COUNTRY_FLAG: Record<string, string> = {
   "South Korea": "🇰🇷", Canada: "🇨🇦", "North America": "🌎",
 };
 
-async function getEvents(sport?: string, date?: string) {
+async function getEvents(sport?: string, date?: string, league?: string) {
   try {
     const params = new URLSearchParams({ limit: "150" });
     if (sport) params.set("sport", sport);
     if (date && date !== "all") params.set("date", date);
+    if (league) params.set("league", league);
     const res = await fetch(`${API_URL}/sports/events?${params}`, {
       next: { revalidate: 60 },
     });
@@ -109,10 +111,10 @@ function groupBySport(events: EventDTO[]): SportGroup[] {
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ sport?: string; date?: string }>;
+  searchParams: Promise<{ sport?: string; date?: string; league?: string }>;
 }) {
-  const { sport, date } = await searchParams;
-  const [{ events, total }, banners] = await Promise.all([getEvents(sport, date), getBanners()]);
+  const { sport, date, league } = await searchParams;
+  const [{ events, total }, banners] = await Promise.all([getEvents(sport, date, league), getBanners()]);
   const eventsArr = (events ?? []) as EventDTO[];
 
   const liveEvents = eventsArr.filter(e => e.status === "LIVE");
@@ -125,6 +127,7 @@ export default async function HomePage({
         <PromoCarousel banners={banners} />
 
         <DateTabs activeSport={sport} />
+        <LeagueSearch activeSport={sport} />
 
         {eventsArr.length > 0 && (
           <p className="text-[11px] text-txt-muted">
@@ -140,9 +143,11 @@ export default async function HomePage({
         {eventsArr.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <span className="text-5xl mb-4">📅</span>
-            <p className="text-txt-primary font-semibold mb-1">Aucun match pour cette période</p>
+            <p className="text-txt-primary font-semibold mb-1">
+              {league ? `Aucun championnat ne correspond à "${league}"` : "Aucun match pour cette période"}
+            </p>
             <p className="text-txt-muted text-sm mb-4">
-              Essayez un autre filtre de date ou revenez plus tard.
+              {league ? "Essayez un autre nom, ou effacez la recherche." : "Essayez un autre filtre de date ou revenez plus tard."}
             </p>
             <Link href="/" className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-500 transition-colors">
               Voir tous les matchs

@@ -66,12 +66,15 @@ export async function createWebCoupon(selections: { oddId: string }[], stakeXAF?
     throw new AppError(400, "Une ou plusieurs sélections sont invalides ou suspendues");
   }
 
-  // Un seul pari par match sur un même coupon — déjà appliqué côté site
-  // public (coupon.store.ts), revalidé ici au cas où l'API serait appelée
+  // Un seul pari par MARCHÉ (pas par match) sur un même coupon — plusieurs
+  // marchés différents du même match peuvent cohabiter (ex. 1X2 + plus/moins
+  // + BTTS), mais deux issues du même marché sont mutuellement exclusives
+  // (demande explicite du 31/10/2026). Déjà appliqué côté site public
+  // (coupon.store.ts), revalidé ici au cas où l'API serait appelée
   // directement sans passer par le store.
-  const eventIds = odds.map((o) => o.market.event.id);
-  if (new Set(eventIds).size !== eventIds.length) {
-    throw new AppError(400, "Une seule sélection par match est autorisée sur un même coupon");
+  const marketKeys = odds.map((o) => `${o.market.event.id}:${o.marketId}`);
+  if (new Set(marketKeys).size !== marketKeys.length) {
+    throw new AppError(400, "Une seule sélection par marché est autorisée sur un même coupon");
   }
 
   const snapshot: CouponSelection[] = [];

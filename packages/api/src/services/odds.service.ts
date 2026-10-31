@@ -1094,7 +1094,7 @@ function getSportLabel(slug: string): string {
   return labels[slug] ?? slug;
 }
 
-export async function getUpcomingEvents(sportSlug?: string, page = 1, limit = 50, dateFilter?: string) {
+export async function getUpcomingEvents(sportSlug?: string, page = 1, limit = 50, dateFilter?: string, league?: string) {
   const now = new Date();
 
   // ── Filtre de date ────────────────────────────────────────────────────────────
@@ -1111,8 +1111,11 @@ export async function getUpcomingEvents(sportSlug?: string, page = 1, limit = 50
     dateFrom = new Date(now);
     dateTo   = new Date(now); dateTo.setDate(now.getDate() + 3); dateTo.setHours(23, 59, 59, 999);
   } else if (dateFilter === "week") {
+    // "week" au sens large (14 jours, pas 7) — demande explicite du
+    // 31/10/2026. La clé reste "week" pour ne pas casser les liens déjà
+    // partagés/en cache (?date=week), seul le libellé affiché change.
     dateFrom = new Date(now);
-    dateTo   = new Date(now); dateTo.setDate(now.getDate() + 7); dateTo.setHours(23, 59, 59, 999);
+    dateTo   = new Date(now); dateTo.setDate(now.getDate() + 14); dateTo.setHours(23, 59, 59, 999);
   }
 
   const where = {
@@ -1123,8 +1126,16 @@ export async function getUpcomingEvents(sportSlug?: string, page = 1, limit = 50
     // la journée calendaire, y compris les matchs déjà en cours) ou sans
     // filtre de date du tout.
     status:    "UPCOMING" as const,
-    ...(sportSlug ? {
-      competition: { sport: { slug: sportSlug } },
+    // Recherche par championnat — demande explicite du 31/10/2026 (aucun
+    // moyen de filtrer/chercher par compétition jusqu'ici, seulement par
+    // sport). Combinée avec le filtre de sport dans le même objet
+    // "competition" (deux clés "competition" distinctes s'écraseraient
+    // sinon au lieu de se cumuler).
+    ...((sportSlug || league) ? {
+      competition: {
+        ...(sportSlug ? { sport: { slug: sportSlug } } : {}),
+        ...(league ? { name: { contains: league, mode: "insensitive" as const } } : {}),
+      },
     } : {}),
   };
 

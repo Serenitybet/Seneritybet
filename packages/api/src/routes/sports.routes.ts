@@ -18,8 +18,9 @@ sportsRouter.get("/events", asyncHandler(async (req: Request, res: Response) => 
   const page     = parseInt((req.query.page  as string) ?? "1",  10);
   const limit    = parseInt((req.query.limit as string) ?? "50", 10);
   const dateFilter = req.query.date as string | undefined; // today | tomorrow | 3days | all
+  const league   = req.query.league as string | undefined; // recherche texte libre sur le nom de la compétition
 
-  const result = await getUpcomingEvents(sport, page, Math.min(limit, 200), dateFilter);
+  const result = await getUpcomingEvents(sport, page, Math.min(limit, 200), dateFilter, league);
   res.json({ success: true, data: result });
 }));
 
