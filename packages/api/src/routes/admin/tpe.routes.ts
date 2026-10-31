@@ -3,7 +3,7 @@ import { requireRole, AuthRequest } from "../../middleware/auth.middleware";
 import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../lib/asyncHandler";
 import { AppError } from "../../middleware/error.middleware";
-import { serializeTpe, serializeTicket, serializeCreditAdjustment } from "../../services/tpe.service";
+import { serializeTpe, serializeTicket, serializeCreditAdjustment, getTpeSummaryReport } from "../../services/tpe.service";
 
 export const adminTpeRouter = Router();
 
@@ -18,6 +18,17 @@ adminTpeRouter.get("/", asyncHandler(async (_req: Request, res: Response) => {
     orderBy: { createdAt: "desc" },
   });
   res.json({ success: true, data: tpes.map((t: typeof tpes[number]) => ({ ...serializeTpe(t), assignedCashiersCount: t._count.assignedCashiers })) });
+}));
+
+// GET /api/admin/tpe/reports/summary — rapport consolidé (ventes/tickets/
+// paiements, une ligne par TPE) sur une période, tous TPE confondus
+adminTpeRouter.get("/reports/summary", asyncHandler(async (req: Request, res: Response) => {
+  const now = new Date();
+  const defaultFrom = new Date(now); defaultFrom.setDate(now.getDate() - 6); defaultFrom.setHours(0, 0, 0, 0);
+  const from = req.query.from ? new Date(req.query.from as string) : defaultFrom;
+  const to   = req.query.to   ? new Date(req.query.to as string)   : now;
+  const result = await getTpeSummaryReport(from, to);
+  res.json({ success: true, data: result });
 }));
 
 // GET /api/admin/tpe/payouts/pending — paiements au-dessus du seuil en attente d'approbation

@@ -38,6 +38,19 @@ const RESULT_BADGE: Record<string, string> = { WON: "bo-badge-green", LOST: "bo-
 
 interface Tpe { id: string; code: string; name: string | null }
 
+interface TpeSummaryRow {
+  tpeId: string;
+  tpeCode: string;
+  tpeName: string | null;
+  regionName: string | null;
+  status: string;
+  issuedCount: number;
+  issuedTotalXAF: number;
+  paidCount: number;
+  paidTotalXAF: number;
+  netXAF: number;
+}
+
 const STATUS_LABEL: Record<Status, string> = {
   PENDING: "En cours", WON: "Gagnant", LOST: "Perdant", REFUNDED: "Remboursé", CANCELLED: "Annulé", PAID: "Payé",
   CASHED_OUT_PENDING: "Cash-out accepté",
@@ -66,6 +79,15 @@ export default function TpeTicketsPage() {
   const [to, setTo] = useState("");
   const [groupByTpe, setGroupByTpe] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Rapport consolidé — demande explicite du 31/10/2026 : exporter les
+  // données de TOUS les TPE en une seule fois (ventes, tickets, paiements
+  // par TPE), indépendamment des filtres ci-dessus qui ne portent eux que
+  // sur la liste détaillée des tickets d'un TPE à la fois.
+  const todayStr0 = new Date().toISOString().slice(0, 10);
+  const weekAgoStr = (() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); })();
+  const [summaryFrom, setSummaryFrom] = useState(weekAgoStr);
+  const [summaryTo, setSummaryTo] = useState(todayStr0);
+  const [summaryLoading, setSummaryLoading] = useState(false);
 
   function token() { return localStorage.getItem("bo_token"); }
   function authHeaders(extra?: Record<string, string>) { return { Authorization: `Bearer ${token()}`, ...extra }; }
@@ -179,6 +201,47 @@ export default function TpeTicketsPage() {
 
     const range = from || to ? `_${from || "debut"}_a_${to || "aujourdhui"}` : "";
     XLSX.writeFile(wb, `rapport-tpe${range}.xlsx`);
+  }
+
+  // Rapport consolidé tous-TPE — une ligne par TPE (ventes, tickets,
+  // paiements), ordre des colonnes demandé explicitement : vente générale
+  // d'abord, puis tickets, puis paiements.
+  async function exportSummary() {
+    setSummaryLoading(true);
+    try {
+      const params = new URLSearchParams({ from: summaryFrom, to: summaryTo });
+      const res = await fetch(`${API}/admin/tpe/reports/summary?${params}`, { headers: authHeaders() });
+      const d = await res.json();
+      if (!res.ok) { toast.error(d.error ?? "Erreur"); return; }
+      const rows: TpeSummaryRow[] = d.data ?? [];
+      if (!rows.length) { toast.error("Aucun TPE trouvé"); return; }
+
+      const sheet = rows.map((r) => ({
+        "TPE":                   r.tpeName ?? r.tpeCode,
+        "Code":                  r.tpeCode,
+        "Région":                r.regionName ?? "—",
+        "Ventes (XAF)":          r.issuedTotalXAF,
+        "Nombre de tickets":     r.issuedCount,
+        "Paiements (XAF)":       r.paidTotalXAF,
+        "Nombre de paiements":   r.paidCount,
+        "Net (XAF)":             r.netXAF,
+      }));
+      // Ligne de totaux en bas — vue d'ensemble immédiate sans avoir à
+      // sélectionner la colonne dans Excel.
+      sheet.push({
+        "TPE": "TOTAL", "Code": "", "Région": "",
+        "Ventes (XAF)":        rows.reduce((s, r) => s + r.issuedTotalXAF, 0),
+        "Nombre de tickets":   rows.reduce((s, r) => s + r.issuedCount, 0),
+        "Paiements (XAF)":     rows.reduce((s, r) => s + r.paidTotalXAF, 0),
+        "Nombre de paiements": rows.reduce((s, r) => s + r.paidCount, 0),
+        "Net (XAF)":           rows.reduce((s, r) => s + r.netXAF, 0),
+      });
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheet), "Rapport par TPE");
+      XLSX.writeFile(wb, `rapport-consolide-tpe_${summaryFrom}_a_${summaryTo}.xlsx`);
+    } catch { toast.error("Erreur réseau"); }
+    finally { setSummaryLoading(false); }
   }
 
   function todayStr() { return new Date().toISOString().slice(0, 10); }
@@ -318,6 +381,30 @@ export default function TpeTicketsPage() {
 
   return (
     <div className="space-y-4">
+      {/* Rapport consolidé — tous les TPE en une fois, indépendant des
+          filtres de la liste détaillée ci-dessous. */}
+      <div className="bo-card p-4">
+        <div className="flex items-center justify-between mb-3">
+          <span className="bo-card-title">📊 Rapport consolidé — tous les TPE</span>
+        </div>
+        <div className="flex items-end gap-3 flex-wrap">
+          <div>
+            <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1.5">Du</label>
+            <input type="date" className="bo-input w-40" value={summaryFrom} onChange={(e) => setSummaryFrom(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1.5">Au</label>
+            <input type="date" className="bo-input w-40" value={summaryTo} onChange={(e) => setSummaryTo(e.target.value)} />
+          </div>
+          <button className="bo-btn-primary" disabled={summaryLoading} onClick={exportSummary}>
+            {summaryLoading ? "Génération…" : "⬇️ Exporter le rapport (tous les TPE)"}
+          </button>
+        </div>
+        <p className="text-[11px] text-t-faint mt-2">
+          Une ligne par TPE : ventes, nombre de tickets, paiements et net sur la période choisie.
+        </p>
+      </div>
+
       <div className="bo-filter-bar flex-wrap">
         <div>
           <h1 className="text-lg font-bold text-t-primary">🎫 Tickets TPE</h1>
