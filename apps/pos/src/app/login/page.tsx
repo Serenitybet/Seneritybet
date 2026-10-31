@@ -9,7 +9,12 @@ import { useAuthStore } from "@/store/auth.store";
 export default function LoginPage() {
   const router = useRouter();
   const { setAuth, token } = useAuthStore();
-  const [email, setEmail] = useState("");
+  // Le champ s'appelle "email" côté API (identifiant générique — voir
+  // auth.service.ts login(), qui reconnaît aussi le code caissier, le
+  // téléphone, le numéro de joueur), mais c'est le code caissier qui est
+  // saisi ici, plus l'email (demande explicite du 31/10/2026 : la connexion
+  // sur un TPE ne doit plus se faire par adresse email).
+  const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -34,7 +39,7 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await api.post("/auth/login", { email, password });
+      const res = await api.post("/auth/login", { email: code, password });
       const { accessToken, user } = res.data.data;
 
       const allowedRoles = ["CASHIER", "ADMIN", "SUPER_ADMIN"];
@@ -95,15 +100,16 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Email de l&apos;agent
+              Code caissier
             </label>
             <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              type="text"
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
               required
-              placeholder="agent@serenitybet.td"
-              className="w-full px-4 py-3 text-lg border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none transition-colors"
+              autoCapitalize="characters"
+              placeholder="Ex: MARIE1"
+              className="w-full px-4 py-3 text-lg font-mono uppercase border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none transition-colors"
             />
           </div>
           <div>

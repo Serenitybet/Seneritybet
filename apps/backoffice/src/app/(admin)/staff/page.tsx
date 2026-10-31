@@ -29,6 +29,7 @@ interface Staff {
   role: Role;
   status: "ACTIVE" | "SUSPENDED" | "CLOSED";
   createdAt: string;
+  cashierCode: string | null;
 }
 
 const ROLE_LABEL: Record<Role, string> = {
@@ -47,7 +48,7 @@ const ROLE_BADGE: Record<Role, string> = {
 };
 const ROLES: Role[] = ["CASHIER", "TRADER", "FINANCE", "ADMIN", "SUPER_ADMIN"];
 
-const EMPTY_FORM = { email: "", phone: "", firstName: "", lastName: "", password: "", role: "CASHIER" as Role };
+const EMPTY_FORM = { email: "", phone: "", firstName: "", lastName: "", password: "", role: "CASHIER" as Role, cashierCode: "" };
 
 export default function StaffPage() {
   const actorRole = useAuthAdminStore((s) => s.admin?.role) as Role | undefined;
@@ -111,6 +112,21 @@ export default function StaffPage() {
       load();
     } catch { toast.error("Erreur réseau"); }
     finally { setRoleEditId(null); }
+  }
+
+  async function editCashierCode(s: Staff) {
+    const input = prompt(`Code de connexion TPE pour ${s.firstName} ${s.lastName} (3 à 12 lettres/chiffres) :`, s.cashierCode ?? "");
+    if (input === null) return;
+    try {
+      const res = await fetch(`${API}/admin/users/${s.id}/cashier-code`, {
+        method: "PATCH", headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ cashierCode: input }),
+      });
+      const d = await res.json();
+      if (!res.ok) { toast.error(d.error ?? "Erreur"); return; }
+      toast.success("Code mis à jour ✓");
+      load();
+    } catch { toast.error("Erreur réseau"); }
   }
 
   async function toggleStatus(s: Staff) {
@@ -181,16 +197,26 @@ export default function StaffPage() {
                     {s.status === "SUSPENDED" && <span className="bo-badge-red text-[10px]">Suspendu</span>}
                     {isSelf && <span className="bo-badge-blue text-[10px]">Vous</span>}
                   </div>
-                  <p className="text-xs text-t-faint mt-0.5">{s.email} · {s.phone}</p>
+                  <p className="text-xs text-t-faint mt-0.5">
+                    {s.email} · {s.phone}
+                    {s.role === "CASHIER" && (
+                      <> · Code TPE : <span className="font-mono font-bold text-t-primary">{s.cashierCode ?? "—"}</span></>
+                    )}
+                  </p>
                 </div>
-                {manageable && (
-                  <button
-                    className={`bo-btn-sm ${s.status === "SUSPENDED" ? "bo-btn-primary" : "bo-btn-danger"}`}
-                    onClick={() => toggleStatus(s)}
-                  >
-                    {s.status === "SUSPENDED" ? "✅ Réactiver" : "🔴 Suspendre"}
-                  </button>
-                )}
+                <div className="flex gap-2">
+                  {s.role === "CASHIER" && manageable && (
+                    <button className="bo-btn-secondary bo-btn-sm" onClick={() => editCashierCode(s)}>🔑 Code TPE</button>
+                  )}
+                  {manageable && (
+                    <button
+                      className={`bo-btn-sm ${s.status === "SUSPENDED" ? "bo-btn-primary" : "bo-btn-danger"}`}
+                      onClick={() => toggleStatus(s)}
+                    >
+                      {s.status === "SUSPENDED" ? "✅ Réactiver" : "🔴 Suspendre"}
+                    </button>
+                  )}
+                </div>
               </div>
               );
             })}
@@ -243,6 +269,18 @@ export default function StaffPage() {
                   <option value="ADMIN">Admin</option>
                 </select>
               </div>
+              {form.role === "CASHIER" && (
+                <div>
+                  <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1.5">Code de connexion TPE *</label>
+                  <input className="bo-input w-full font-mono uppercase" required minLength={3} maxLength={12}
+                    placeholder="Ex: MARIE1"
+                    value={form.cashierCode}
+                    onChange={(e) => setForm((f) => ({ ...f, cashierCode: e.target.value.toUpperCase() }))} />
+                  <p className="text-[11px] text-t-faint mt-1">
+                    Utilisé à la place de l'email pour se connecter sur un TPE (apps/pos) — 3 à 12 lettres/chiffres.
+                  </p>
+                </div>
+              )}
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowModal(false)} className="bo-btn-secondary flex-1">Annuler</button>
                 <button type="submit" disabled={saving} className="bo-btn-primary flex-1">

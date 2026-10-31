@@ -36,15 +36,22 @@ export async function register(payload: RegisterPayload) {
 export async function login(payload: LoginPayload) {
   const identifier = payload.email.trim();
 
-  // Recherche par playerNumber (6 chiffres), téléphone ou email
-  const isPlayerNumber = /^\d{6}$/.test(identifier);
-  const isPhone = /^\+?\d{8,15}$/.test(identifier) && !isPlayerNumber;
+  // Recherche par playerNumber (6 chiffres), téléphone, code caissier (TPE,
+  // voir cashierCode) ou email. Un email contient toujours "@" — jamais
+  // confondu avec un code caissier, qui lui n'en contient jamais (défini par
+  // l'admin à la création du caissier, voir admin/users.routes.ts).
+  const isEmail = identifier.includes("@");
+  const isPlayerNumber = !isEmail && /^\d{6}$/.test(identifier);
+  const isPhone = !isEmail && !isPlayerNumber && /^\+?\d{8,15}$/.test(identifier);
+  const isCashierCode = !isEmail && !isPlayerNumber && !isPhone;
 
   const user = await prisma.user.findFirst({
     where: isPlayerNumber
       ? { playerNumber: parseInt(identifier, 10) }
       : isPhone
       ? { phone: identifier }
+      : isCashierCode
+      ? { cashierCode: identifier.toUpperCase() }
       : { email: identifier },
   });
 
