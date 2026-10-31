@@ -154,13 +154,15 @@ export default function TpeTicketPage() {
       setSelections(selections.filter((s) => s.oddId !== odd.id));
       return;
     }
-    // Un seul pari par match sur un même coupon, quel que soit le marché
-    // (pas de "victoire" + "nombre de buts" simultanés sur le même match) —
-    // choisir une cote remplace donc toute sélection existante sur ce match,
-    // pas seulement celle du même marché/groupe.
-    const withoutSameEvent = selections.filter((s) => s.eventId !== event.id);
+    // Un seul pari par MARCHÉ (pas par match) — plusieurs marchés différents
+    // du même match peuvent cohabiter dans le même ticket (ex. 1X2 +
+    // plus/moins + BTTS), mais choisir une autre cote du même marché/groupe
+    // (ex. une autre ligne de handicap) remplace la précédente, puisque ce
+    // sont des issues mutuellement exclusives (demande explicite du
+    // 31/10/2026).
+    const withoutSameMarket = selections.filter((s) => !(s.eventId === event.id && (s.groupKey ?? s.marketId) === key));
     setSelections([
-      ...withoutSameEvent,
+      ...withoutSameMarket,
       {
         eventId: event.id,
         eventLabel: `${event.homeTeam} vs ${event.awayTeam}`,

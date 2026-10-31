@@ -1111,8 +1111,11 @@ export async function getUpcomingEvents(sportSlug?: string, page = 1, limit = 50
     dateFrom = new Date(now);
     dateTo   = new Date(now); dateTo.setDate(now.getDate() + 3); dateTo.setHours(23, 59, 59, 999);
   } else if (dateFilter === "week") {
+    // "week" au sens large (14 jours, pas 7) — demande explicite du
+    // 31/10/2026. La clé reste "week" pour ne pas casser les liens déjà
+    // partagés/en cache (?date=week), seul le libellé affiché change.
     dateFrom = new Date(now);
-    dateTo   = new Date(now); dateTo.setDate(now.getDate() + 7); dateTo.setHours(23, 59, 59, 999);
+    dateTo   = new Date(now); dateTo.setDate(now.getDate() + 14); dateTo.setHours(23, 59, 59, 999);
   }
 
   const where = {

@@ -35,8 +35,13 @@ export const useCouponStore = create<CouponStore>()(
       totalOdds: 1,
 
       addSelection(sel) {
-        // Un seul pari par événement
-        const filtered = get().selections.filter((s) => s.eventId !== sel.eventId);
+        // Un seul pari par MARCHÉ (pas par événement) : plusieurs marchés
+        // différents du même match peuvent cohabiter dans un même coupon
+        // (ex. 1X2 + plus/moins + BTTS), mais deux issues du même marché
+        // (ex. "1" et "X" du même 1X2) restent mutuellement exclusives et
+        // la nouvelle sélection remplace l'ancienne du même marché (demande
+        // explicite du 31/10/2026).
+        const filtered = get().selections.filter((s) => !(s.eventId === sel.eventId && s.marketId === sel.marketId));
         const next = [...filtered, sel];
         set({ selections: next, totalOdds: calcTotalOdds(next) });
       },
