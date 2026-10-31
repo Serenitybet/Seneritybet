@@ -1115,6 +1115,14 @@ export async function getUpcomingEvents(sportSlug?: string, page = 1, limit = 50
     // partagés/en cache (?date=week), seul le libellé affiché change.
     dateFrom = new Date(now);
     dateTo   = new Date(now); dateTo.setDate(now.getDate() + 14); dateTo.setHours(23, 59, 59, 999);
+  } else if (dateFilter && /^\d{4}-\d{2}-\d{2}$/.test(dateFilter)) {
+    // Date précise choisie via le sélecteur calendrier du site public —
+    // demande explicite du 31/10/2026. Composants extraits manuellement
+    // (pas new Date(string) qui interprète une date ISO sans heure comme
+    // UTC minuit, décalant le jour affiché selon le fuseau du serveur).
+    const [y, m, d] = dateFilter.split("-").map(Number);
+    dateFrom = new Date(y, m - 1, d, 0, 0, 0, 0);
+    dateTo   = new Date(y, m - 1, d, 23, 59, 59, 999);
   }
 
   const where = {
