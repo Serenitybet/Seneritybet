@@ -42,7 +42,10 @@ const MARKET_TYPES: { value: string; label: string; defaultOdds: { label: string
   { value: "FOULS_TOTAL",             label: "Plus/Moins fautes",          defaultOdds: [{ label: "Plus 22.5", value: "1.90" }, { label: "Moins 22.5", value: "1.90" }] },
 ];
 
-const SPORTS = ["Football", "Basketball", "Tennis", "Rugby", "MMA", "Hockey", "Volleyball", "Handball"];
+// Football/basketball/tennis seulement (demande explicite du 31/10/2026) —
+// les autres sports ne sont plus synchronisés (voir SPORTS_CONFIG,
+// odds.service.ts).
+const SPORTS = ["Football", "Basketball", "Tennis"];
 const DATE_QUICK = [
   { value: "all",   label: "Toutes dates" },
   { value: "today", label: "Aujourd'hui" },

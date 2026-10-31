@@ -194,15 +194,14 @@ const SPORTS_CONFIG = [
   { key: "tennis_atp_canadian_open",     slug: "tennis",     name: "Canada Masters (ATP)",  country: "Canada",   icon: "🎾", sortOrder: 3 },
   { key: "tennis_wta_canadian_open",     slug: "tennis",     name: "Canada Open (WTA)",     country: "Canada",   icon: "🎾", sortOrder: 3 },
   { key: "tennis_atp_cincinnati_open",   slug: "tennis",     name: "Cincinnati Masters (ATP)", country: "USA",   icon: "🎾", sortOrder: 3 },
-  // 🏒 Ice Hockey
-  { key: "icehockey_nhl",               slug: "hockey",     name: "NHL",                   country: "USA",      icon: "🏒", sortOrder: 4 },
-  // 🏈 American Football
-  { key: "americanfootball_nfl",        slug: "american-football", name: "NFL",            country: "USA",      icon: "🏈", sortOrder: 5 },
-  // 🥊 MMA / Boxe — même catégorie "Sport" (slug "mma", déjà libellée "MMA / Boxe")
-  { key: "mma_mixed_martial_arts",      slug: "mma",        name: "MMA",                   country: "World",    icon: "🥊", sortOrder: 6 },
-  { key: "boxing_boxing",               slug: "mma",        name: "Boxe",                  country: "World",    icon: "🥊", sortOrder: 6 },
-  // ⚾ Baseball
-  { key: "baseball_mlb",               slug: "baseball",   name: "MLB",                   country: "USA",      icon: "⚾", sortOrder: 7 },
+  // Hockey, football américain, MMA/boxe et baseball retirés (demande
+  // explicite du 31/10/2026) : peu/pas demandés par les parieurs, leur
+  // synchronisation (cotes + résultats, à chaque cycle, pour tous les
+  // matchs) consommait des crédits TheOddsAPI pour rien. Seuls football,
+  // basketball et tennis restent synchronisés. Les événements déjà en base
+  // pour ces sports ne sont pas supprimés (tickets déjà émis à préserver),
+  // ils arrêtent simplement de se mettre à jour — voir le backoffice pour
+  // régler manuellement tout ticket encore en attente sur l'un d'eux.
 ];
 
 export async function syncOddsFromAPI() {
