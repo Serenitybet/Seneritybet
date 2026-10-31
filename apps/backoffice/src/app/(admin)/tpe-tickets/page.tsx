@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
+import * as XLSX from "xlsx";
 import { useAuthAdminStore } from "@/store/auth-admin.store";
 
 const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL ?? "https://seneritybet.onrender.com/api";
@@ -141,6 +142,44 @@ export default function TpeTicketsPage() {
   }
 
   useEffect(() => { load(); }, [status, tpeId, dangerousOnly, from, to]);
+
+  // Export Excel — demande explicite du 31/10/2026 : exporte exactement les
+  // tickets actuellement affichés (mêmes filtres TPE/statut/période que ceux
+  // sélectionnés à l'écran), pas un export à part avec ses propres filtres.
+  function exportExcel() {
+    if (!tickets.length) { toast.error("Aucun ticket à exporter avec ces filtres"); return; }
+
+    const ticketsSheet = tickets.map((t) => ({
+      "Code":           t.code,
+      "TPE":            t.tpe?.name ?? t.tpe?.code ?? "—",
+      "Caissier":       `${t.cashier?.firstName ?? ""} ${t.cashier?.lastName ?? ""}`.trim(),
+      "Statut":         STATUS_LABEL[t.status] ?? t.status,
+      "Mise (XAF)":     t.stakeXAF,
+      "Cote totale":    Number(t.totalOdds.toFixed(2)),
+      "Gain potentiel (XAF)": t.potentialWinXAF,
+      "Date":           new Date(t.createdAt).toLocaleString("fr-FR"),
+    }));
+
+    const selectionsSheet = tickets.flatMap((t) =>
+      (t.items ?? []).map((item) => ({
+        "Ticket":   t.code,
+        "TPE":      t.tpe?.name ?? t.tpe?.code ?? "—",
+        "Match":    `${item.market.event.homeTeam} vs ${item.market.event.awayTeam}`,
+        "Marché":   item.market.name,
+        "Sélection": item.odd.label,
+        "Cote":     Number(item.oddValue.toFixed(2)),
+        "Résultat": item.result ? (RESULT_LABEL[item.result] ?? item.result) : "En attente",
+        "Coup d'envoi": new Date(item.market.event.startTime).toLocaleString("fr-FR"),
+      })),
+    );
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ticketsSheet), "Tickets");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(selectionsSheet), "Sélections");
+
+    const range = from || to ? `_${from || "debut"}_a_${to || "aujourdhui"}` : "";
+    XLSX.writeFile(wb, `rapport-tpe${range}.xlsx`);
+  }
 
   function todayStr() { return new Date().toISOString().slice(0, 10); }
   function applyPreset(preset: "today" | "7days" | "all") {
@@ -315,6 +354,9 @@ export default function TpeTicketsPage() {
           <input type="checkbox" checked={dangerousOnly} onChange={(e) => setDangerousOnly(e.target.checked)} />
           ⚠️ Dangereux uniquement
         </label>
+        <button className="bo-btn-secondary bo-btn-sm" onClick={exportExcel}>
+          ⬇️ Exporter Excel
+        </button>
         <label className="flex items-center gap-1.5 text-xs text-t-muted cursor-pointer ml-auto">
           <input type="checkbox" checked={groupByTpe} onChange={(e) => setGroupByTpe(e.target.checked)} />
           Grouper par TPE
