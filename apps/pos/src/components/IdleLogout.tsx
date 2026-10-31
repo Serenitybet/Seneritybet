@@ -5,7 +5,7 @@ import toast from "react-hot-toast";
 import { useAuthStore } from "@/store/auth.store";
 import { api, setAuthToken } from "@/lib/api";
 
-const IDLE_LIMIT_MS = 2 * 60 * 60 * 1000; // 2 heures
+const IDLE_LIMIT_MS = 5 * 60 * 1000; // 5 minutes — demande explicite des caissières (31/10/2026)
 const ACTIVITY_EVENTS = ["mousemove", "mousedown", "keydown", "scroll", "touchstart", "click"] as const;
 
 export function IdleLogout() {
@@ -16,7 +16,7 @@ export function IdleLogout() {
     function reset() {
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
-        toast.error("Session expirée après 2h d'inactivité");
+        toast.error("Session expirée après 5 min d'inactivité");
         api.post("/auth/logout").catch(() => {}); // révoque côté serveur, au mieux
         logout();
         setAuthToken(null);
