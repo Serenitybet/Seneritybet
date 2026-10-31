@@ -59,11 +59,12 @@ adminUsersRouter.post("/", requireRole("ADMIN", "SUPER_ADMIN"),
 // GET /api/admin/users/staff — liste du personnel (non-PLAYER)
 adminUsersRouter.get("/staff", asyncHandler(async (req: Request, res: Response) => {
   const search = req.query.search as string | undefined;
+  const role   = req.query.role as string | undefined;
   const playerNumSearch = search && /^\d+$/.test(search.trim()) ? parseInt(search.trim(), 10) : null;
 
   const staff = await prisma.user.findMany({
     where: {
-      role: { not: "PLAYER" },
+      role: role ? (role as any) : { not: "PLAYER" },
       ...(search ? {
         OR: [
           { email:     { contains: search, mode: "insensitive" as const } },

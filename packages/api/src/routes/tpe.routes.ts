@@ -1,6 +1,6 @@
 import { Response } from "express";
 import { authenticate, requireRole } from "../middleware/auth.middleware";
-import { identifyTpeDevice, requireActiveTpe, TpeRequest } from "../middleware/tpe.middleware";
+import { identifyTpeDevice, requireActiveTpe, requireCashierAssignedToTpe, TpeRequest } from "../middleware/tpe.middleware";
 import { asyncHandler } from "../lib/asyncHandler";
 import { AppError } from "../middleware/error.middleware";
 import { Router } from "express";
@@ -9,11 +9,21 @@ import * as webCouponService from "../services/web-coupon.service";
 
 export const tpeRouter = Router();
 
-// Double authentification : l'appareil (secret TPE) puis l'opérateur (JWT caissier)
+// Triple vérification : l'appareil (secret TPE), l'opérateur (JWT caissier),
+// puis que ce caissier précis est bien autorisé sur ce TPE précis.
 tpeRouter.use(identifyTpeDevice);
 tpeRouter.use(requireActiveTpe);
 tpeRouter.use(authenticate);
 tpeRouter.use(requireRole("CASHIER", "ADMIN", "SUPER_ADMIN"));
+tpeRouter.use(requireCashierAssignedToTpe);
+
+// GET /api/tpe/me — vérification légère (appareil + caissier + rattachement),
+// appelée juste après la connexion côté apps/pos pour un refus immédiat et
+// clair si ce caissier n'est pas autorisé sur ce TPE, plutôt que de laisser
+// l'erreur apparaître plus tard sur une action quelconque.
+tpeRouter.get("/me", (req: TpeRequest, res: Response) => {
+  res.json({ success: true, data: { tpeCode: req.tpe!.code, cashierId: req.user!.id } });
+});
 
 // POST /api/tpe/tickets — créer un ticket physique anonyme
 tpeRouter.post("/tickets", asyncHandler(async (req: TpeRequest, res: Response) => {

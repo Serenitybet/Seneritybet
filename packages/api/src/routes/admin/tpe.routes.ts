@@ -11,10 +11,13 @@ export const adminTpeRouter = Router();
 adminTpeRouter.get("/", asyncHandler(async (_req: Request, res: Response) => {
   const tpes = await prisma.tpe.findMany({
     where: { status: { not: "DELETED" } },
-    include: { region: { select: { id: true, name: true } } },
+    include: {
+      region: { select: { id: true, name: true } },
+      _count: { select: { assignedCashiers: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
-  res.json({ success: true, data: tpes.map(serializeTpe) });
+  res.json({ success: true, data: tpes.map((t: typeof tpes[number]) => ({ ...serializeTpe(t), assignedCashiersCount: t._count.assignedCashiers })) });
 }));
 
 // GET /api/admin/tpe/payouts/pending — paiements au-dessus du seuil en attente d'approbation
@@ -157,6 +160,47 @@ adminTpeRouter.post("/:id/unblock", requireRole("ADMIN", "SUPER_ADMIN"),
     if (tpe.status !== "BLOCKED") throw new AppError(400, "Ce TPE n'est pas bloqué");
     const updated = await prisma.tpe.update({ where: { id: tpe.id }, data: { status: "ACTIVE" } });
     res.json({ success: true, data: serializeTpe(updated) });
+  }),
+);
+
+// GET /api/admin/tpe/:id/cashiers — caissiers rattachés à ce TPE
+// (liste vide = accès libre pour tout caissier, voir requireCashierAssignedToTpe)
+adminTpeRouter.get("/:id/cashiers", asyncHandler(async (req: Request, res: Response) => {
+  const assignments = await prisma.tpeCashier.findMany({
+    where: { tpeId: req.params.id },
+    include: { cashier: { select: { id: true, firstName: true, lastName: true, email: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  res.json({ success: true, data: assignments.map((a: typeof assignments[number]) => ({ assignmentId: a.id, ...a.cashier })) });
+}));
+
+// POST /api/admin/tpe/:id/cashiers — rattacher un caissier à ce TPE
+adminTpeRouter.post("/:id/cashiers", requireRole("ADMIN", "SUPER_ADMIN"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { cashierId } = req.body;
+    if (!cashierId) throw new AppError(400, "Caissier requis");
+
+    const [tpe, cashier] = await Promise.all([
+      prisma.tpe.findUnique({ where: { id: req.params.id } }),
+      prisma.user.findUnique({ where: { id: cashierId } }),
+    ]);
+    if (!tpe) throw new AppError(404, "TPE introuvable");
+    if (!cashier || cashier.role !== "CASHIER") throw new AppError(400, "Ce compte n'est pas un caissier");
+
+    await prisma.tpeCashier.upsert({
+      where: { tpeId_cashierId: { tpeId: tpe.id, cashierId } },
+      create: { tpeId: tpe.id, cashierId },
+      update: {},
+    });
+    res.status(201).json({ success: true, message: "Caissier rattaché" });
+  }),
+);
+
+// DELETE /api/admin/tpe/:id/cashiers/:cashierId — détacher un caissier de ce TPE
+adminTpeRouter.delete("/:id/cashiers/:cashierId", requireRole("ADMIN", "SUPER_ADMIN"),
+  asyncHandler(async (req: Request, res: Response) => {
+    await prisma.tpeCashier.deleteMany({ where: { tpeId: req.params.id, cashierId: req.params.cashierId } });
+    res.json({ success: true, message: "Caissier détaché" });
   }),
 );
 

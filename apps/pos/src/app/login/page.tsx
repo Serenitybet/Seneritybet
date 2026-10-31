@@ -17,6 +17,19 @@ export default function LoginPage() {
     if (token) router.replace("/");
   }, [token, router]);
 
+  // Message laissé par l'intercepteur Axios si une session a été coupée en
+  // cours de route parce que le rattachement caissier↔TPE a été retiré
+  // (voir api.ts) — affiché une fois puis effacé.
+  useEffect(() => {
+    try {
+      const msg = sessionStorage.getItem("pos-login-error");
+      if (msg) {
+        toast.error(msg);
+        sessionStorage.removeItem("pos-login-error");
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -31,7 +44,25 @@ export default function LoginPage() {
         return;
       }
 
-      setAuthToken(accessToken);
+      // Vérifie tout de suite que ce caissier est bien rattaché au TPE de cet
+      // appareil (GET /tpe/me passe par requireCashierAssignedToTpe) — pour
+      // un refus clair au moment de la connexion plutôt qu'au milieu d'une
+      // vente, un TPE sans aucun caissier rattaché reste en accès libre.
+      if (user.role === "CASHIER") {
+        setAuthToken(accessToken);
+        try {
+          await api.get("/tpe/me");
+        } catch (err: unknown) {
+          setAuthToken(null);
+          const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+          toast.error(msg ?? "Ce caissier n'est pas autorisé sur ce TPE");
+          setLoading(false);
+          return;
+        }
+      } else {
+        setAuthToken(accessToken);
+      }
+
       setAuth(accessToken, {
         id: user.id,
         firstName: user.firstName,

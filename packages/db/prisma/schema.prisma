@@ -212,6 +212,7 @@ model User {
   ticketsCreated      Ticket[]            @relation("TicketCashier")
   ticketsPaid         Ticket[]            @relation("TicketPaidBy")
   tpeCreditAdjustments TpeCreditAdjustment[]
+  tpeAssignments       TpeCashier[]       @relation("TpeCashierAssignment")
 
   @@index([email])
   @@index([phone])
@@ -638,10 +639,29 @@ model Tpe {
   ticketsCreated    Ticket[]               @relation("TpeTicketsCreated")
   ticketsPaid       Ticket[]               @relation("TpeTicketsPaid")
   creditAdjustments TpeCreditAdjustment[]
+  assignedCashiers  TpeCashier[]
 
   @@index([status])
   @@index([pairingCode])
   @@index([regionId])
+}
+
+// Rattachement caissier ↔ TPE — demande explicite du 31/10/2026 : un
+// caissier ne doit pouvoir se servir que des TPE qui lui sont assignés, pas
+// de n'importe lequel. Tant qu'un TPE n'a AUCUNE ligne ici, l'accès reste
+// libre pour tout caissier (comportement historique, évite de bloquer les
+// TPE déjà en service avant qu'un admin ne configure les rattachements) —
+// voir requireCashierAssignedToTpe, tpe.middleware.ts.
+model TpeCashier {
+  id        String   @id @default(cuid())
+  tpeId     String
+  tpe       Tpe      @relation(fields: [tpeId], references: [id], onDelete: Cascade)
+  cashierId String
+  cashier   User     @relation("TpeCashierAssignment", fields: [cashierId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([tpeId, cashierId])
+  @@index([cashierId])
 }
 
 model TpeCreditAdjustment {
