@@ -197,6 +197,14 @@ model User {
   // dans ce projet) pour un contrôle de sécurité critique.
   tokensRevokedAt DateTime?
 
+  // Identifiant court pour la connexion sur les TPE (apps/pos) — demande
+  // explicite du 31/10/2026 : un caissier ne doit plus se connecter par
+  // adresse email sur un TPE, juste avec ce code défini par l'admin à la
+  // création de son compte. Reste null pour les autres rôles (email/
+  // téléphone/numéro de joueur restent les identifiants ailleurs, voir
+  // auth.service.ts login()).
+  cashierCode String? @unique
+
   shopId              String?
   shop                Shop?          @relation("CashierShop", fields: [shopId], references: [id])
 
@@ -219,6 +227,7 @@ model User {
   @@index([playerNumber])
   @@index([role])
   @@index([status])
+  @@index([cashierCode])
 }
 
 model Kyc {

@@ -26,7 +26,7 @@ function canManage(actorRole: string, targetRole: string): boolean {
 // POST /api/admin/users — créer un caissier ou admin
 adminUsersRouter.post("/", requireRole("ADMIN", "SUPER_ADMIN"),
   asyncHandler(async (req: Request, res: Response) => {
-    const { email, phone, firstName, lastName, password, role, dateOfBirth, shopId } = req.body;
+    const { email, phone, firstName, lastName, password, role, dateOfBirth, shopId, cashierCode } = req.body;
 
     if (!email || !phone || !firstName || !lastName || !password || !role) {
       res.status(400).json({ success: false, error: "Tous les champs sont requis" }); return;
@@ -35,10 +35,30 @@ adminUsersRouter.post("/", requireRole("ADMIN", "SUPER_ADMIN"),
     if (!allowedRoles.includes(role)) {
       res.status(400).json({ success: false, error: "Rôle non autorisé" }); return;
     }
+
+    // Code de connexion TPE — remplace l'email pour la connexion sur apps/pos
+    // (demande explicite du 31/10/2026). Requis pour un caissier, ignoré
+    // pour les autres rôles qui continuent de se connecter par email.
+    let trimmedCode: string | undefined;
+    if (role === "CASHIER") {
+      trimmedCode = typeof cashierCode === "string" ? cashierCode.trim().toUpperCase() : "";
+      if (!trimmedCode) {
+        res.status(400).json({ success: false, error: "Code de connexion requis pour un caissier" }); return;
+      }
+      if (!/^[A-Z0-9]{3,12}$/.test(trimmedCode)) {
+        res.status(400).json({ success: false, error: "Le code doit faire 3 à 12 lettres/chiffres" }); return;
+      }
+    }
+
     // shopId optionnel — peut être assigné plus tard depuis le backoffice
-    const exists = await prisma.user.findFirst({ where: { OR: [{ email }, { phone }] } });
+    const exists = await prisma.user.findFirst({
+      where: { OR: [{ email }, { phone }, ...(trimmedCode ? [{ cashierCode: trimmedCode }] : [])] },
+    });
     if (exists) {
-      res.status(409).json({ success: false, error: "Email ou téléphone déjà utilisé" }); return;
+      res.status(409).json({
+        success: false,
+        error: exists.cashierCode === trimmedCode ? "Ce code caissier est déjà utilisé" : "Email ou téléphone déjà utilisé",
+      }); return;
     }
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
@@ -48,11 +68,12 @@ adminUsersRouter.post("/", requireRole("ADMIN", "SUPER_ADMIN"),
         kycStatus: "APPROVED",
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : new Date("1990-01-01"),
         ...(shopId ? { shopId } : {}),
+        ...(trimmedCode ? { cashierCode: trimmedCode } : {}),
         // Créer automatiquement un portefeuille vide pour les caissiers
         ...(role === "CASHIER" ? { cashierWallet: { create: { balance: BigInt(0) } } } : {}),
       },
     });
-    res.status(201).json({ success: true, data: { id: user.id, email: user.email, role: user.role } });
+    res.status(201).json({ success: true, data: { id: user.id, email: user.email, cashierCode: user.cashierCode, role: user.role } });
   }),
 );
 
@@ -77,7 +98,7 @@ adminUsersRouter.get("/staff", asyncHandler(async (req: Request, res: Response) 
     },
     select: {
       id: true, playerNumber: true, email: true, phone: true, firstName: true, lastName: true,
-      role: true, status: true, kycStatus: true, createdAt: true,
+      role: true, status: true, kycStatus: true, createdAt: true, cashierCode: true,
     },
     orderBy: { createdAt: "desc" },
   });
@@ -216,6 +237,26 @@ adminUsersRouter.patch("/:id/password", requireRole("ADMIN", "SUPER_ADMIN"),
     const hash = await bcrypt.hash(newPassword, 10);
     await prisma.user.update({ where: { id: req.params.id }, data: { password: hash } });
     res.json({ success: true, message: "Mot de passe réinitialisé avec succès" });
+  }),
+);
+
+// PATCH /api/admin/users/:id/cashier-code — changer le code de connexion TPE d'un caissier
+adminUsersRouter.patch("/:id/cashier-code", requireRole("ADMIN", "SUPER_ADMIN"),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { cashierCode } = req.body;
+    const trimmed = typeof cashierCode === "string" ? cashierCode.trim().toUpperCase() : "";
+    if (!/^[A-Z0-9]{3,12}$/.test(trimmed)) {
+      res.status(400).json({ success: false, error: "Le code doit faire 3 à 12 lettres/chiffres" }); return;
+    }
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) { res.status(404).json({ success: false, error: "Utilisateur introuvable" }); return; }
+    if (target.role !== "CASHIER") { res.status(400).json({ success: false, error: "Ce compte n'est pas un caissier" }); return; }
+
+    const clash = await prisma.user.findFirst({ where: { cashierCode: trimmed, id: { not: target.id } } });
+    if (clash) { res.status(409).json({ success: false, error: "Ce code caissier est déjà utilisé" }); return; }
+
+    await prisma.user.update({ where: { id: target.id }, data: { cashierCode: trimmed } });
+    res.json({ success: true, message: `Code mis à jour : ${trimmed}` });
   }),
 );
 
