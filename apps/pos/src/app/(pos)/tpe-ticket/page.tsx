@@ -115,6 +115,14 @@ export default function TpeTicketPage() {
   // travail des caissières). Au-delà de lg:, le panneau reste affiché tel
   // quel dans la colonne latérale (sticky), ce bouton/tiroir n'apparaît pas.
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
+  // Cotes ayant changé depuis la composition du coupon — renvoyées par le
+  // serveur (placeTicket) quand il refuse l'impression faute de confirmation
+  // explicite (demande explicite du 31/10/2026) : affichées en rouge/vert
+  // avant de permettre à la caissière d'imprimer quand même aux nouvelles
+  // cotes.
+  const [oddsChangeWarning, setOddsChangeWarning] = useState<
+    { eventLabel: string; marketName: string; oldValue: number; newValue: number }[] | null
+  >(null);
   const { confirm, ConfirmDialog } = useConfirm();
 
   // Même technique de verrouillage de défilement que le tiroir "Mon coupon"
@@ -267,12 +275,14 @@ export default function TpeTicketPage() {
     }
   }
 
-  async function placeTicket() {
+  async function placeTicket(confirmOddsChange = false) {
     if (!selections.length || !stakeXAF) return;
     const stake = parseFloat(stakeXAF);
     if (isNaN(stake) || stake < 100) { toast.error("Mise minimum 100 XAF"); return; }
-    const ok = await confirm(`Confirmer le ticket ?\nMise : ${stake.toLocaleString("fr-FR")} XAF\nGain potentiel : ${(stake * totalOdds).toLocaleString("fr-FR")} XAF`);
-    if (!ok) return;
+    if (!confirmOddsChange) {
+      const ok = await confirm(`Confirmer le ticket ?\nMise : ${stake.toLocaleString("fr-FR")} XAF\nGain potentiel : ${(stake * totalOdds).toLocaleString("fr-FR")} XAF`);
+      if (!ok) return;
+    }
 
     setPlacing(true);
     try {
@@ -280,11 +290,13 @@ export default function TpeTicketPage() {
         selections: selections.map((s) => ({ marketId: s.marketId, oddId: s.oddId, oddValue: s.oddValue })),
         stakeXAF: stake,
         webCouponCode: loadedWebCouponCode ?? undefined,
+        confirmOddsChange,
       });
       setTicket(res.data.data);
       setCodePrinted(false);
       setSelections([]);
       setStakeXAF("");
+      setOddsChangeWarning(null);
       // Sans ça, le verrouillage de défilement du tiroir mobile (voir
       // l'effet lié à mobilePanelOpen) resterait actif sur l'écran "Ticket
       // créé" qui suit — ce tiroir n'y est plus rendu, mais son état restait
@@ -296,12 +308,19 @@ export default function TpeTicketPage() {
       setTimeout(() => window.print(), 500);
     } catch (err: any) {
       const maxStakeXAF = err.response?.data?.data?.maxStakeXAF;
+      const changedOdds = err.response?.data?.data?.changedOdds;
       if (maxStakeXAF) {
         // Plafond de gain dépassé : on propose directement la mise maximale
         // acceptée pour ce coupon (voir tpe.service.ts placeTicket) — le
         // caissier n'a plus qu'à revalider si ça convient au parieur.
         setStakeXAF(String(maxStakeXAF));
         toast.error(`Gain trop élevé — mise ramenée à ${maxStakeXAF.toLocaleString("fr-FR")} XAF (maximum autorisé). Revalidez si ça convient.`, { duration: 6000 });
+      } else if (changedOdds?.length) {
+        // Une ou plusieurs cotes ont bougé depuis la composition du coupon —
+        // affichées (rouge = baisse, vert = hausse) pour que la caissière
+        // décide d'imprimer quand même aux nouvelles cotes plutôt que d'être
+        // bloquée sans alternative.
+        setOddsChangeWarning(changedOdds);
       } else {
         toast.error(err.response?.data?.error ?? "Erreur lors de la création du ticket");
       }
@@ -401,7 +420,7 @@ export default function TpeTicketPage() {
           )}
 
           <button
-            onClick={placeTicket}
+            onClick={() => placeTicket()}
             disabled={placing || !stakeXAF || parseFloat(stakeXAF) <= 0}
             className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl disabled:opacity-50"
           >
@@ -826,6 +845,52 @@ export default function TpeTicketPage() {
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto p-4">
               {couponPanel}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Avertissement cotes changées — le serveur refuse d'imprimer tant
+          que ce n'est pas explicitement confirmé (voir placeTicket,
+          tpe.service.ts) ; rouge = cote en baisse, vert = cote en hausse,
+          pour que la caissière voie immédiatement si le changement est en
+          faveur ou en défaveur du parieur avant de décider. */}
+      {oddsChangeWarning && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] flex flex-col">
+            <div className="px-5 pt-5 pb-3 border-b border-gray-100 shrink-0">
+              <p className="text-lg font-black text-gray-900">⚠️ Cotes modifiées</p>
+              <p className="text-xs text-gray-500 mt-1">
+                Une ou plusieurs cotes ont changé depuis la composition du coupon. Vérifiez avant d'imprimer :
+              </p>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
+              {oddsChangeWarning.map((o, i) => {
+                const up = o.newValue > o.oldValue;
+                return (
+                  <div key={i} className="bg-gray-50 rounded-lg px-3 py-2">
+                    <p className="text-xs font-semibold text-gray-800 truncate">{o.eventLabel}</p>
+                    <div className="flex items-center justify-between mt-0.5">
+                      <p className="text-[11px] text-gray-500">{o.marketName}</p>
+                      <p className={`text-sm font-black ${up ? "text-green-600" : "text-red-600"}`}>
+                        {o.oldValue.toFixed(2)} → {o.newValue.toFixed(2)} {up ? "▲" : "▼"}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex gap-3 p-4 border-t border-gray-100 shrink-0">
+              <button onClick={() => setOddsChangeWarning(null)} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl">
+                Annuler
+              </button>
+              <button
+                onClick={() => { setOddsChangeWarning(null); placeTicket(true); }}
+                disabled={placing}
+                className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl disabled:opacity-50"
+              >
+                Imprimer quand même
+              </button>
             </div>
           </div>
         </div>

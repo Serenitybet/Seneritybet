@@ -27,9 +27,9 @@ tpeRouter.get("/me", (req: TpeRequest, res: Response) => {
 
 // POST /api/tpe/tickets — créer un ticket physique anonyme
 tpeRouter.post("/tickets", asyncHandler(async (req: TpeRequest, res: Response) => {
-  const { selections, stakeXAF, webCouponCode } = req.body;
+  const { selections, stakeXAF, webCouponCode, confirmOddsChange } = req.body;
   if (!stakeXAF) throw new AppError(400, "Mise requise");
-  const ticket = await tpeService.placeTicket(req.tpe!.id, req.user!.id, selections, Number(stakeXAF), webCouponCode);
+  const ticket = await tpeService.placeTicket(req.tpe!.id, req.user!.id, selections, Number(stakeXAF), webCouponCode, !!confirmOddsChange);
   res.status(201).json({ success: true, data: ticket });
 }));
 

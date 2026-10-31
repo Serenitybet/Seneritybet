@@ -138,7 +138,19 @@ interface TicketSelection {
   oddValue: number;
 }
 
-export async function placeTicket(tpeId: string, cashierId: string, selections: TicketSelection[], stakeXAF: number, webCouponCode?: string) {
+export async function placeTicket(
+  tpeId: string,
+  cashierId: string,
+  selections: TicketSelection[],
+  stakeXAF: number,
+  webCouponCode?: string,
+  // true = le caissier a déjà vu les nouvelles cotes (voir changedOdds
+  // ci-dessous, affichées en rouge/vert côté apps/pos) et confirme malgré le
+  // changement — demande explicite du 31/10/2026 : un coupon composé sur le
+  // site, puis des cotes ayant bougé avant que la caissière ne finalise au
+  // TPE, bloquait entièrement l'impression sans alternative.
+  confirmOddsChange = false,
+) {
   if (!selections?.length) throw new AppError(400, "Aucune sélection");
   if (selections.length > 15) throw new AppError(400, "Maximum 15 événements par ticket");
 
@@ -165,6 +177,11 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
     throw new AppError(400, "Une seule sélection par marché est autorisée sur un même ticket");
   }
 
+  // Cotes ayant bougé depuis la composition du coupon (sur le site, ou
+  // depuis que le caissier a affiché le match) — collectées plutôt que de
+  // bloquer au premier écart trouvé, pour les montrer TOUTES d'un coup à la
+  // caissière plutôt qu'un aller-retour par cote changée.
+  const changedOdds: { eventLabel: string; marketName: string; oldValue: number; newValue: number }[] = [];
   for (const selection of selections) {
     const odd = odds.find((o) => o.id === selection.oddId);
     if (!odd) throw new AppError(400, "Cote introuvable");
@@ -175,12 +192,24 @@ export async function placeTicket(tpeId: string, cashierId: string, selections: 
     // Le pari en direct n'est pas pris en charge (les cotes ne sont pas mises à
     // jour en temps réel pendant un match) : on refuse tout pari sur un match
     // dont le coup d'envoi est déjà passé, même si l'écran du caissier
-    // affichait encore le match avant (données non rafraîchies).
+    // affichait encore le match avant (données non rafraîchies). Jamais
+    // contournable par confirmOddsChange — ce n'est pas une cote qui a
+    // bougé, c'est un match qui ne peut plus être parié du tout.
     if (odd.market.event.status === "UPCOMING" && odd.market.event.startTime <= new Date()) {
       throw new AppError(400, `Ce match a déjà débuté, les paris sont fermés : ${odd.market.event.homeTeam} vs ${odd.market.event.awayTeam}`);
     }
     const diff = Math.abs(Number(odd.value) - selection.oddValue);
-    if (diff > 0.05) throw new AppError(400, "La cote a changé, veuillez revalider le ticket");
+    if (diff > 0.05) {
+      changedOdds.push({
+        eventLabel: `${odd.market.event.homeTeam} vs ${odd.market.event.awayTeam}`,
+        marketName: odd.market.name,
+        oldValue: selection.oddValue,
+        newValue: Number(odd.value),
+      });
+    }
+  }
+  if (changedOdds.length > 0 && !confirmOddsChange) {
+    throw new AppError(400, "Une ou plusieurs cotes ont changé depuis la composition du coupon", { changedOdds });
   }
 
   const totalOdds = odds.reduce((acc, o) => acc * Number(o.value), 1);
