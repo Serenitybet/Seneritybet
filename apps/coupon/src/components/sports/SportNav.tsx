@@ -2,17 +2,14 @@
 
 import Link from "next/link";
 
+// Football/basketball/tennis seulement (demande explicite du 31/10/2026) —
+// les autres sports ne sont plus synchronisés (voir SPORTS_CONFIG,
+// odds.service.ts), ces onglets n'auraient donc plus jamais de matchs à
+// afficher.
 const SPORTS_TABS = [
   { icon: "⚽", label: "Football",    slug: "football" },
   { icon: "🏀", label: "Basketball",  slug: "basketball" },
   { icon: "🎾", label: "Tennis",      slug: "tennis" },
-  { icon: "🏈", label: "Américain",   slug: "american-football" },
-  { icon: "⚾", label: "Baseball",    slug: "baseball" },
-  { icon: "🏒", label: "Hockey",      slug: "hockey" },
-  { icon: "🥊", label: "Boxe/MMA",   slug: "mma" },
-  { icon: "🏐", label: "Volley",      slug: "volleyball" },
-  { icon: "🏉", label: "Rugby",       slug: "rugby" },
-  { icon: "🎱", label: "Snooker",     slug: "snooker" },
 ];
 
 export function SportNav({ activeSport }: { activeSport?: string }) {
