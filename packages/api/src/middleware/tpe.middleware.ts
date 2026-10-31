@@ -51,3 +51,46 @@ export function requireActiveTpe(req: TpeRequest, res: Response, next: NextFunct
   }
   next();
 }
+
+/**
+ * Exige que le caissier connecté soit autorisé sur ce TPE précis — demande
+ * explicite du 31/10/2026 : un caissier ne doit plus pouvoir se connecter
+ * sur n'importe quel TPE. À utiliser après identifyTpeDevice/requireActiveTpe
+ * ET authenticate (dans cet ordre — a besoin de req.tpe et req.user).
+ *
+ * Tant qu'AUCUN caissier n'est explicitement assigné à ce TPE, l'accès reste
+ * libre (comportement historique) : la restriction est donc opt-in, TPE par
+ * TPE, pour ne pas bloquer d'un coup tous les TPE déjà en service tant qu'un
+ * admin n'a pas configuré leurs rattachements. ADMIN/SUPER_ADMIN passent
+ * toujours (ils n'opèrent pas une caisse au quotidien, et doivent pouvoir
+ * dépanner n'importe quel TPE).
+ */
+export async function requireCashierAssignedToTpe(req: TpeRequest, res: Response, next: NextFunction) {
+  if (!req.tpe || !req.user) {
+    res.status(401).json({ success: false, error: "Non authentifié" });
+    return;
+  }
+  if (req.user.role === "ADMIN" || req.user.role === "SUPER_ADMIN") {
+    next();
+    return;
+  }
+
+  const assignedCount = await prisma.tpeCashier.count({ where: { tpeId: req.tpe.id } });
+  if (assignedCount === 0) {
+    next();
+    return;
+  }
+
+  const allowed = await prisma.tpeCashier.findUnique({
+    where: { tpeId_cashierId: { tpeId: req.tpe.id, cashierId: req.user.id } },
+  });
+  if (!allowed) {
+    res.status(403).json({
+      success: false,
+      error: "Ce caissier n'est pas autorisé sur ce TPE — contactez le backoffice",
+      data: { code: "CASHIER_NOT_ASSIGNED" },
+    });
+    return;
+  }
+  next();
+}

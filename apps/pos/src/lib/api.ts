@@ -15,6 +15,17 @@ api.interceptors.response.use(
       useAuthStore.getState().logout();
       setAuthToken(null);
     }
+    // Un caissier dont le rattachement a été retiré en cours de session (pas
+    // seulement au login) tombe ici — même traitement que le 401 : on
+    // déconnecte, en gardant le message pour l'afficher sur /login (voir
+    // login/page.tsx).
+    if (err.response?.status === 403 && err.response?.data?.data?.code === "CASHIER_NOT_ASSIGNED") {
+      useAuthStore.getState().logout();
+      setAuthToken(null);
+      if (typeof window !== "undefined") {
+        try { sessionStorage.setItem("pos-login-error", err.response.data.error); } catch { /* ignore */ }
+      }
+    }
     return Promise.reject(err);
   },
 );

@@ -17,6 +17,16 @@ interface Tpe {
   region: { id: string; name: string } | null;
   lastSeenAt: string | null;
   pairedAt: string | null;
+  // 0 = accès libre, tout caissier peut se connecter sur ce TPE (comportement
+  // historique) — voir requireCashierAssignedToTpe côté API.
+  assignedCashiersCount: number;
+}
+
+interface Cashier {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
 }
 
 interface Region {
@@ -71,6 +81,11 @@ export default function TpePage() {
   const [creditAmount, setCreditAmount] = useState("");
   const [creditReason, setCreditReason] = useState("");
   const [saving, setSaving] = useState(false);
+  const [cashierModal, setCashierModal] = useState<Tpe | null>(null);
+  const [assignedCashiers, setAssignedCashiers] = useState<Cashier[]>([]);
+  const [allCashiers, setAllCashiers] = useState<Cashier[]>([]);
+  const [cashierToAdd, setCashierToAdd] = useState("");
+  const [loadingCashiers, setLoadingCashiers] = useState(false);
   const [regions, setRegions] = useState<Region[]>([]);
   const [newRegionName, setNewRegionName] = useState("");
   const [newRegionMaxWin, setNewRegionMaxWin] = useState("");
@@ -268,6 +283,52 @@ export default function TpePage() {
     finally { setSaving(false); }
   }
 
+  async function openCashierModal(tpe: Tpe) {
+    setCashierModal(tpe);
+    setCashierToAdd("");
+    setLoadingCashiers(true);
+    try {
+      const [assignedRes, allRes] = await Promise.all([
+        fetch(`${API}/admin/tpe/${tpe.id}/cashiers`, { headers: authHeaders() }),
+        fetch(`${API}/admin/users/staff?role=CASHIER`, { headers: authHeaders() }),
+      ]);
+      const assignedData = await assignedRes.json();
+      const allData = await allRes.json();
+      setAssignedCashiers(assignedData.data ?? []);
+      setAllCashiers(allData.data?.users ?? []);
+    } catch { toast.error("Erreur de chargement"); }
+    finally { setLoadingCashiers(false); }
+  }
+
+  async function addCashier() {
+    if (!cashierModal || !cashierToAdd) return;
+    try {
+      const res = await fetch(`${API}/admin/tpe/${cashierModal.id}/cashiers`, {
+        method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ cashierId: cashierToAdd }),
+      });
+      const d = await res.json();
+      if (!res.ok) { toast.error(d.error ?? "Erreur"); return; }
+      toast.success("Caissier rattaché ✓");
+      setCashierToAdd("");
+      openCashierModal(cashierModal);
+      loadAll();
+    } catch { toast.error("Erreur réseau"); }
+  }
+
+  async function removeCashier(cashierId: string) {
+    if (!cashierModal) return;
+    try {
+      const res = await fetch(`${API}/admin/tpe/${cashierModal.id}/cashiers/${cashierId}`, {
+        method: "DELETE", headers: authHeaders(),
+      });
+      if (!res.ok) { toast.error("Erreur"); return; }
+      toast.success("Caissier détaché ✓");
+      openCashierModal(cashierModal);
+      loadAll();
+    } catch { toast.error("Erreur réseau"); }
+  }
+
   async function saveThreshold() {
     try {
       const res = await fetch(`${API}/admin/settings/tpe-payout-threshold`, {
@@ -432,6 +493,9 @@ export default function TpePage() {
                         <button className="bo-btn-secondary bo-btn-sm" onClick={() => renameTpe(t)}>✏️ Renommer</button>
                         <button className="bo-btn-secondary bo-btn-sm" onClick={() => setCreditModal(t)}>💰 Crédit</button>
                         <button className="bo-btn-secondary bo-btn-sm" onClick={() => editDailyCredit(t)}>📅 Palier</button>
+                        <button className="bo-btn-secondary bo-btn-sm" onClick={() => openCashierModal(t)}>
+                          👤 Caissiers {t.assignedCashiersCount > 0 ? `(${t.assignedCashiersCount})` : "(libre)"}
+                        </button>
                         <button
                           className={`bo-btn-sm ${t.status === "BLOCKED" ? "bo-btn-primary" : "bo-btn-danger"}`}
                           onClick={() => toggleBlock(t)}
@@ -548,6 +612,65 @@ export default function TpePage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal caissiers rattachés */}
+      {cashierModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-bo-card border border-bo-border rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-base font-bold text-t-primary">
+                👤 Caissiers rattachés — {cashierModal.name ?? cashierModal.code}
+              </h2>
+              <button onClick={() => setCashierModal(null)} className="text-t-faint hover:text-t-primary text-lg">✕</button>
+            </div>
+
+            {loadingCashiers ? (
+              <p className="text-xs text-t-faint">Chargement…</p>
+            ) : (
+              <>
+                <p className="text-xs text-t-faint mb-3">
+                  {assignedCashiers.length === 0
+                    ? "Aucun caissier rattaché — accès libre, n'importe quel caissier peut se connecter sur ce TPE."
+                    : "Seuls les caissiers ci-dessous peuvent se connecter sur ce TPE."}
+                </p>
+
+                {assignedCashiers.length > 0 && (
+                  <div className="space-y-2 mb-4">
+                    {assignedCashiers.map(c => (
+                      <div key={c.id} className="flex items-center justify-between gap-2 bg-bo-surface rounded-lg px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-t-primary truncate">{c.firstName} {c.lastName}</p>
+                          <p className="text-[11px] text-t-faint truncate">{c.email}</p>
+                        </div>
+                        <button onClick={() => removeCashier(c.id)} className="text-t-faint hover:text-red-400 text-sm shrink-0">
+                          ✕ Détacher
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1.5">Rattacher un caissier</label>
+                    <select className="bo-input w-full" value={cashierToAdd} onChange={e => setCashierToAdd(e.target.value)}>
+                      <option value="">— Choisir —</option>
+                      {allCashiers
+                        .filter(c => !assignedCashiers.some(a => a.id === c.id))
+                        .map(c => (
+                          <option key={c.id} value={c.id}>{c.firstName} {c.lastName} ({c.email})</option>
+                        ))}
+                    </select>
+                  </div>
+                  <button className="bo-btn-primary bo-btn-sm" disabled={!cashierToAdd} onClick={addCashier}>
+                    Ajouter
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
