@@ -59,7 +59,11 @@ export async function createWebCoupon(selections: { oddId: string }[], stakeXAF?
 
   const oddIds = selections.map((s) => s.oddId);
   const odds = await prisma.odd.findMany({
-    where: { id: { in: oddIds }, isActive: true },
+    // isPublished : revalidation serveur du brouillon (voir aussi
+    // getUpcomingEvents/GET events/:id) — un marché non publié ne doit pas
+    // être pariable même par un appel API direct, pas seulement caché côté
+    // UI (demande explicite du 01/11/2026).
+    where: { id: { in: oddIds }, isActive: true, market: { isPublished: true } },
     include: { market: { include: { event: true } } },
   });
   if (odds.length !== selections.length) {
@@ -208,7 +212,7 @@ export async function getWebCouponForCashier(code: string) {
   let droppedCount = 0;
   for (const s of snapshot) {
     const odd = odds.find((o) => o.id === s.oddId);
-    const stillOpen = odd && !odd.market.isSuspended &&
+    const stillOpen = odd && !odd.market.isSuspended && odd.market.isPublished &&
       (odd.market.event.status === "UPCOMING" || odd.market.event.status === "LIVE") &&
       !(odd.market.event.status === "UPCOMING" && odd.market.event.startTime <= new Date());
     if (odd && stillOpen) {

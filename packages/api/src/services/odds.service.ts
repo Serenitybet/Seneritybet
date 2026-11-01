@@ -1153,7 +1153,10 @@ export async function getUpcomingEvents(sportSlug?: string, page = 1, limit = 50
       include: {
         competition: { include: { sport: true } },
         markets: {
-          where: { isActive: true, isSuspended: false },
+          // isPublished : brouillon invisible sur le site/TPE tant qu'un
+          // admin ne l'a pas explicitement publié depuis le backoffice
+          // (demande explicite du 01/11/2026).
+          where: { isActive: true, isSuspended: false, isPublished: true },
           include: { odds: { where: { isActive: true } } },
         },
       },

@@ -385,6 +385,14 @@ model Market {
   type        MarketType
   isActive    Boolean    @default(true)
   isSuspended Boolean    @default(false)
+  // Brouillon invisible sur serenitybetcode et au TPE tant que non publié —
+  // demande explicite du 01/11/2026 : pouvoir vérifier un nouveau marché créé
+  // manuellement au backoffice avant de le rendre pariable pour de vrai.
+  // true par défaut : ne change rien pour les marchés déjà existants
+  // (synchronisation automatique incluse, toujours publiée immédiatement) —
+  // seuls les NOUVEAUX marchés créés manuellement démarrent à false (voir
+  // POST /admin/sports/events/:id/markets).
+  isPublished Boolean    @default(true)
   odds        Odd[]
   betItems    BetItem[]
   ticketItems TicketItem[]

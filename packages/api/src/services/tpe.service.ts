@@ -159,7 +159,11 @@ export async function placeTicket(
 
   const oddIds = selections.map((s) => s.oddId);
   const odds = await prisma.odd.findMany({
-    where: { id: { in: oddIds }, isActive: true },
+    // isPublished : revalidation serveur du brouillon — un marché non publié
+    // ne doit pas être pariable même via un appel direct au TPE, pas
+    // seulement caché côté écran du caissier (demande explicite du
+    // 01/11/2026).
+    where: { id: { in: oddIds }, isActive: true, market: { isPublished: true } },
     include: { market: { include: { event: true } } },
   });
   if (odds.length !== selections.length) {
