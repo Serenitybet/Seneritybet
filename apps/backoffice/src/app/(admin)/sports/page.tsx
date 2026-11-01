@@ -8,7 +8,7 @@ const API = process.env.NEXT_PUBLIC_BACKOFFICE_API_URL ?? "https://seneritybet.o
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Odd      { id: string; label: string; value: number | string; isActive: boolean }
-interface Market   { id: string; name: string; type: string; isActive: boolean; isSuspended: boolean; odds: Odd[]; _count?: { betItems: number } }
+interface Market   { id: string; name: string; type: string; isActive: boolean; isSuspended: boolean; isPublished: boolean; odds: Odd[]; _count?: { betItems: number } }
 interface Event    { id: string; homeTeam: string; awayTeam: string; startTime: string; status: string; homeScore?: number | null; awayScore?: number | null; competition: { name: string; sport: { name: string } }; markets?: Market[]; _count?: { markets: number } }
 interface Competition { id: string; name: string; sport: { name: string } }
 
@@ -225,7 +225,7 @@ export default function SportsPage() {
       });
       const d = await r.json();
       if (!r.ok) { toast.error(d.error ?? "Erreur"); return; }
-      toast.success("✓ Marché créé !");
+      toast.success("✓ Marché créé en brouillon — vérifiez-le puis publiez-le quand c'est prêt", { duration: 5000 });
       // rafraîchir le panel
       await openPanel(selectedEvent);
       setNewMarket({ type: "MATCH_WINNER", name: "", odds: [] });
@@ -251,6 +251,18 @@ export default function SportsPage() {
       body: JSON.stringify({ isSuspended: !market.isSuspended }),
     });
     toast.success(market.isSuspended ? "Marché activé" : "Marché suspendu");
+    if (selectedEvent) await openPanel(selectedEvent);
+  }
+
+  // Brouillon → publié : rend le marché visible/pariable sur serenitybetcode
+  // et au TPE — demande explicite du 01/11/2026 (vérifier d'abord un
+  // nouveau marché en backoffice, ne le déployer qu'une fois validé).
+  async function togglePublish(market: Market) {
+    await fetch(`${API}/admin/sports/markets/${market.id}`, {
+      method: "PATCH", headers: authHeaders(),
+      body: JSON.stringify({ isPublished: !market.isPublished }),
+    });
+    toast.success(market.isPublished ? "Marché repassé en brouillon" : "Marché publié ✓ — visible sur le site et au TPE");
     if (selectedEvent) await openPanel(selectedEvent);
   }
 
@@ -648,6 +660,11 @@ export default function SportsPage() {
                             ) : null}
                           </div>
                           <div className="flex items-center gap-1.5">
+                            <button onClick={() => togglePublish(market)}
+                              title={market.isPublished ? "Repasser en brouillon (invisible site/TPE)" : "Publier (visible site/TPE)"}
+                              className={`text-[9px] px-2 py-0.5 rounded font-bold border transition-all ${market.isPublished ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-gold/10 text-gold border-gold/20"}`}>
+                              {market.isPublished ? "✓ PUBLIÉ" : "📝 BROUILLON"}
+                            </button>
                             <button onClick={() => toggleMarket(market)}
                               className={`text-[9px] px-2 py-0.5 rounded font-bold border transition-all ${market.isSuspended ? "bg-red-500/10 text-red-400 border-red-500/20" : "bg-green-500/10 text-green-400 border-green-500/20"}`}>
                               {market.isSuspended ? "⏸ SUSPENDU" : "▶ ACTIF"}
@@ -658,6 +675,11 @@ export default function SportsPage() {
                             )}
                           </div>
                         </div>
+                        {!market.isPublished && (
+                          <p className="text-[10px] text-gold/80 mb-2">
+                            📝 Brouillon — invisible sur serenitybetcode et au TPE. Vérifiez les cotes ci-dessous puis publiez quand c'est prêt.
+                          </p>
+                        )}
 
                         {/* Cotes */}
                         <div className="flex flex-wrap gap-1.5 mb-2">

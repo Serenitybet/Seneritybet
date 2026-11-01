@@ -331,6 +331,11 @@ adminSportsRouter.post("/events/:id/markets",
         eventId: req.params.id,
         name,
         type,
+        // Brouillon par défaut — invisible sur serenitybetcode/au TPE tant
+        // qu'un admin ne le publie pas explicitement après vérification
+        // (demande explicite du 01/11/2026). Contrairement aux marchés
+        // synchronisés automatiquement (toujours publiés immédiatement).
+        isPublished: false,
         odds: odds && Array.isArray(odds) && odds.length > 0
           ? { create: odds.map((o: { label: string; value: number }) => ({ label: o.label, value: Number(o.value) })) }
           : undefined,
@@ -349,12 +354,13 @@ adminSportsRouter.post("/events/:id/markets",
 adminSportsRouter.patch("/markets/:id",
   requireRole("TRADER", "ADMIN", "SUPER_ADMIN"),
   asyncHandler(async (req: Request, res: Response) => {
-    const { isSuspended, isActive, name } = req.body;
+    const { isSuspended, isActive, isPublished, name } = req.body;
     await prisma.market.update({
       where: { id: req.params.id },
       data: {
         ...(isSuspended !== undefined ? { isSuspended } : {}),
         ...(isActive    !== undefined ? { isActive    } : {}),
+        ...(isPublished !== undefined ? { isPublished } : {}),
         ...(name        !== undefined ? { name        } : {}),
       },
     });

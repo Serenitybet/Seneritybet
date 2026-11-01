@@ -30,7 +30,10 @@ sportsRouter.get("/events/:id", asyncHandler(async (req: Request, res: Response)
     include: {
       competition: { include: { sport: true } },
       markets: {
-        where: { isActive: true },
+        // isPublished : brouillon invisible tant qu'un admin ne l'a pas
+        // explicitement publié depuis le backoffice (demande explicite du
+        // 01/11/2026) — même filtre que getUpcomingEvents.
+        where: { isActive: true, isPublished: true },
         include: { odds: { where: { isActive: true } } },
       },
     },
