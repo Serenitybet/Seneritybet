@@ -60,6 +60,9 @@ export default function StaffPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [roleEditId, setRoleEditId] = useState<string | null>(null);
+  const [passwordModal, setPasswordModal] = useState<Staff | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
 
   function token() { return localStorage.getItem("bo_token"); }
   function authHeaders(extra?: Record<string, string>) {
@@ -127,6 +130,24 @@ export default function StaffPage() {
       toast.success("Code mis à jour ✓");
       load();
     } catch { toast.error("Erreur réseau"); }
+  }
+
+  async function submitPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!passwordModal || newPassword.length < 6) return;
+    setSavingPassword(true);
+    try {
+      const res = await fetch(`${API}/admin/users/${passwordModal.id}/password`, {
+        method: "PATCH", headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ newPassword }),
+      });
+      const d = await res.json();
+      if (!res.ok) { toast.error(d.error ?? "Erreur"); return; }
+      toast.success(`Mot de passe de ${passwordModal.firstName} ${passwordModal.lastName} réinitialisé ✓`);
+      setPasswordModal(null);
+      setNewPassword("");
+    } catch { toast.error("Erreur réseau"); }
+    finally { setSavingPassword(false); }
   }
 
   async function toggleStatus(s: Staff) {
@@ -209,6 +230,11 @@ export default function StaffPage() {
                     <button className="bo-btn-secondary bo-btn-sm" onClick={() => editCashierCode(s)}>🔑 Code TPE</button>
                   )}
                   {manageable && (
+                    <button className="bo-btn-secondary bo-btn-sm" onClick={() => { setPasswordModal(s); setNewPassword(""); }}>
+                      🔒 Mot de passe
+                    </button>
+                  )}
+                  {manageable && (
                     <button
                       className={`bo-btn-sm ${s.status === "SUSPENDED" ? "bo-btn-primary" : "bo-btn-danger"}`}
                       onClick={() => toggleStatus(s)}
@@ -285,6 +311,33 @@ export default function StaffPage() {
                 <button type="button" onClick={() => setShowModal(false)} className="bo-btn-secondary flex-1">Annuler</button>
                 <button type="submit" disabled={saving} className="bo-btn-primary flex-1">
                   {saving ? "Création…" : "Créer"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {passwordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-bo-card border border-bo-border rounded-2xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-base font-bold text-t-primary">
+                🔒 Réinitialiser le mot de passe — {passwordModal.firstName} {passwordModal.lastName}
+              </h2>
+              <button onClick={() => setPasswordModal(null)} className="text-t-faint hover:text-t-primary text-lg">✕</button>
+            </div>
+            <form onSubmit={submitPassword} className="space-y-3">
+              <div>
+                <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1.5">Nouveau mot de passe *</label>
+                <input className="bo-input w-full" type="password" required minLength={6} autoFocus
+                  value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                <p className="text-[11px] text-t-faint mt-1">6 caractères minimum.</p>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setPasswordModal(null)} className="bo-btn-secondary flex-1">Annuler</button>
+                <button type="submit" disabled={savingPassword || newPassword.length < 6} className="bo-btn-primary flex-1">
+                  {savingPassword ? "Enregistrement…" : "Réinitialiser"}
                 </button>
               </div>
             </form>
