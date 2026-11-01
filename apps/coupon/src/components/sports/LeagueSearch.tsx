@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { COUNTRY_FLAG, competitionPriority } from "@/lib/leagueDisplay";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 
@@ -33,7 +34,13 @@ export function LeagueSearch({ activeSport }: { activeSport?: string }) {
     if (activeSport) params.set("sport", activeSport);
     fetch(`${API_URL}/sports/competitions?${params}`)
       .then((r) => r.json())
-      .then((json) => setCompetitions(json.data ?? []))
+      .then((json) => {
+        const data: CompetitionOption[] = json.data ?? [];
+        // Grands championnats d'abord (même ordre que la page d'accueil,
+        // voir lib/leagueDisplay.ts) — tri stable : les autres gardent
+        // l'ordre alphabétique déjà renvoyé par l'API.
+        setCompetitions([...data].sort((a, b) => competitionPriority(a.name) - competitionPriority(b.name)));
+      })
       .catch(() => setCompetitions([]))
       .finally(() => setLoading(false));
   }, [activeSport]);
@@ -50,16 +57,20 @@ export function LeagueSearch({ activeSport }: { activeSport?: string }) {
   return (
     <div className="relative">
       <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-txt-muted text-sm">🏆</span>
+      {/* Majuscules + drapeau devant chaque championnat — demande explicite
+          du 01/11/2026, sur le modèle d'un concurrent (Pariez Cash). Le
+          "uppercase" ne porte que sur l'affichage (CSS) : la valeur envoyée
+          au serveur reste le nom exact tel qu'enregistré en base. */}
       <select
         value={competitions.some((c) => c.name === selected) ? selected : ""}
         onChange={(e) => navigate(e.target.value)}
         disabled={loading}
-        className="field w-full text-sm pl-8 pr-8 appearance-none disabled:opacity-60"
+        className="field w-full text-sm pl-8 pr-8 appearance-none uppercase disabled:opacity-60"
       >
-        <option value="">{loading ? "Chargement des championnats…" : "Tous les championnats"}</option>
+        <option value="">{loading ? "Chargement des championnats…" : "🌐 Tous les championnats"}</option>
         {competitions.map((c) => (
           <option key={c.id} value={c.name}>
-            {c.name}{c.country ? ` — ${c.country}` : ""}
+            {c.country ? COUNTRY_FLAG[c.country] ?? "🌐" : "🌐"} {c.name}{c.country ? ` — ${c.country}` : ""}
           </option>
         ))}
       </select>
