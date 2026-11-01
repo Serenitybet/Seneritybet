@@ -55,6 +55,33 @@ interface CompGroup {
   events:   EventDTO[];
 }
 
+// Grands championnats affichés en premier, dans cet ordre — demande explicite
+// du 01/11/2026. Noms exacts tels qu'enregistrés en base (voir SPORTS_CONFIG,
+// odds.service.ts) : un nom absent de cette liste n'est pas une erreur, il
+// retombe simplement en fin de liste, dans l'ordre chronologique habituel
+// (prochain match le plus proche en premier).
+const BIG_COMPETITIONS_PRIORITY = [
+  "Champions League",
+  "Premier League",
+  "La Liga",
+  "Serie A",
+  "Bundesliga",
+  "Ligue 1",
+  "CAN (Coupe d'Afrique des Nations)",
+  "Coupe du Monde FIFA",
+  "Euro (Championnat d'Europe)",
+  "Europa League",
+  "Copa América",
+  "Copa Libertadores",
+  "Saudi Pro League",
+  "NBA",
+];
+
+function competitionPriority(name: string): number {
+  const idx = BIG_COMPETITIONS_PRIORITY.indexOf(name);
+  return idx === -1 ? BIG_COMPETITIONS_PRIORITY.length : idx;
+}
+
 function groupByCompetition(events: EventDTO[]): CompGroup[] {
   const map = new Map<string, CompGroup>();
   for (const ev of events) {
@@ -74,7 +101,12 @@ function groupByCompetition(events: EventDTO[]): CompGroup[] {
     }
     map.get(key)!.events.push(ev);
   }
-  return [...map.values()];
+  // Array.prototype.sort est stable (garanti depuis ES2019) : les
+  // championnats absents de la liste de priorité (même rang = longueur de la
+  // liste) gardent donc leur ordre relatif d'origine, c'est-à-dire
+  // chronologique par prochain match — seuls les grands championnats sont
+  // remontés en tête, le reste n'est pas perturbé.
+  return [...map.values()].sort((a, b) => competitionPriority(a.compName) - competitionPriority(b.compName));
 }
 
 interface SportGroup {
