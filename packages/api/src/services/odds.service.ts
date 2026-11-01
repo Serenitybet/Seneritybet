@@ -523,11 +523,14 @@ async function generateLevel1Markets(eventId: string, homeTeam: string, awayTeam
 //
 // Ces marchés ne sont disponibles que via l'endpoint par match (pas par
 // championnat), donc 1 appel = 1 match au lieu de 1 appel = 1 championnat.
-// Fenêtre alignée sur le sync principal (J0 à J+7) : les parieurs doivent
-// pouvoir composer des combinés sur toute la semaine avec les mêmes options,
-// pas seulement sur les matchs des 48h à venir. Le coût réel (quelques
-// milliers de crédits pour couvrir tout le calendrier de la semaine, sur
-// 100 000/mois) ne justifie pas d'étaler la couverture sur plusieurs heures :
+// Fenêtre alignée sur la fenêtre d'affichage du site (J0 à J+14, demande
+// explicite du 01/11/2026 — un match affiché à J+10 n'avait jusqu'ici que
+// le strict minimum de marchés, faute d'être encore dans cette fenêtre) :
+// les parieurs doivent pouvoir composer des combinés sur les 14 jours
+// affichés avec les mêmes options, pas seulement sur les matchs des 48h à
+// venir. Le coût réel (quelques milliers de crédits pour couvrir tout le
+// calendrier des deux semaines, sur 100 000/mois) ne justifie pas d'étaler
+// la couverture sur plusieurs heures :
 // plafond large pour que tout le calendrier passe en un seul cycle (toutes
 // les 30 min), récupéré une seule fois par match (pas de rafraîchissement
 // répété comme pour les marchés principaux). Les crédits utilisés/restants
@@ -548,7 +551,7 @@ export async function syncExtraMarkets() {
   if (!API_KEY) return;
 
   const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() + 7);
+  cutoff.setDate(cutoff.getDate() + 14);
 
   const events = await prisma.event.findMany({
     where: {
@@ -786,8 +789,10 @@ const PROP_MARKETS_VERSION = 1;
 export async function syncPropMarkets() {
   if (!API_KEY) return;
 
+  // Fenêtre étendue à J+14 (comme syncExtraMarkets ci-dessus) — demande
+  // explicite du 01/11/2026.
   const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() + 7);
+  cutoff.setDate(cutoff.getDate() + 14);
 
   const events = await prisma.event.findMany({
     where: {
@@ -956,8 +961,10 @@ const HALF_MARKETS_VERSION = 2; // v2: totaux/handicap mi-temps n'étaient plus 
 export async function syncHalfMarkets() {
   if (!API_KEY) return;
 
+  // Fenêtre étendue à J+14 (comme syncExtraMarkets/syncPropMarkets) — demande
+  // explicite du 01/11/2026.
   const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() + 7);
+  cutoff.setDate(cutoff.getDate() + 14);
 
   const events = await prisma.event.findMany({
     where: {
