@@ -4,13 +4,17 @@ import { syncApiFootballSettlement } from "../services/api-football.service";
 
 // ─── Budget crédits TheOddsAPI ────────────────────────────────────────────────
 // Plan 5M/mois (passage depuis 100K le 20/10/2026 pour supporter ce rythme).
+// Quota utilisé à ~1% en pratique (52k/5M sur la période en cours) : grosse
+// marge, d'où la fréquence des cotes principales resserrée le 01/11/2026
+// (demande explicite) de 5 à 2 minutes pour des cotes plus fraîches.
 // Les cotes principales et les résultats se répètent à CHAQUE cycle pour
 // TOUS les matchs — ce sont elles qui scalent avec la fréquence :
-//   17 championnats × 12 syncs/heure (5 min) × 24h × 30j = ~147 000
-//   crédits/mois (cotes principales), autant pour les résultats (5 min
-//   aussi) = ~147 000 crédits/mois. Total ~294 000/mois, moins de 6% du
-//   palier 5M — grosse marge, y compris pour une fréquence encore plus
-//   élevée si besoin.
+//   17 championnats × 30 syncs/heure (2 min) × 24h × 30j = ~367 200
+//   crédits/mois (cotes principales), ~147 000 crédits/mois pour les
+//   résultats (restés à 5 min, pas de bénéfice à les accélérer autant — le
+//   règlement n'est pas aussi sensible à la fraîcheur que l'affichage des
+//   cotes). Total ~514 000/mois, environ 10% du palier 5M — grosse marge
+//   restante, y compris pour une fréquence encore plus élevée si besoin.
 // + marchés additionnels (BTTS, double chance, score exact, remboursé si nul,
 //   plus/moins alternatif, handicap alternatif, totaux par équipe — 7
 //   marchés × 1 région = 7 crédits/match, tous les championnats, matchs des
@@ -35,7 +39,7 @@ import { syncApiFootballSettlement } from "../services/api-football.service";
 //   temps.
 // À SURVEILLER sur le dashboard TheOddsAPI les premières semaines.
 
-const ODDS_INTERVAL_MS          = 5  * 60 * 1000; // 5 minutes  — cotes principales
+const ODDS_INTERVAL_MS          = 2  * 60 * 1000; // 2 minutes  — cotes principales (resserré depuis 5 min, demande explicite du 01/11/2026)
 const EXTRA_MARKETS_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes — marchés additionnels
 const PROP_MARKETS_INTERVAL_MS  = 17 * 60 * 1000; // 17 minutes — marchés stats (corners, cartons, vainqueur mi-temps)
 const HALF_MARKETS_INTERVAL_MS  = 19 * 60 * 1000; // 19 minutes — marchés mi-temps (plus/moins, handicap, double chance)
@@ -120,7 +124,7 @@ async function runMarkLiveEvents() {
 
 export function startOddsSyncWorker() {
   const credits = getCreditsStatus();
-  console.log(`📡 Worker cotes démarré — sync toutes les 5 min, marchés additionnels toutes les 15 min, marchés stats toutes les 17 min, marchés mi-temps toutes les 19 min, résultats toutes les 5 min`);
+  console.log(`📡 Worker cotes démarré — sync toutes les 2 min, marchés additionnels toutes les 15 min, marchés stats toutes les 17 min, marchés mi-temps toutes les 19 min, résultats toutes les 5 min`);
   if (credits.remaining !== null) {
     console.log(`   Crédits restants : ${credits.remaining}`);
   }
