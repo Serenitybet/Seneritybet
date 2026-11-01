@@ -13,6 +13,26 @@ sportsRouter.get("/", asyncHandler(async (_req: Request, res: Response) => {
   res.json({ success: true, data: sports });
 }));
 
+// GET /api/sports/competitions — liste des championnats ayant au moins un
+// match à venir, pour le menu déroulant du site public (LeagueSearch.tsx) —
+// demande explicite du 01/11/2026 : jusqu'ici un simple champ de saisie
+// libre, sans moyen de voir la liste des championnats disponibles. Limité
+// aux championnats ayant réellement un match à venir, pour qu'aucune
+// option du menu ne mène à une liste vide.
+sportsRouter.get("/competitions", asyncHandler(async (req: Request, res: Response) => {
+  const sport = req.query.sport as string | undefined;
+  const competitions = await prisma.competition.findMany({
+    where: {
+      isActive: true,
+      ...(sport ? { sport: { slug: sport } } : {}),
+      events: { some: { status: "UPCOMING" } },
+    },
+    select: { id: true, name: true, country: true },
+    orderBy: { name: "asc" },
+  });
+  res.json({ success: true, data: competitions });
+}));
+
 sportsRouter.get("/events", asyncHandler(async (req: Request, res: Response) => {
   const sport    = req.query.sport as string | undefined;
   const page     = parseInt((req.query.page  as string) ?? "1",  10);
