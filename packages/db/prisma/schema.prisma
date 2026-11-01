@@ -120,6 +120,15 @@ enum MarketType {
   // Niveau 3 — extraits de la même réponse API-Football que corners/cartons.
   SHOTS_ON_TARGET_TOTAL
   FOULS_TOTAL
+  // Marchés TheOddsAPI supplémentaires activés le 01/11/2026 (demande
+  // explicite : utiliser toutes les options proposées par TheOddsAPI pour
+  // football/basketball/tennis). Même principe que FIRST_HALF_WINNER/
+  // CORNERS_TOTAL ci-dessus : réglage manuel par un trader, TheOddsAPI ne
+  // fournissant ni le score mi-temps, ni le détail des corners par issue,
+  // ni le résultat par set.
+  BOTH_TEAMS_SCORE_FIRST_HALF
+  CORNERS_1X2
+  FIRST_SET_WINNER
 }
 
 enum BetType {
@@ -361,6 +370,19 @@ model Event {
   // la même raison : isoler un échec sur une clé encore non confirmée côté
   // TheOddsAPI du reste des marchés déjà éprouvés.
   halfMarketsVersion Int @default(0)
+
+  // Même principe que halfMarketsVersion, pour les mi-temps basketball
+  // (totals_h1/h2, spreads_h1/h2 — pas de double_chance, le basket n'a pas
+  // de match nul) — voir odds.service.ts syncBasketballHalfMarkets. Champ
+  // séparé (plutôt que réutiliser halfMarketsVersion) car les deux lots
+  // portent sur des compétitions disjointes (foot vs basket) : un
+  // changement de version sur l'un ne doit jamais forcer un re-sync inutile
+  // sur l'autre.
+  basketballHalfMarketsVersion Int @default(0)
+
+  // Vainqueur du 1er set (tennis uniquement) — voir odds.service.ts
+  // syncTennisSetMarkets.
+  tennisSetMarketsVersion Int @default(0)
 
   // Nombre de tentatives de règlement automatique via API-Football (mi-temps,
   // corners, cartons — voir api-football.service.ts) pour cet évènement.

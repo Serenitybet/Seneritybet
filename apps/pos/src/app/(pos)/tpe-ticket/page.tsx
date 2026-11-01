@@ -47,6 +47,9 @@ const LABEL_ORDER: Record<string, string[]> = {
   DRAW_NO_BET: ["1", "2"],
   FIRST_HALF_DOUBLE_CHANCE: ["1X", "12", "X2"],
   SECOND_HALF_DOUBLE_CHANCE: ["1X", "12", "X2"],
+  BOTH_TEAMS_SCORE_FIRST_HALF: ["Oui", "Non"],
+  CORNERS_1X2: ["1", "X", "2"],
+  FIRST_SET_WINNER: ["1", "2"],
 };
 function sortOddsForDisplay(market: Market): Odd[] {
   const order = LABEL_ORDER[market.type];

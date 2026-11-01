@@ -363,7 +363,7 @@ async function upsertEvent(competitionId: string, game: any, sportSlug = "footba
           // une fusion de reprogrammation : remettre ces versions à 0 à
           // chaque sync normal (externalId inchangé) gaspillerait des
           // crédits en re-synchronisant tous les matchs à chaque cycle.
-          ...(rescheduleMerge ? { extraMarketsVersion: 0, propMarketsVersion: 0, halfMarketsVersion: 0 } : {}),
+          ...(rescheduleMerge ? { extraMarketsVersion: 0, propMarketsVersion: 0, halfMarketsVersion: 0, basketballHalfMarketsVersion: 0, tennisSetMarketsVersion: 0 } : {}),
         },
       })
     : await prisma.event.create({
@@ -545,7 +545,7 @@ const EXTRA_MARKETS_LIMIT = 600;
 // À incrémenter à chaque fois que le jeu de marchés additionnels change
 // (ajout/retrait d'une clé dans l'appel ci-dessous), pour que les matchs
 // déjà traités sous une version antérieure soient retraités une fois.
-const EXTRA_MARKETS_VERSION = 7; // v1: btts+double_chance ; v2: + correct_score, draw_no_bet, alternate_totals ; v3: fix libellé double chance + plus/moins à 6 lignes ; v4: plus/moins alternatif limité aux lignes X.5 ; v5: + handicap alternatif ; v6: + totaux par équipe ; v7: fix plus/moins alternatif laissait passer les lignes au quart (3.75, 4.25)
+const EXTRA_MARKETS_VERSION = 8; // v1: btts+double_chance ; v2: + correct_score, draw_no_bet, alternate_totals ; v3: fix libellé double chance + plus/moins à 6 lignes ; v4: plus/moins alternatif limité aux lignes X.5 ; v5: + handicap alternatif ; v6: + totaux par équipe ; v7: fix plus/moins alternatif laissait passer les lignes au quart (3.75, 4.25) ; v8: + alternate_team_totals fusionné dans TEAM_TOTALS (plus de lignes par équipe — demande explicite du 01/11/2026)
 
 export async function syncExtraMarkets() {
   if (!API_KEY) return;
@@ -581,7 +581,7 @@ export async function syncExtraMarkets() {
           params: {
             apiKey:     API_KEY,
             regions:    "eu",
-            markets:    "btts,double_chance,correct_score,draw_no_bet,alternate_totals,alternate_spreads,team_totals",
+            markets:    "btts,double_chance,correct_score,draw_no_bet,alternate_totals,alternate_spreads,team_totals,alternate_team_totals",
             oddsFormat: "decimal",
             dateFormat: "iso",
           },
@@ -614,7 +614,7 @@ export async function syncExtraMarkets() {
     }
   }
 
-  if (synced > 0) console.log(`🎯 Marchés additionnels (BTTS, double chance, score exact, remboursé si nul, plus/moins alternatif, handicap alternatif, totaux par équipe) : ${synced} match(s) synchronisés`);
+  if (synced > 0) console.log(`🎯 Marchés additionnels (BTTS, double chance, score exact, remboursé si nul, plus/moins alternatif, handicap alternatif, totaux par équipe élargis) : ${synced} match(s) synchronisés`);
 }
 
 // Pas un seul bookmaker n'offre systématiquement les 4 marchés (vérifié
@@ -644,7 +644,34 @@ const ALTERNATE_SPREADS_MAX_LINES = 6;
 // souvent une seule ligne par équipe chez la plupart des bookmakers).
 const TEAM_TOTALS_MAX_LINES_PER_TEAM = 3;
 
+// alternate_team_totals ("toutes les lignes disponibles") complète team_totals
+// ("ligne vedette") plutôt que de la remplacer — fusionné dans la clé
+// team_totals AVANT le traitement principal (qui ne garde qu'une seule clé
+// par type de marché, voir seenTypes plus bas), pour que les deux
+// contribuent ensemble au même marché TEAM_TOTALS au lieu de s'exclure.
+function mergeAlternateTeamTotals(bookmakers: any[]) {
+  for (const bookmaker of bookmakers) {
+    const markets = bookmaker.markets ?? [];
+    const featured  = markets.find((m: any) => m.key === "team_totals");
+    const alternate = markets.find((m: any) => m.key === "alternate_team_totals");
+    if (!alternate) continue;
+    if (featured) {
+      const seen = new Set(featured.outcomes.map((o: any) => `${o.description}|${o.point}|${o.name}`));
+      for (const o of alternate.outcomes) {
+        const key = `${o.description}|${o.point}|${o.name}`;
+        if (!seen.has(key)) { featured.outcomes.push(o); seen.add(key); }
+      }
+    } else {
+      // Pas de ligne vedette chez ce bookmaker : alternate_team_totals devient
+      // directement la source du marché.
+      alternate.key = "team_totals";
+    }
+    bookmaker.markets = markets.filter((m: any) => m.key !== "alternate_team_totals");
+  }
+}
+
 async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: string, bookmakers: any[]) {
+  mergeAlternateTeamTotals(bookmakers);
   const priorityKeys = ["bet365", "unibet", "betway", "onexbet", "pinnacle"];
   const orderedBookmakers = [
     ...priorityKeys.map((k) => bookmakers.find((b: any) => b.key === k)).filter(Boolean),
@@ -783,8 +810,16 @@ async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: s
 const FOOTBALL_SPORT_KEY_BY_COMPETITION_NAME: Record<string, string> = Object.fromEntries(
   SPORTS_CONFIG.filter((c) => c.slug === "football").map((c) => [c.name, c.key]),
 );
+// Mêmes cartes pour basketball (syncBasketballHalfMarkets) et tennis
+// (syncTennisSetMarkets) ci-dessous — demande explicite du 01/11/2026.
+const BASKETBALL_SPORT_KEY_BY_COMPETITION_NAME: Record<string, string> = Object.fromEntries(
+  SPORTS_CONFIG.filter((c) => c.slug === "basketball").map((c) => [c.name, c.key]),
+);
+const TENNIS_SPORT_KEY_BY_COMPETITION_NAME: Record<string, string> = Object.fromEntries(
+  SPORTS_CONFIG.filter((c) => c.slug === "tennis").map((c) => [c.name, c.key]),
+);
 const PROP_MARKETS_LIMIT = 600;
-const PROP_MARKETS_VERSION = 1;
+const PROP_MARKETS_VERSION = 2; // v2: + BTTS 1ère mi-temps, score exact à la mi-temps, mi-temps/fin de match, corners 1X2 (demande explicite du 01/11/2026 : utiliser toutes les options proposées par TheOddsAPI)
 
 export async function syncPropMarkets() {
   if (!API_KEY) return;
@@ -818,7 +853,7 @@ export async function syncPropMarkets() {
           params: {
             apiKey:     API_KEY,
             regions:    "eu",
-            markets:    "h2h_h1,h2h_h2,alternate_totals_corners,alternate_spreads_corners,alternate_totals_cards,alternate_spreads_cards",
+            markets:    "h2h_h1,h2h_h2,alternate_totals_corners,alternate_spreads_corners,alternate_totals_cards,alternate_spreads_cards,btts_h1,correct_score_h1,halftime_fulltime,corners_1x2",
             oddsFormat: "decimal",
             dateFormat: "iso",
           },
@@ -849,7 +884,7 @@ export async function syncPropMarkets() {
     }
   }
 
-  if (synced > 0) console.log(`🥅 Marchés stats (1ère/2nde mi-temps, corners, cartons) : ${synced} match(s) synchronisés`);
+  if (synced > 0) console.log(`🥅 Marchés stats (1ère/2nde mi-temps, corners, cartons, BTTS 1MT, score exact 1MT, mi-temps/fin de match, corners 1X2) : ${synced} match(s) synchronisés`);
 }
 
 const PROP_MARKET_TYPE_BY_KEY: Record<string, string> = {
@@ -859,6 +894,10 @@ const PROP_MARKET_TYPE_BY_KEY: Record<string, string> = {
   alternate_spreads_corners:  "CORNERS_HANDICAP",
   alternate_totals_cards:     "CARDS_TOTAL",
   alternate_spreads_cards:    "CARDS_HANDICAP",
+  btts_h1:                    "BOTH_TEAMS_SCORE_FIRST_HALF",
+  correct_score_h1:           "HALF_TIME_CORRECT_SCORE",
+  halftime_fulltime:          "HALF_TIME_FULL_TIME",
+  corners_1x2:                "CORNERS_1X2",
 };
 
 const PROP_TOTALS_MAX_LINES  = 6;
@@ -885,7 +924,11 @@ async function upsertPropMarkets(eventId: string, homeTeam: string, awayTeam: st
         apiMarket.key === "alternate_totals_corners"  ? "Total corners" :
         apiMarket.key === "alternate_spreads_corners" ? "Handicap corners" :
         apiMarket.key === "alternate_totals_cards"    ? "Total cartons" :
-        "Handicap cartons";
+        apiMarket.key === "alternate_spreads_cards"   ? "Handicap cartons" :
+        apiMarket.key === "btts_h1"                   ? "Les deux équipes marquent (1ère mi-temps)" :
+        apiMarket.key === "correct_score_h1"          ? "Score exact à la mi-temps" :
+        apiMarket.key === "halftime_fulltime"         ? "Mi-temps / Fin de match" :
+        "Corners (1X2)";
 
       let market = await prisma.market.findFirst({ where: { eventId, type: marketType as any } });
       if (!market) {
@@ -926,11 +969,30 @@ async function upsertPropMarkets(eventId: string, homeTeam: string, awayTeam: st
           label = `${outcome.name === "Over" ? "Plus" : "Moins"} ${outcome.point} corners`;
         } else if (apiMarket.key === "alternate_totals_cards") {
           label = `${outcome.name === "Over" ? "Plus" : "Moins"} ${outcome.point} cartons`;
-        } else {
-          // alternate_spreads_corners / alternate_spreads_cards
+        } else if (apiMarket.key === "alternate_spreads_corners" || apiMarket.key === "alternate_spreads_cards") {
           const side = outcome.name === homeTeam ? "1" : outcome.name === awayTeam ? "2" : outcome.name;
           const point = Number(outcome.point);
           label = `${side} (${point >= 0 ? "+" : ""}${point})`;
+        } else if (apiMarket.key === "btts_h1") {
+          label = outcome.name === "Yes" ? "Oui" : "Non";
+        } else if (apiMarket.key === "correct_score_h1") {
+          // Même format que correct_score plein match (voir syncExtraMarkets) :
+          // "Équipe1:0|Équipe2:0" → "0-0".
+          const [homePart, awayPart] = String(outcome.name).split("|");
+          const homeGoals = homePart?.split(":").pop()?.trim();
+          const awayGoals = awayPart?.split(":").pop()?.trim();
+          label = homeGoals !== undefined && awayGoals !== undefined ? `${homeGoals}-${awayGoals}` : outcome.name;
+        } else if (apiMarket.key === "halftime_fulltime") {
+          // Format TheOddsAPI : "Équipe/Équipe" (meneur à la mi-temps / vainqueur
+          // au score final), chaque partie étant soit un nom d'équipe soit "Draw"
+          // — converti en notation 1/X/2 (ex. "1/1", "X/2").
+          const toCode = (part: string) =>
+            part === homeTeam ? "1" : part === awayTeam ? "2" : part === "Draw" ? "X" : part;
+          const [htPart, ftPart] = String(outcome.name).split("/");
+          label = htPart !== undefined && ftPart !== undefined ? `${toCode(htPart)}/${toCode(ftPart)}` : outcome.name;
+        } else {
+          // corners_1x2 : équipe avec le plus de corners (ou égalité)
+          label = outcome.name === homeTeam ? "1" : outcome.name === awayTeam ? "2" : outcome.name === "Draw" ? "X" : outcome.name;
         }
 
         const existing = await prisma.odd.findFirst({ where: { marketId: market.id, label } });
@@ -1115,6 +1177,176 @@ async function upsertHalfMarkets(eventId: string, homeTeam: string, awayTeam: st
         }
       }
     }
+  }
+}
+
+// ─── Marchés "mi-temps" — basketball ──────────────────────────────────────────
+//
+// Même famille que syncHalfMarkets (plus/moins, handicap par mi-temps), mais
+// SANS double_chance_h1/h2 (pas de match nul au basket, la clé ne renverrait
+// jamais rien — inutile de payer les crédits pour la demander). Réutilise
+// directement upsertHalfMarkets/HALF_MARKET_TYPE_BY_KEY ci-dessus : les clés
+// totals_h1/h2 et spreads_h1/h2 sont déjà génériques (basées sur les noms
+// d'équipe, rien de spécifique au football). Lot et version séparés de
+// syncHalfMarkets (basketballHalfMarketsVersion) bien que les deux
+// compétitions soient disjointes, pour ne jamais faire re-synchroniser l'un
+// quand l'autre change de version — demande explicite du 01/11/2026.
+const BASKETBALL_HALF_MARKETS_LIMIT = 300;
+const BASKETBALL_HALF_MARKETS_VERSION = 1;
+
+export async function syncBasketballHalfMarkets() {
+  if (!API_KEY) return;
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() + 14);
+
+  const events = await prisma.event.findMany({
+    where: {
+      status: { in: ["UPCOMING", "LIVE"] },
+      startTime: { gte: new Date(), lte: cutoff },
+      competition: { name: { in: Object.keys(BASKETBALL_SPORT_KEY_BY_COMPETITION_NAME) } },
+      basketballHalfMarketsVersion: { lt: BASKETBALL_HALF_MARKETS_VERSION },
+    },
+    include: { competition: true },
+    orderBy: { startTime: "asc" },
+    take: BASKETBALL_HALF_MARKETS_LIMIT,
+  });
+
+  let synced = 0;
+  for (const event of events) {
+    const sportKey = BASKETBALL_SPORT_KEY_BY_COMPETITION_NAME[event.competition.name];
+    if (!sportKey || !event.externalId) continue;
+
+    try {
+      const res = await axios.get(
+        `${ODDS_API_BASE}/sports/${sportKey}/events/${event.externalId}/odds`,
+        {
+          params: {
+            apiKey:     API_KEY,
+            regions:    "eu",
+            markets:    "totals_h1,totals_h2,spreads_h1,spreads_h2",
+            oddsFormat: "decimal",
+            dateFormat: "iso",
+          },
+          timeout: 10000,
+        },
+      );
+
+      const remaining = parseInt(res.headers["x-requests-remaining"] ?? "-1", 10);
+      if (remaining >= 0) updateCredits(remaining);
+
+      await upsertHalfMarkets(event.id, event.homeTeam, event.awayTeam, res.data?.bookmakers ?? []);
+      await prisma.event.update({ where: { id: event.id }, data: { basketballHalfMarketsVersion: BASKETBALL_HALF_MARKETS_VERSION } });
+      synced++;
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        console.error("ODDS_API_KEY invalide ou quota dépassé");
+        break;
+      }
+      console.warn(`⚠️  Marchés mi-temps basket — échec pour ${event.homeTeam} vs ${event.awayTeam} : ${err.response?.status ?? "?"} ${JSON.stringify(err.response?.data ?? err.message)}`);
+      if (err.response?.status === 404 || err.response?.status === 422) {
+        await prisma.event.update({ where: { id: event.id }, data: { basketballHalfMarketsVersion: BASKETBALL_HALF_MARKETS_VERSION } }).catch(() => {});
+      }
+    }
+  }
+
+  if (synced > 0) console.log(`🏀 Marchés mi-temps basket (plus/moins, handicap) : ${synced} match(s) synchronisés`);
+}
+
+// ─── Vainqueur du 1er set — tennis ─────────────────────────────────────────────
+//
+// Clé TheOddsAPI h2h_s1 (catalogue officiel, section "Game Period Markets")
+// — demande explicite du 01/11/2026. Non calculable automatiquement (le
+// score final ne dit rien du vainqueur du 1er set) : réglage manuel par un
+// trader, comme les marchés mi-temps/corners/cartons au football.
+const TENNIS_SET_MARKETS_LIMIT = 300;
+const TENNIS_SET_MARKETS_VERSION = 1;
+
+export async function syncTennisSetMarkets() {
+  if (!API_KEY) return;
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() + 14);
+
+  const events = await prisma.event.findMany({
+    where: {
+      status: { in: ["UPCOMING", "LIVE"] },
+      startTime: { gte: new Date(), lte: cutoff },
+      competition: { name: { in: Object.keys(TENNIS_SPORT_KEY_BY_COMPETITION_NAME) } },
+      tennisSetMarketsVersion: { lt: TENNIS_SET_MARKETS_VERSION },
+    },
+    include: { competition: true },
+    orderBy: { startTime: "asc" },
+    take: TENNIS_SET_MARKETS_LIMIT,
+  });
+
+  let synced = 0;
+  for (const event of events) {
+    const sportKey = TENNIS_SPORT_KEY_BY_COMPETITION_NAME[event.competition.name];
+    if (!sportKey || !event.externalId) continue;
+
+    try {
+      const res = await axios.get(
+        `${ODDS_API_BASE}/sports/${sportKey}/events/${event.externalId}/odds`,
+        {
+          params: {
+            apiKey:     API_KEY,
+            regions:    "eu",
+            markets:    "h2h_s1",
+            oddsFormat: "decimal",
+            dateFormat: "iso",
+          },
+          timeout: 10000,
+        },
+      );
+
+      const remaining = parseInt(res.headers["x-requests-remaining"] ?? "-1", 10);
+      if (remaining >= 0) updateCredits(remaining);
+
+      await upsertTennisSetMarkets(event.id, event.homeTeam, event.awayTeam, res.data?.bookmakers ?? []);
+      await prisma.event.update({ where: { id: event.id }, data: { tennisSetMarketsVersion: TENNIS_SET_MARKETS_VERSION } });
+      synced++;
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        console.error("ODDS_API_KEY invalide ou quota dépassé");
+        break;
+      }
+      console.warn(`⚠️  Vainqueur 1er set — échec pour ${event.homeTeam} vs ${event.awayTeam} : ${err.response?.status ?? "?"} ${JSON.stringify(err.response?.data ?? err.message)}`);
+      if (err.response?.status === 404 || err.response?.status === 422) {
+        await prisma.event.update({ where: { id: event.id }, data: { tennisSetMarketsVersion: TENNIS_SET_MARKETS_VERSION } }).catch(() => {});
+      }
+    }
+  }
+
+  if (synced > 0) console.log(`🎾 Vainqueur du 1er set : ${synced} match(s) synchronisés`);
+}
+
+async function upsertTennisSetMarkets(eventId: string, homeTeam: string, awayTeam: string, bookmakers: any[]) {
+  const priorityKeys = ["bet365", "unibet", "betway", "onexbet", "pinnacle"];
+  const orderedBookmakers = [
+    ...priorityKeys.map((k) => bookmakers.find((b: any) => b.key === k)).filter(Boolean),
+    ...bookmakers,
+  ];
+
+  for (const bookmaker of orderedBookmakers) {
+    const apiMarket = (bookmaker.markets ?? []).find((m: any) => m.key === "h2h_s1");
+    if (!apiMarket) continue;
+
+    let market = await prisma.market.findFirst({ where: { eventId, type: "FIRST_SET_WINNER" as any } });
+    if (!market) {
+      market = await prisma.market.create({ data: { eventId, name: "Vainqueur du 1er set", type: "FIRST_SET_WINNER" as any } });
+    }
+
+    for (const outcome of apiMarket.outcomes) {
+      const label = outcome.name === homeTeam ? "1" : outcome.name === awayTeam ? "2" : outcome.name;
+      const existing = await prisma.odd.findFirst({ where: { marketId: market.id, label } });
+      if (existing) {
+        await prisma.odd.update({ where: { id: existing.id }, data: { value: outcome.price } });
+      } else {
+        await prisma.odd.create({ data: { marketId: market.id, label, value: outcome.price } });
+      }
+    }
+    break; // un seul bookmaker pour ce marché à source unique
   }
 }
 

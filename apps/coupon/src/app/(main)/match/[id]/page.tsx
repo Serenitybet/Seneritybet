@@ -8,7 +8,7 @@ import { fr } from "date-fns/locale";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
 
-// Les 18 types de marché que notre sync TheOddsAPI alimente (voir
+// Tous les types de marché que notre sync TheOddsAPI alimente (voir
 // packages/api/src/services/odds.service.ts) — tous doivent pouvoir être
 // consultés et sélectionnés ici, pas seulement un sous-ensemble.
 // FIRST_HALF_WINNER/SECOND_HALF_WINNER/CORNERS_*/CARDS_* ne sont pas
@@ -54,6 +54,13 @@ const MARKET_LABELS: Record<string, string> = {
   BOTH_HALVES_SCORE:       "⏱ Marque dans les 2 mi-temps",
   SHOTS_ON_TARGET_TOTAL:   "🎯 Plus/Moins tirs cadrés",
   FOULS_TOTAL:              "🟥 Plus/Moins fautes",
+  // Marchés TheOddsAPI supplémentaires activés le 01/11/2026 (demande
+  // explicite : utiliser toutes les options proposées par TheOddsAPI pour
+  // foot/basket/tennis) — réglage manuel par un trader, même principe que
+  // CORNERS_TOTAL/HALF_TIME_FULL_TIME ci-dessus.
+  BOTH_TEAMS_SCORE_FIRST_HALF: "⚽ Les 2 équipes marquent (1ère mi-temps)",
+  CORNERS_1X2:                 "🚩 Plus de corners (1X2)",
+  FIRST_SET_WINNER:            "🎾 Vainqueur du 1er set",
 };
 
 // Ordre d'affichage des onglets — les marchés les plus pariés en premier.
@@ -70,12 +77,12 @@ const HALF_TIME_TYPES = [
   "SECOND_HALF_WINNER", "SECOND_HALF_TOTALS", "SECOND_HALF_HANDICAP", "SECOND_HALF_DOUBLE_CHANCE",
 ];
 const MARKET_TAB_ORDER = [
-  "MATCH_WINNER", "DOUBLE_CHANCE", "OVER_UNDER", "BOTH_TEAMS_SCORE",
+  "MATCH_WINNER", "FIRST_SET_WINNER", "DOUBLE_CHANCE", "OVER_UNDER", "BOTH_TEAMS_SCORE",
   "HANDICAP", "CORRECT_SCORE", "TEAM_TOTALS", "DRAW_NO_BET",
   "HALF_TIME",
   "ODD_EVEN_TOTAL", "CLEAN_SHEET", "WIN_TO_NIL", "WINNING_MARGIN", "TEAM_GOALS",
-  "HALF_TIME_CORRECT_SCORE", "HALF_TIME_FULL_TIME", "BOTH_HALVES_SCORE",
-  "CORNERS_TOTAL", "CORNERS_HANDICAP", "CARDS_TOTAL", "CARDS_HANDICAP",
+  "HALF_TIME_CORRECT_SCORE", "HALF_TIME_FULL_TIME", "BOTH_HALVES_SCORE", "BOTH_TEAMS_SCORE_FIRST_HALF",
+  "CORNERS_TOTAL", "CORNERS_HANDICAP", "CORNERS_1X2", "CARDS_TOTAL", "CARDS_HANDICAP",
   "SHOTS_ON_TARGET_TOTAL", "FOULS_TOTAL",
   "FIRST_GOAL_SCORER", "HALF_TIME_RESULT",
 ];

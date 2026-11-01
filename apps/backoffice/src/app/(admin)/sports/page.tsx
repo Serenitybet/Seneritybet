@@ -40,6 +40,14 @@ const MARKET_TYPES: { value: string; label: string; defaultOdds: { label: string
   { value: "BOTH_HALVES_SCORE",       label: "Marque dans les 2 mi-temps", defaultOdds: [{ label: "Domicile Oui", value: "2.60" }, { label: "Domicile Non", value: "1.45" }, { label: "Extérieur Oui", value: "3.40" }, { label: "Extérieur Non", value: "1.25" }] },
   { value: "SHOTS_ON_TARGET_TOTAL",   label: "Plus/Moins tirs cadrés",     defaultOdds: [{ label: "Plus 8.5", value: "1.90" }, { label: "Moins 8.5", value: "1.90" }] },
   { value: "FOULS_TOTAL",             label: "Plus/Moins fautes",          defaultOdds: [{ label: "Plus 22.5", value: "1.90" }, { label: "Moins 22.5", value: "1.90" }] },
+  // Marchés TheOddsAPI supplémentaires activés le 01/11/2026 (demande
+  // explicite : utiliser toutes les options proposées par TheOddsAPI pour
+  // foot/basket/tennis) — normalement synchronisés automatiquement, cette
+  // entrée sert surtout de filet pour un match que la sync n'aurait pas
+  // couvert. Réglage manuel, comme les marchés "stats" ci-dessus.
+  { value: "BOTH_TEAMS_SCORE_FIRST_HALF", label: "Les 2 équipes marquent (1ère mi-temps)", defaultOdds: [{ label: "Oui", value: "3.20" }, { label: "Non", value: "1.30" }] },
+  { value: "CORNERS_1X2",                 label: "Plus de corners (1X2)",                  defaultOdds: [{ label: "1", value: "1.80" }, { label: "X", value: "5.50" }, { label: "2", value: "2.10" }] },
+  { value: "FIRST_SET_WINNER",            label: "Vainqueur du 1er set",                   defaultOdds: [{ label: "1", value: "1.70" }, { label: "2", value: "2.05" }] },
 ];
 
 // Football/basketball/tennis seulement (demande explicite du 31/10/2026) —
