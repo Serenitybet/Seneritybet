@@ -4,17 +4,10 @@ import { SportNav } from "@/components/sports/SportNav";
 import { DateTabs } from "@/components/sports/DateTabs";
 import { LeagueSearch } from "@/components/sports/LeagueSearch";
 import { PromoCarousel } from "@/components/layout/PromoCarousel";
+import { COUNTRY_FLAG, competitionPriority } from "@/lib/leagueDisplay";
 import type { EventDTO } from "@serenitybet/shared";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
-
-const COUNTRY_FLAG: Record<string, string> = {
-  England: "🏴", France: "🇫🇷", Spain: "🇪🇸", Italy: "🇮🇹", Germany: "🇩🇪",
-  Europe: "🇪🇺", Brazil: "🇧🇷", Argentina: "🇦🇷", USA: "🇺🇸", Mexico: "🇲🇽",
-  Japan: "🇯🇵", Turkey: "🇹🇷", Australia: "🇦🇺", Netherlands: "🇳🇱", Portugal: "🇵🇹",
-  Africa: "🌍", World: "🌐", Chad: "🇹🇩", "South America": "🌎",
-  "South Korea": "🇰🇷", Canada: "🇨🇦", "North America": "🌎",
-};
 
 async function getEvents(sport?: string, date?: string, league?: string) {
   try {
@@ -53,33 +46,6 @@ interface CompGroup {
   sportName: string;
   sportSlug: string;
   events:   EventDTO[];
-}
-
-// Grands championnats affichés en premier, dans cet ordre — demande explicite
-// du 01/11/2026. Noms exacts tels qu'enregistrés en base (voir SPORTS_CONFIG,
-// odds.service.ts) : un nom absent de cette liste n'est pas une erreur, il
-// retombe simplement en fin de liste, dans l'ordre chronologique habituel
-// (prochain match le plus proche en premier).
-const BIG_COMPETITIONS_PRIORITY = [
-  "Champions League",
-  "Premier League",
-  "La Liga",
-  "Serie A",
-  "Bundesliga",
-  "Ligue 1",
-  "CAN (Coupe d'Afrique des Nations)",
-  "Coupe du Monde FIFA",
-  "Euro (Championnat d'Europe)",
-  "Europa League",
-  "Copa América",
-  "Copa Libertadores",
-  "Saudi Pro League",
-  "NBA",
-];
-
-function competitionPriority(name: string): number {
-  const idx = BIG_COMPETITIONS_PRIORITY.indexOf(name);
-  return idx === -1 ? BIG_COMPETITIONS_PRIORITY.length : idx;
 }
 
 function groupByCompetition(events: EventDTO[]): CompGroup[] {
