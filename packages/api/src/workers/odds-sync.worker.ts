@@ -1,4 +1,4 @@
-import { syncOddsFromAPI, syncExtraMarkets, syncPropMarkets, syncHalfMarkets, syncScoresAndSettle, markLiveEvents } from "../services/odds.service";
+import { syncOddsFromAPI, syncExtraMarkets, syncPropMarkets, syncHalfMarkets, syncBasketballHalfMarkets, syncTennisSetMarkets, syncScoresAndSettle, markLiveEvents } from "../services/odds.service";
 import { isSyncPaused, getCreditsStatus } from "../lib/credits.state";
 import { syncApiFootballSettlement } from "../services/api-football.service";
 
@@ -37,13 +37,24 @@ import { syncApiFootballSettlement } from "../services/api-football.service";
 //   matchs qui arrivent au calendrier, sans alourdir le coût mensuel —
 //   intervalles décalés entre eux pour ne jamais tourner pile en même
 //   temps.
+// + marchés mi-temps basket (plus/moins, handicap — 4 marchés × 1 région =
+//   4 crédits/match, plafonné à 300 matchs/exécution, 1 seule fois par
+//   match) toutes les 21 min, et vainqueur du 1er set tennis (1 marché × 1
+//   région = 1 crédit/match, plafonné à 300 matchs/exécution) toutes les
+//   23 min — ajoutés le 01/11/2026 (demande explicite : utiliser toutes les
+//   options proposées par TheOddsAPI pour foot/basket/tennis). Même
+//   principe que les trois lots ci-dessus : ne scalent pas avec la
+//   fréquence, un intervalle plus court accélère juste la couverture des
+//   nouveaux matchs.
 // À SURVEILLER sur le dashboard TheOddsAPI les premières semaines.
 
-const ODDS_INTERVAL_MS          = 2  * 60 * 1000; // 2 minutes  — cotes principales (resserré depuis 5 min, demande explicite du 01/11/2026)
-const EXTRA_MARKETS_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes — marchés additionnels
-const PROP_MARKETS_INTERVAL_MS  = 17 * 60 * 1000; // 17 minutes — marchés stats (corners, cartons, vainqueur mi-temps)
-const HALF_MARKETS_INTERVAL_MS  = 19 * 60 * 1000; // 19 minutes — marchés mi-temps (plus/moins, handicap, double chance)
-const SCORES_INTERVAL_MS        = 5  * 60 * 1000; // 5 minutes  — résultats finaux + règlement auto
+const ODDS_INTERVAL_MS                  = 2  * 60 * 1000; // 2 minutes  — cotes principales (resserré depuis 5 min, demande explicite du 01/11/2026)
+const EXTRA_MARKETS_INTERVAL_MS         = 15 * 60 * 1000; // 15 minutes — marchés additionnels
+const PROP_MARKETS_INTERVAL_MS          = 17 * 60 * 1000; // 17 minutes — marchés stats (corners, cartons, vainqueur mi-temps)
+const HALF_MARKETS_INTERVAL_MS          = 19 * 60 * 1000; // 19 minutes — marchés mi-temps (plus/moins, handicap, double chance)
+const BASKETBALL_HALF_MARKETS_INTERVAL_MS = 21 * 60 * 1000; // 21 minutes — marchés mi-temps basket
+const TENNIS_SET_MARKETS_INTERVAL_MS    = 23 * 60 * 1000; // 23 minutes — vainqueur du 1er set (tennis)
+const SCORES_INTERVAL_MS                = 5  * 60 * 1000; // 5 minutes  — résultats finaux + règlement auto
 
 // Règlement automatique via API-Football (mi-temps, corners, cartons — voir
 // api-football.service.ts), indépendant de TheOddsAPI (clé/quota séparés,
@@ -97,6 +108,24 @@ async function runHalfMarketsSync() {
   }
 }
 
+async function runBasketballHalfMarketsSync() {
+  if (isSyncPaused()) return;
+  try {
+    await syncBasketballHalfMarkets();
+  } catch (err) {
+    console.error("❌ Erreur sync marchés mi-temps basket:", err);
+  }
+}
+
+async function runTennisSetMarketsSync() {
+  if (isSyncPaused()) return;
+  try {
+    await syncTennisSetMarkets();
+  } catch (err) {
+    console.error("❌ Erreur sync vainqueur 1er set tennis:", err);
+  }
+}
+
 async function runScoresSync() {
   if (isSyncPaused()) return;
   try {
@@ -124,7 +153,7 @@ async function runMarkLiveEvents() {
 
 export function startOddsSyncWorker() {
   const credits = getCreditsStatus();
-  console.log(`📡 Worker cotes démarré — sync toutes les 2 min, marchés additionnels toutes les 15 min, marchés stats toutes les 17 min, marchés mi-temps toutes les 19 min, résultats toutes les 5 min`);
+  console.log(`📡 Worker cotes démarré — sync toutes les 2 min, marchés additionnels toutes les 15 min, marchés stats toutes les 17 min, marchés mi-temps toutes les 19 min, mi-temps basket toutes les 21 min, 1er set tennis toutes les 23 min, résultats toutes les 5 min`);
   if (credits.remaining !== null) {
     console.log(`   Crédits restants : ${credits.remaining}`);
   }
@@ -134,6 +163,8 @@ export function startOddsSyncWorker() {
   setTimeout(() => runExtraMarketsSync(), 30_000);
   setTimeout(() => runPropMarketsSync(), 40_000);
   setTimeout(() => runHalfMarketsSync(), 50_000);
+  setTimeout(() => runBasketballHalfMarketsSync(), 60_000);
+  setTimeout(() => runTennisSetMarketsSync(), 70_000);
   setTimeout(() => runScoresSync(), 55_000);
   setTimeout(() => runApiFootballSettlement(), 90_000);
   setTimeout(() => runMarkLiveEvents(), 10_000);
@@ -143,6 +174,8 @@ export function startOddsSyncWorker() {
   setInterval(() => runExtraMarketsSync(), EXTRA_MARKETS_INTERVAL_MS);
   setInterval(() => runPropMarketsSync(), PROP_MARKETS_INTERVAL_MS);
   setInterval(() => runHalfMarketsSync(), HALF_MARKETS_INTERVAL_MS);
+  setInterval(() => runBasketballHalfMarketsSync(), BASKETBALL_HALF_MARKETS_INTERVAL_MS);
+  setInterval(() => runTennisSetMarketsSync(), TENNIS_SET_MARKETS_INTERVAL_MS);
   setInterval(() => runScoresSync(), SCORES_INTERVAL_MS);
   setInterval(() => runApiFootballSettlement(), API_FOOTBALL_INTERVAL_MS);
   setInterval(() => runMarkLiveEvents(), LIVE_CHECK_INTERVAL_MS);
