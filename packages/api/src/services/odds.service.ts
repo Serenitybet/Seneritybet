@@ -101,10 +101,41 @@ export function sortOddsByCanonicalOrder<T extends { label: string }>(marketType
   return [...filtered].sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
 }
 
+// ─── Ordre d'affichage canonique des marchés ───────────────────────────────
+//
+// Sans tri explicite, les marchés d'un même match s'affichaient dans
+// l'ordre où ils avaient été créés en base (site public) ou triés par
+// ordre alphabétique de leur nom (backoffice, "Cage inviolée" avant
+// "Résultat (1X2)") — deux ordres différents, et aucun des deux ne mettait
+// le marché principal en avant. Signalé en prod le 01/11/2026 : un seul
+// ordre, partagé par le site ET le backoffice, marché principal (1X2)
+// toujours en tête. Un type absent de cette liste retombe à la fin.
+const MARKET_TYPE_DISPLAY_ORDER: string[] = [
+  "MATCH_WINNER", "DOUBLE_CHANCE", "OVER_UNDER", "HANDICAP", "BOTH_TEAMS_SCORE",
+  "DRAW_NO_BET", "CORRECT_SCORE", "HALF_TIME_RESULT", "HALF_TIME_FULL_TIME",
+  "ODD_EVEN_TOTAL", "WINNING_MARGIN", "CLEAN_SHEET", "WIN_TO_NIL", "TEAM_GOALS",
+  "TEAM_TOTALS", "FIRST_GOAL_SCORER", "ALTERNATE_TOTALS", "ALTERNATE_SPREADS",
+  "FIRST_HALF_WINNER", "FIRST_HALF_TOTALS", "FIRST_HALF_HANDICAP", "FIRST_HALF_DOUBLE_CHANCE",
+  "SECOND_HALF_WINNER", "SECOND_HALF_TOTALS", "SECOND_HALF_HANDICAP", "SECOND_HALF_DOUBLE_CHANCE",
+  "HALF_TIME_CORRECT_SCORE", "BOTH_HALVES_SCORE",
+  "CORNERS_TOTAL", "CORNERS_HANDICAP", "CARDS_TOTAL", "CARDS_HANDICAP",
+  "SHOTS_ON_TARGET_TOTAL", "FOULS_TOTAL",
+];
+
+function marketTypeRank(type: string): number {
+  const idx = MARKET_TYPE_DISPLAY_ORDER.indexOf(type);
+  return idx === -1 ? MARKET_TYPE_DISPLAY_ORDER.length : idx;
+}
+
+/** Trie une liste de marchés dans l'ordre canonique ci-dessus — tri stable, exporté pour être réutilisé par les routes qui listent les marchés d'un match (site public et backoffice). */
+export function sortMarketsByCanonicalOrder<T extends { type: string }>(markets: T[]): T[] {
+  return [...markets].sort((a, b) => marketTypeRank(a.type) - marketTypeRank(b.type));
+}
+
 function sortEventMarketsOdds<T extends { markets: { type: string; odds: any[] }[] }>(event: T): T {
   return {
     ...event,
-    markets: event.markets.map((m) => ({ ...m, odds: sortOddsByCanonicalOrder(m.type, m.odds) })),
+    markets: sortMarketsByCanonicalOrder(event.markets).map((m) => ({ ...m, odds: sortOddsByCanonicalOrder(m.type, m.odds) })),
   };
 }
 

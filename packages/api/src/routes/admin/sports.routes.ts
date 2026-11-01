@@ -4,7 +4,7 @@ import { prisma } from "../../lib/prisma";
 import { asyncHandler } from "../../lib/asyncHandler";
 import { STATS_MARKET_TYPES, computeStatsItemResult } from "../../lib/stats-settlement";
 import { settleTicket } from "../../services/tpe.service";
-import { settleEventTickets } from "../../services/odds.service";
+import { settleEventTickets, sortMarketsByCanonicalOrder } from "../../services/odds.service";
 
 export const adminSportsRouter = Router();
 
@@ -78,12 +78,16 @@ adminSportsRouter.get("/events/:id", asyncHandler(async (req: Request, res: Resp
           odds: { orderBy: { label: "asc" } },
           _count: { select: { betItems: true } },
         },
-        orderBy: { name: "asc" },
+        // Pas de tri alphabétique par nom (mélangeait tout au hasard —
+        // "Cage inviolée" avant "Résultat (1X2)", signalé en prod le
+        // 01/11/2026) : même ordre canonique par type de marché que le site
+        // public, trié ci-dessous après la requête (voir
+        // sortMarketsByCanonicalOrder, odds.service.ts).
       },
     },
   });
   if (!event) { res.status(404).json({ success: false, error: "Événement introuvable" }); return; }
-  res.json({ success: true, data: event });
+  res.json({ success: true, data: { ...event, markets: sortMarketsByCanonicalOrder(event.markets) } });
 }));
 
 // POST /api/admin/sports/events — créer un événement manuel

@@ -660,9 +660,15 @@ export default function SportsPage() {
                             ) : null}
                           </div>
                           <div className="flex items-center gap-1.5">
+                            {/* Couleur neutre plutôt qu'un accent vif pour
+                                "brouillon" — un marché en préparation n'est
+                                pas une alerte, un badge jaune saturé qui
+                                revient sur chaque marché fatiguait la vue
+                                sur de longues sessions (signalé en prod le
+                                01/11/2026). */}
                             <button onClick={() => togglePublish(market)}
                               title={market.isPublished ? "Repasser en brouillon (invisible site/TPE)" : "Publier (visible site/TPE)"}
-                              className={`text-[9px] px-2 py-0.5 rounded font-bold border transition-all ${market.isPublished ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-gold/10 text-gold border-gold/20"}`}>
+                              className={`text-[9px] px-2 py-0.5 rounded font-bold border transition-all ${market.isPublished ? "bg-blue-500/10 text-blue-400/90 border-blue-500/20" : "bg-bo-input text-t-muted border-bo-border2"}`}>
                               {market.isPublished ? "✓ PUBLIÉ" : "📝 BROUILLON"}
                             </button>
                             <button onClick={() => toggleMarket(market)}
@@ -676,7 +682,7 @@ export default function SportsPage() {
                           </div>
                         </div>
                         {!market.isPublished && (
-                          <p className="text-[10px] text-gold/80 mb-2">
+                          <p className="text-[10px] text-t-faint mb-2">
                             📝 Brouillon — invisible sur serenitybetcode et au TPE. Vérifiez les cotes ci-dessous puis publiez quand c'est prêt.
                           </p>
                         )}
