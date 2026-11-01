@@ -18,6 +18,10 @@ interface Event {
 interface Selection {
   eventId: string; eventLabel: string; marketId: string; marketName: string;
   oddId: string; oddLabel: string; oddValue: number; groupKey: string;
+  // Permet de retrouver le bon onglet de jour (goToSelection) sans avoir à
+  // chercher dans la liste des matchs chargés — celle-ci n'est désormais
+  // plus que celle du jour affiché, pas celle de tous les jours à venir.
+  startTime: string;
 }
 
 interface TicketResult {
@@ -69,7 +73,7 @@ function combinedGroupOdds(event: Event, types: string[]): { market: Market; odd
 
 interface WebCouponSelection {
   eventId: string; eventLabel: string; marketId: string; marketName: string;
-  oddId: string; oddLabel: string; oddValue: number;
+  oddId: string; oddLabel: string; oddValue: number; eventStartTime: string;
 }
 
 // Même regroupement que combinedGroupOdds : une sélection handicap ou
@@ -85,7 +89,14 @@ function inferGroupKey(eventId: string, marketId: string, oddLabel: string): str
 }
 
 export default function TpeTicketPage() {
-  const [events, setEvents] = useState<Event[]>([]);
+  // Un jour à la fois (clé YYYY-MM-DD → matchs de ce jour), pas les 7
+  // d'affilée en une seule requête — le payload (tous sports, tous marchés
+  // et toutes les cotes de chaque match) était bien trop lourd pour un
+  // appareil TPE, signalé en prod le 01/11/2026 ("les matchs se
+  // téléchargent très lentement", pas un problème de connexion). Mis en
+  // cache par jour déjà visité pour ne pas re-télécharger en changeant
+  // d'onglet de date.
+  const [eventsByDay, setEventsByDay] = useState<Record<string, Event[]>>({});
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [selections, setSelections] = useState<Selection[]>([]);
   const [stakeXAF, setStakeXAF] = useState("");
@@ -153,12 +164,6 @@ export default function TpeTicketPage() {
   }, [mobilePanelOpen]);
 
   useEffect(() => {
-    api.get("/sports/events?date=week&limit=200").then((r) => setEvents(r.data.data.events))
-      .catch(() => toast.error("Erreur de chargement des matchs"))
-      .finally(() => setLoadingEvents(false));
-  }, []);
-
-  useEffect(() => {
     if (!ticket) { setTicketBarcode(null); return; }
     // Code-barres (CODE128) plutôt qu'un QR carré — une bande fine économise
     // nettement plus de papier thermique sur un rouleau 58mm. On encode le
@@ -184,10 +189,32 @@ export default function TpeTicketPage() {
     const d = new Date(); d.setDate(d.getDate() + i);
     return { offset: i, key: dayKey(d), label: DAY_LABELS[i] };
   });
+  const currentDayKey = days[dayOffset]?.key;
+  const events = (currentDayKey && eventsByDay[currentDayKey]) || [];
+
+  useEffect(() => {
+    if (!currentDayKey || eventsByDay[currentDayKey]) return; // déjà en cache
+    setLoadingEvents(true);
+    api.get(`/sports/events?date=${currentDayKey}&limit=200`)
+      .then((r) => setEventsByDay((prev) => ({ ...prev, [currentDayKey]: r.data.data.events })))
+      .catch(() => toast.error("Erreur de chargement des matchs"))
+      .finally(() => setLoadingEvents(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentDayKey]);
+
+  // Vient compléter le défilement vers un match amené par goToSelection
+  // quand son jour ne venait pas d'être chargé — scroll seulement une fois
+  // le match effectivement présent dans la liste affichée.
+  const [pendingScrollEventId, setPendingScrollEventId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pendingScrollEventId) return;
+    if (!events.some((e) => e.id === pendingScrollEventId)) return;
+    document.getElementById(`event-${pendingScrollEventId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setPendingScrollEventId(null);
+  }, [events, pendingScrollEventId]);
+
   const competitions = Array.from(new Set(events.map((e) => e.competition.name))).sort((a, b) => a.localeCompare(b));
-  const visibleEvents = events
-    .filter((e) => dayKey(new Date(e.startTime)) === days[dayOffset]?.key)
-    .filter((e) => !competitionFilter || e.competition.name === competitionFilter);
+  const visibleEvents = events.filter((e) => !competitionFilter || e.competition.name === competitionFilter);
 
   function toggleOdd(event: Event, market: Market, odd: Odd, marketNameOverride?: string, groupKey?: string) {
     const key = groupKey ?? market.id;
@@ -214,6 +241,7 @@ export default function TpeTicketPage() {
         oddLabel: odd.label,
         oddValue: Number(odd.value),
         groupKey: key,
+        startTime: event.startTime,
       },
     ]);
   }
@@ -226,18 +254,18 @@ export default function TpeTicketPage() {
   // change d'avis en chemin vers la boutique (demander un nouveau code
   // pour un simple changement serait peu pratique pour tout le monde).
   function goToSelection(s: Selection) {
-    const event = events.find((e) => e.id === s.eventId);
-    if (!event) {
+    const idx = days.findIndex((d) => d.key === dayKey(new Date(s.startTime)));
+    if (idx === -1) {
       toast.error("Match introuvable (plus de 7 jours ou déjà commencé)");
       return;
     }
-    const idx = days.findIndex((d) => d.key === dayKey(new Date(event.startTime)));
-    if (idx >= 0) setDayOffset(idx);
+    setDayOffset(idx);
     setCompetitionFilter("");
-    setExpandedId(event.id);
-    setTimeout(() => {
-      document.getElementById(`event-${event.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 50);
+    setExpandedId(s.eventId);
+    // Le jour ciblé n'est pas forcément déjà chargé — le scroll est terminé
+    // par l'effet lié à pendingScrollEventId, une fois le match présent dans
+    // la liste affichée.
+    setPendingScrollEventId(s.eventId);
   }
 
   async function loadCoupon() {
@@ -252,7 +280,7 @@ export default function TpeTicketPage() {
         return;
       }
       setSelections(data.selections.map((s) => ({
-        ...s, groupKey: inferGroupKey(s.eventId, s.marketId, s.oddLabel),
+        ...s, startTime: s.eventStartTime, groupKey: inferGroupKey(s.eventId, s.marketId, s.oddLabel),
       })));
       setLoadedWebCouponCode(data.code);
       setCouponCode("");

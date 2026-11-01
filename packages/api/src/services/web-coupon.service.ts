@@ -204,7 +204,7 @@ export async function getWebCouponForCashier(code: string) {
   // Les cotes/évènements peuvent avoir changé depuis la composition — on ne
   // garde que ce qui est encore valable, le caissier (ou le client) décide
   // s'il complète/retire manuellement le reste en boutique.
-  const valid: CouponSelection[] = [];
+  const valid: (CouponSelection & { eventStartTime: string })[] = [];
   let droppedCount = 0;
   for (const s of snapshot) {
     const odd = odds.find((o) => o.id === s.oddId);
@@ -212,7 +212,11 @@ export async function getWebCouponForCashier(code: string) {
       (odd.market.event.status === "UPCOMING" || odd.market.event.status === "LIVE") &&
       !(odd.market.event.status === "UPCOMING" && odd.market.event.startTime <= new Date());
     if (odd && stillOpen) {
-      valid.push({ ...s, oddValue: Number(odd.value) }); // cote à jour
+      // eventStartTime : pour que le caissier (apps/pos) puisse retrouver le
+      // bon jour/onglet d'un match chargé depuis un coupon web, sans devoir
+      // télécharger tous les matchs à venir (voir goToSelection, demande
+      // explicite du 01/11/2026).
+      valid.push({ ...s, oddValue: Number(odd.value), eventStartTime: odd.market.event.startTime.toISOString() });
     } else {
       droppedCount++;
     }
