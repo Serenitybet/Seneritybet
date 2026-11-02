@@ -37,6 +37,10 @@ interface CouponSelection {
   oddId: string;
   oddLabel: string;
   oddValue: number;
+  // Date/heure du match — demande explicite du 02/11/2026 (affichée sur le
+  // ticket côté site public, voir apps/coupon verifier/page.tsx). Absente
+  // des coupons créés avant cette date (snapshot JSON figé à la création).
+  eventStartTime: string;
 }
 
 /** Composé depuis le site public, sans compte — resalidé puis converti en Ticket en boutique (voir tpe.service.placeTicket). */
@@ -98,6 +102,7 @@ export async function createWebCoupon(selections: { oddId: string }[], stakeXAF?
       oddId: odd.id,
       oddLabel: odd.label,
       oddValue: Number(odd.value),
+      eventStartTime: odd.market.event.startTime.toISOString(),
     });
   }
 
