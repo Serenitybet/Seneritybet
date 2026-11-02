@@ -88,6 +88,9 @@ export default function TpePage() {
   const [loadingCashiers, setLoadingCashiers] = useState(false);
   const [regions, setRegions] = useState<Region[]>([]);
   const [newRegionName, setNewRegionName] = useState("");
+  // Affiche aussi les TPE supprimés — demande explicite du 02/11/2026, pour
+  // pouvoir les retrouver et les restaurer (voir restoreTpe ci-dessous).
+  const [showDeleted, setShowDeleted] = useState(false);
   const [newRegionMaxWin, setNewRegionMaxWin] = useState("");
   const [savingRegion, setSavingRegion] = useState(false);
 
@@ -100,7 +103,7 @@ export default function TpePage() {
     setLoading(true);
     try {
       const [tpeRes, payoutRes, thresholdRes, regionsRes] = await Promise.all([
-        fetch(`${API}/admin/tpe`, { headers: authHeaders() }),
+        fetch(`${API}/admin/tpe${showDeleted ? "?includeDeleted=true" : ""}`, { headers: authHeaders() }),
         fetch(`${API}/admin/tpe/payouts/pending`, { headers: authHeaders() }),
         fetch(`${API}/admin/settings/tpe-payout-threshold`, { headers: authHeaders() }),
         fetch(`${API}/admin/regions`, { headers: authHeaders() }),
@@ -117,7 +120,7 @@ export default function TpePage() {
     finally { setLoading(false); }
   }
 
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => { loadAll(); }, [showDeleted]);
 
   async function approvePairing(tpe: Tpe) {
     const name = prompt("Nom du terminal :", tpe.name ?? "");
@@ -257,10 +260,21 @@ export default function TpePage() {
   }
 
   async function removeTpe(tpe: Tpe) {
-    if (!confirm(`Supprimer définitivement "${tpe.code}" ? Cette action est irréversible.`)) return;
+    // "Restaurable depuis la liste des supprimés" plutôt que "irréversible"
+    // depuis l'ajout de restoreTpe (demande explicite du 02/11/2026).
+    if (!confirm(`Supprimer "${tpe.code}" ? Il restera restaurable depuis "Afficher les TPE supprimés".`)) return;
     try {
       const res = await fetch(`${API}/admin/tpe/${tpe.id}`, { method: "DELETE", headers: authHeaders() });
       if (res.ok) { toast.success(`${tpe.code} supprimé ✓`); loadAll(); }
+      else toast.error("Erreur");
+    } catch { toast.error("Erreur réseau"); }
+  }
+
+  async function restoreTpe(tpe: Tpe) {
+    if (!confirm(`Restaurer "${tpe.code}" ? Il redeviendra actif et l'appareil pourra se reconnecter immédiatement.`)) return;
+    try {
+      const res = await fetch(`${API}/admin/tpe/${tpe.id}/restore`, { method: "POST", headers: authHeaders() });
+      if (res.ok) { toast.success(`${tpe.code} restauré ✓`); loadAll(); }
       else toast.error("Erreur");
     } catch { toast.error("Erreur réseau"); }
   }
@@ -358,7 +372,8 @@ export default function TpePage() {
   }
 
   const pending = tpes.filter(t => t.status === "PENDING_PAIRING");
-  const others = tpes.filter(t => t.status !== "PENDING_PAIRING");
+  const deletedTpes = tpes.filter(t => t.status === "DELETED");
+  const others = tpes.filter(t => t.status !== "PENDING_PAIRING" && t.status !== "DELETED");
 
   return (
     <div className="space-y-4">
@@ -391,6 +406,33 @@ export default function TpePage() {
         <span className="text-[11px] text-t-faint">XAF — tout gain au-dessus doit être approuvé par le backoffice avant paiement</span>
         <button className="bo-btn-primary bo-btn-sm ml-auto" onClick={saveThreshold}>Enregistrer</button>
       </div>
+
+      {/* Afficher/masquer les TPE supprimés — demande explicite du 02/11/2026 */}
+      <label className="flex items-center gap-2 text-xs text-t-faint cursor-pointer select-none w-fit">
+        <input type="checkbox" checked={showDeleted} onChange={e => setShowDeleted(e.target.checked)} />
+        Afficher les TPE supprimés
+      </label>
+
+      {/* TPE supprimés — restaurables */}
+      {showDeleted && deletedTpes.length > 0 && (
+        <div className="bo-card">
+          <div className="bo-card-header">
+            <span className="bo-card-title">🗑️ TPE supprimés</span>
+            <span className="text-[11px] text-t-faint">{deletedTpes.length} terminal(aux)</span>
+          </div>
+          <div className="divide-y divide-bo-border">
+            {deletedTpes.map(t => (
+              <div key={t.id} className="p-4 flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="font-semibold text-t-primary">{t.name ?? t.code}</p>
+                  <p className="text-xs text-t-faint mt-0.5">{t.code} · vu {timeAgo(t.lastSeenAt)}</p>
+                </div>
+                <button className="bo-btn-primary bo-btn-sm" onClick={() => restoreTpe(t)}>♻️ Restaurer</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Appairages en attente */}
       {pending.length > 0 && (
