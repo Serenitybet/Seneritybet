@@ -8,9 +8,15 @@ import { serializeTpe, serializeTicket, serializeCreditAdjustment, getTpeSummary
 export const adminTpeRouter = Router();
 
 // GET /api/admin/tpe — liste des TPE
-adminTpeRouter.get("/", asyncHandler(async (_req: Request, res: Response) => {
+// ?includeDeleted=true : inclut aussi les TPE supprimés (pour pouvoir les
+// restaurer, voir POST /:id/restore ci-dessous) — demande explicite du
+// 02/11/2026, suite à un TPE supprimé par erreur et resté bloqué (aucun
+// moyen de le revoir ni de le rouvrir). Exclus par défaut pour ne pas
+// polluer la liste du quotidien.
+adminTpeRouter.get("/", asyncHandler(async (req: Request, res: Response) => {
+  const includeDeleted = req.query.includeDeleted === "true";
   const tpes = await prisma.tpe.findMany({
-    where: { status: { not: "DELETED" } },
+    where: includeDeleted ? {} : { status: { not: "DELETED" } },
     include: {
       region: { select: { id: true, name: true } },
       _count: { select: { assignedCashiers: true } },
@@ -229,5 +235,23 @@ adminTpeRouter.delete("/:id", requireRole("SUPER_ADMIN"),
   asyncHandler(async (req: Request, res: Response) => {
     await prisma.tpe.update({ where: { id: req.params.id }, data: { status: "DELETED" } });
     res.json({ success: true, message: "TPE supprimé" });
+  }),
+);
+
+// POST /api/admin/tpe/:id/restore — annule une suppression, remet le TPE en
+// service — demande explicite du 02/11/2026 (jusqu'ici une suppression était
+// définitive : le TPE disparaissait de la liste et l'appareil physique
+// restait bloqué pour toujours, sans aucun moyen de le réactiver). Remet
+// systématiquement en ACTIVE plutôt que de tenter de deviner le statut
+// d'avant suppression (non conservé) — l'appareil peut immédiatement se
+// reconnecter ; un admin peut ensuite le bloquer à nouveau si besoin.
+adminTpeRouter.post("/:id/restore", requireRole("SUPER_ADMIN"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const tpe = await prisma.tpe.findUnique({ where: { id: req.params.id } });
+    if (!tpe) throw new AppError(404, "TPE introuvable");
+    if (tpe.status !== "DELETED") throw new AppError(400, "Ce TPE n'est pas supprimé");
+
+    const updated = await prisma.tpe.update({ where: { id: tpe.id }, data: { status: "ACTIVE" } });
+    res.json({ success: true, data: serializeTpe(updated) });
   }),
 );
