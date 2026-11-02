@@ -36,13 +36,17 @@ interface Selection {
   oddId: string;
   oddLabel: string;
   oddValue: number;
+  // Absent sur les coupons créés avant le 02/11/2026 (demande explicite :
+  // afficher la date/heure du match sur les tickets) — snapshot JSON figé à
+  // la création, les anciens coupons n'ont jamais eu ce champ.
+  eventStartTime?: string;
 }
 
 interface TicketItem {
   id: string;
   oddValue: number;
   result: string | null;
-  market: { name: string; event: { homeTeam: string; awayTeam: string } };
+  market: { name: string; event: { homeTeam: string; awayTeam: string; startTime: string } };
   odd: { label: string };
 }
 
@@ -191,6 +195,11 @@ function CouponResultView({
             <div className="min-w-0">
               <p className="text-sm font-semibold text-txt-primary truncate">{s.eventLabel}</p>
               <p className="text-[11px] text-txt-muted">{s.marketName} · {s.oddLabel}</p>
+              {s.eventStartTime && (
+                <p className="text-[10px] text-txt-muted/70">
+                  {new Date(s.eventStartTime).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
+                </p>
+              )}
             </div>
             <span className="text-sm font-black text-txt-primary shrink-0">{s.oddValue.toFixed(2)}</span>
           </div>
@@ -222,6 +231,9 @@ function TicketResultView({ ticket, onCashedOut }: { ticket: Ticket; onCashedOut
                   {item.market.event.homeTeam} — {item.market.event.awayTeam}
                 </p>
                 <p className="text-[11px] text-txt-muted">{item.market.name} · {item.odd.label}</p>
+                <p className="text-[10px] text-txt-muted/70">
+                  {new Date(item.market.event.startTime).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
+                </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <span className="text-sm font-black text-txt-primary">{Number(item.oddValue).toFixed(2)}</span>

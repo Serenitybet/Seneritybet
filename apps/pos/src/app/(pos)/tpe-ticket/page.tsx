@@ -32,7 +32,7 @@ interface TicketResult {
   createdAt: string;
   tpe?: { code: string; name: string | null };
   payoutCode?: string;
-  items: { oddValue: number; market: { name: string; event: { homeTeam: string; awayTeam: string } }; odd: { label: string } }[];
+  items: { oddValue: number; market: { name: string; event: { homeTeam: string; awayTeam: string; startTime: string } }; odd: { label: string } }[];
 }
 
 const QUICK_STAKES = [500, 1000, 2000, 5000, 10000, 25000];
@@ -511,6 +511,9 @@ export default function TpeTicketPage() {
               {ticket.items.map((it, i) => (
                 <div key={i} style={{ marginBottom: 4, fontSize: 9 }}>
                   <p>{i + 1}. {it.market.event.homeTeam} vs {it.market.event.awayTeam}</p>
+                  <p style={{ paddingLeft: 8, fontSize: 8 }}>
+                    {new Date(it.market.event.startTime).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                  </p>
                   <p style={{ paddingLeft: 8 }}>→ {it.odd.label} @ <strong>{it.oddValue.toFixed(2)}</strong></p>
                 </div>
               ))}
