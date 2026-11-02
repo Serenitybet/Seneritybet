@@ -38,22 +38,30 @@ export async function login(payload: LoginPayload) {
 
   // Recherche par playerNumber (6 chiffres), téléphone, code caissier (TPE,
   // voir cashierCode) ou email. Un email contient toujours "@" — jamais
-  // confondu avec un code caissier, qui lui n'en contient jamais (défini par
-  // l'admin à la création du caissier, voir admin/users.routes.ts).
+  // confondu avec les autres formats.
+  //
+  // cashierCode autorise 3 à 12 lettres ET/OU chiffres (voir admin/
+  // users.routes.ts) : un code purement numérique de 6 chiffres ou de 8-15
+  // chiffres ressemble donc AUSSI à un playerNumber ou un téléphone. Avec un
+  // if/else exclusif (bug corrigé le 02/11/2026, signalé en prod — une
+  // caissière avec le bon identifiant/mot de passe se voyait refuser l'accès),
+  // un tel code ne cherchait QUE sur le mauvais champ et ne matchait jamais.
+  // On construit donc toutes les interprétations plausibles du format saisi
+  // et on les cherche ensemble (OR) plutôt que d'en choisir une seule à
+  // l'avance.
   const isEmail = identifier.includes("@");
-  const isPlayerNumber = !isEmail && /^\d{6}$/.test(identifier);
-  const isPhone = !isEmail && !isPlayerNumber && /^\+?\d{8,15}$/.test(identifier);
-  const isCashierCode = !isEmail && !isPlayerNumber && !isPhone;
+  const candidates: Array<Record<string, unknown>> = [];
+  if (isEmail) {
+    candidates.push({ email: identifier });
+  } else {
+    if (/^\d{6}$/.test(identifier)) candidates.push({ playerNumber: parseInt(identifier, 10) });
+    if (/^\+?\d{8,15}$/.test(identifier)) candidates.push({ phone: identifier });
+    if (/^[A-Za-z0-9]{3,12}$/.test(identifier)) candidates.push({ cashierCode: identifier.toUpperCase() });
+  }
 
-  const user = await prisma.user.findFirst({
-    where: isPlayerNumber
-      ? { playerNumber: parseInt(identifier, 10) }
-      : isPhone
-      ? { phone: identifier }
-      : isCashierCode
-      ? { cashierCode: identifier.toUpperCase() }
-      : { email: identifier },
-  });
+  const user = candidates.length > 0
+    ? await prisma.user.findFirst({ where: { OR: candidates } })
+    : null;
 
   if (!user) throw new AppError(401, "Identifiant ou mot de passe incorrect");
   if (user.status !== "ACTIVE") throw new AppError(403, "Compte suspendu ou fermé");

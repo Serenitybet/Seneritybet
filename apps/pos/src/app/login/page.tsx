@@ -100,16 +100,20 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} className="space-y-5">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Code caissier
+              Code caissier (ou email)
             </label>
             <input
               type="text"
               value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              // Ne plus forcer les majuscules ici (bug signalé en prod le
+              // 02/11/2026) : le code caissier est normalisé côté serveur
+              // (auth.service.ts), mais un email saisi ici ressortait
+              // corrompu (tout en majuscules), rendant la connexion par
+              // email impossible alors qu'elle reste acceptée en backup.
+              onChange={(e) => setCode(e.target.value)}
               required
-              autoCapitalize="characters"
               placeholder="Ex: MARIE1"
-              className="w-full px-4 py-3 text-lg font-mono uppercase border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none transition-colors"
+              className="w-full px-4 py-3 text-lg font-mono border-2 border-gray-200 rounded-xl focus:border-green-500 focus:outline-none transition-colors"
             />
           </div>
           <div>
