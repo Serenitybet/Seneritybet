@@ -26,6 +26,7 @@ adminSportsRouter.get("/events", asyncHandler(async (req: Request, res: Response
   const limit  = parseInt((req.query.limit as string) ?? "25", 10);
   const search = req.query.search as string | undefined;
   const status = req.query.status as string | undefined;
+  const sport  = req.query.sport as string | undefined; // slug : football/basketball/tennis
   const from   = req.query.from as string | undefined; // YYYY-MM-DD
   const to     = req.query.to   as string | undefined; // YYYY-MM-DD, inclus
 
@@ -36,6 +37,11 @@ adminSportsRouter.get("/events", asyncHandler(async (req: Request, res: Response
   // à venir en pages suivantes. Toujours accessibles via le filtre de
   // statut pour qui veut les consulter volontairement.
   where.status = status ? status : { notIn: ["FINISHED", "CANCELLED"] };
+  // Filtre par sport — demande explicite du 04/11/2026 : la liste mélangeait
+  // foot/basket/tennis, rendant difficile de retrouver un match de foot
+  // précis (ex. pour vérifier les nouveaux marchés manuels, foot uniquement)
+  // au milieu de dizaines de matchs de basket.
+  if (sport) where.competition = { sport: { slug: sport } };
   if (from || to) {
     where.startTime = {
       ...(from ? { gte: new Date(`${from}T00:00:00`) } : {}),

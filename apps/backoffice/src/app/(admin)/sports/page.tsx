@@ -95,6 +95,18 @@ const STATUS_FILTERS = [
   { value: "CANCELLED", label: "Annulés" },
 ] as const;
 
+// Filtre par sport — demande explicite du 04/11/2026, pour retrouver vite
+// un match de foot au milieu de dizaines de matchs de basket. Valeurs =
+// slug (voir SPORTS_CONFIG, packages/api/.../odds.service.ts), distinct de
+// SPORTS ci-dessous (noms affichés, utilisés pour la création manuelle
+// d'un match).
+const SPORT_FILTERS = [
+  { value: "",            label: "Tous les sports" },
+  { value: "football",    label: "⚽ Football" },
+  { value: "basketball",  label: "🏀 Basketball" },
+  { value: "tennis",      label: "🎾 Tennis" },
+] as const;
+
 function toYMD(d: Date) {
   // Format local (pas d'UTC) — new Date().toISOString() décale la date
   // autour de minuit selon le fuseau, ce qu'on veut éviter ici.
@@ -121,6 +133,7 @@ export default function SportsPage() {
   const [loading, setLoading]         = useState(true);
   const [search, setSearch]           = useState("");
   const [filterStatus, setStatus]     = useState("");
+  const [filterSport, setFilterSport] = useState("");
   const [dateRange, setDateRange]     = useState<DateRange>("all");
   const [page, setPage]               = useState(1);
   const [totalPages, setTotalPages]   = useState(1);
@@ -164,6 +177,7 @@ export default function SportsPage() {
       const params = new URLSearchParams({ limit: "50", page: String(page) });
       if (search)       params.set("search", search);
       if (filterStatus) params.set("status", filterStatus);
+      if (filterSport)  params.set("sport", filterSport);
       if (dateRange === "today") {
         const today = toYMD(new Date());
         params.set("from", today); params.set("to", today);
@@ -179,12 +193,12 @@ export default function SportsPage() {
         setTotalEvents(d.data.total ?? d.data.events.length);
       }
     } finally { setLoading(false); }
-  }, [search, filterStatus, dateRange, page]);
+  }, [search, filterStatus, filterSport, dateRange, page]);
 
   useEffect(() => { loadEvents(); }, [loadEvents]);
   // Revenir à la page 1 dès qu'un filtre change, sinon on peut se retrouver
   // sur une page qui n'existe plus pour le nouveau filtre (liste vide).
-  useEffect(() => { setPage(1); }, [search, filterStatus, dateRange]);
+  useEffect(() => { setPage(1); }, [search, filterStatus, filterSport, dateRange]);
 
   useEffect(() => {
     fetch(`${API}/admin/sports/competitions`, { headers: authHeaders() })
@@ -406,6 +420,9 @@ export default function SportsPage() {
             <div className="bo-filter-bar">
               <input className="bo-input flex-1" placeholder="🔍 Rechercher un match…"
                 value={search} onChange={e => setSearch(e.target.value)} />
+              <select className="bo-select" value={filterSport} onChange={e => setFilterSport(e.target.value)}>
+                {SPORT_FILTERS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
               <button onClick={loadEvents} className="bo-btn-secondary text-xs">↺ Actualiser</button>
             </div>
 
