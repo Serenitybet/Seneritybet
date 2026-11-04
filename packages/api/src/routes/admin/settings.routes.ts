@@ -78,3 +78,23 @@ adminSettingsRouter.patch("/cashout", requireRole("ADMIN", "SUPER_ADMIN", "FINAN
     res.json({ success: true, data: { marginPct: Number(marginPct), maxOddPending: Number(maxOddPending), maxPendingLegs: Number(maxPendingLegs), minTotalLegs: Number(minTotalLegs) } });
   }),
 );
+
+// GET /api/admin/settings/odds-margin — marge globale appliquée aux cotes
+// synchronisées (voir odds.service.ts applyMargin) — demande explicite du
+// 04/11/2026.
+adminSettingsRouter.get("/odds-margin", asyncHandler(async (_req: Request, res: Response) => {
+  const marginPct = await getSettingFloat(SETTING_KEYS.ODDS_MARGIN_PCT);
+  res.json({ success: true, data: { marginPct } });
+}));
+
+// PATCH /api/admin/settings/odds-margin
+adminSettingsRouter.patch("/odds-margin", requireRole("ADMIN", "SUPER_ADMIN", "FINANCE"),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const { marginPct } = req.body;
+    if (marginPct === undefined || isNaN(Number(marginPct)) || Number(marginPct) < 0 || Number(marginPct) > 20) {
+      throw new AppError(400, "Marge invalide (0 à 20)");
+    }
+    await setSetting(SETTING_KEYS.ODDS_MARGIN_PCT, String(Number(marginPct)), req.user!.id);
+    res.json({ success: true, data: { marginPct: Number(marginPct) } });
+  }),
+);

@@ -3,9 +3,25 @@ import { prisma } from "../lib/prisma";
 import { updateCredits } from "../lib/credits.state";
 import { settleTicket } from "./tpe.service";
 import { fitLambdas, buildScoreGrid, devig, deriveLevel1Markets } from "../lib/goal-model";
+import { getSettingFloat, SETTING_KEYS } from "../lib/settings";
 
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
 const API_KEY = process.env.ODDS_API_KEY;
+
+// Marge globale sur les cotes — équivalent du RTP des jeux virtuels mais
+// appliqué au PRIX plutôt qu'au résultat (qui reste réel, impossible à
+// contrôler) — demande explicite du 04/11/2026. Lue une seule fois par
+// cycle de sync (pas par cote) pour ne pas multiplier les requêtes DB, puis
+// transmise aux fonctions d'upsert qui écrivent réellement les cotes.
+// N'affecte PAS les marchés Niveau 1 (generateLevel1Markets) : ceux-ci
+// recalculent leurs propres probabilités "justes" par devig avant de
+// réappliquer leur propre marge (LEVEL1_MARGIN), donc une réduction en
+// amont sur MATCH_WINNER/OVER_UNDER y est automatiquement neutralisée par
+// le devig — pas un bug, juste hors du périmètre de ce réglage.
+function applyMargin(rawPrice: number, marginPct: number): number {
+  if (!marginPct) return rawPrice;
+  return Math.round(rawPrice * (1 - marginPct / 100) * 100) / 100;
+}
 
 // Lignes de handicap "au quart" (ex: -0.25, +0.75) : le pari est en réalité
 // scindé en deux moitiés de mise sur deux lignes voisines (-0.25 = moitié
@@ -241,6 +257,7 @@ export async function syncOddsFromAPI() {
     return;
   }
 
+  const marginPct = await getSettingFloat(SETTING_KEYS.ODDS_MARGIN_PCT);
   let totalEvents = 0;
   let creditsUsedThisSync = 0;
 
@@ -294,7 +311,7 @@ export async function syncOddsFromAPI() {
 
       // Upsert événements
       for (const game of res.data) {
-        await upsertEvent(competition.id, game, config.slug);
+        await upsertEvent(competition.id, game, config.slug, marginPct);
         totalEvents++;
       }
     } catch (err: any) {
@@ -323,7 +340,7 @@ export async function syncOddsFromAPI() {
 // espacées de plusieurs semaines).
 const RESCHEDULE_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 
-async function upsertEvent(competitionId: string, game: any, sportSlug = "football") {
+async function upsertEvent(competitionId: string, game: any, sportSlug = "football", marginPct = 0) {
   const commenceTime = new Date(game.commence_time);
   let existing = await prisma.event.findUnique({ where: { externalId: game.id } });
   let rescheduleMerge = false;
@@ -424,11 +441,12 @@ async function upsertEvent(competitionId: string, game: any, sportSlug = "footba
           : outcome.name;
       }
 
+      const value = applyMargin(outcome.price, marginPct);
       const existing = await prisma.odd.findFirst({ where: { marketId: market.id, label } });
       if (existing) {
-        await prisma.odd.update({ where: { id: existing.id }, data: { value: outcome.price } });
+        await prisma.odd.update({ where: { id: existing.id }, data: { value } });
       } else {
-        await prisma.odd.create({ data: { marketId: market.id, label, value: outcome.price } });
+        await prisma.odd.create({ data: { marketId: market.id, label, value } });
       }
     }
   }
@@ -550,6 +568,7 @@ const EXTRA_MARKETS_VERSION = 8; // v1: btts+double_chance ; v2: + correct_score
 export async function syncExtraMarkets() {
   if (!API_KEY) return;
 
+  const marginPct = await getSettingFloat(SETTING_KEYS.ODDS_MARGIN_PCT);
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() + 14);
 
@@ -592,7 +611,7 @@ export async function syncExtraMarkets() {
       const remaining = parseInt(res.headers["x-requests-remaining"] ?? "-1", 10);
       if (remaining >= 0) updateCredits(remaining);
 
-      await upsertExtraMarkets(event.id, event.homeTeam, event.awayTeam, res.data?.bookmakers ?? []);
+      await upsertExtraMarkets(event.id, event.homeTeam, event.awayTeam, res.data?.bookmakers ?? [], marginPct);
       await prisma.event.update({ where: { id: event.id }, data: { extraMarketsVersion: EXTRA_MARKETS_VERSION } });
       synced++;
     } catch (err: any) {
@@ -670,7 +689,7 @@ function mergeAlternateTeamTotals(bookmakers: any[]) {
   }
 }
 
-async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: string, bookmakers: any[]) {
+async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: string, bookmakers: any[], marginPct = 0) {
   mergeAlternateTeamTotals(bookmakers);
   const priorityKeys = ["bet365", "unibet", "betway", "onexbet", "pinnacle"];
   const orderedBookmakers = [
@@ -775,11 +794,12 @@ async function upsertExtraMarkets(eventId: string, homeTeam: string, awayTeam: s
             outcome.name;
         }
 
+        const value = applyMargin(outcome.price, marginPct);
         const existing = await prisma.odd.findFirst({ where: { marketId: market.id, label } });
         if (existing) {
-          await prisma.odd.update({ where: { id: existing.id }, data: { value: outcome.price } });
+          await prisma.odd.update({ where: { id: existing.id }, data: { value } });
         } else {
-          await prisma.odd.create({ data: { marketId: market.id, label, value: outcome.price } });
+          await prisma.odd.create({ data: { marketId: market.id, label, value } });
         }
       }
     }
@@ -824,6 +844,7 @@ const PROP_MARKETS_VERSION = 2; // v2: + BTTS 1ère mi-temps, score exact à la 
 export async function syncPropMarkets() {
   if (!API_KEY) return;
 
+  const marginPct = await getSettingFloat(SETTING_KEYS.ODDS_MARGIN_PCT);
   // Fenêtre étendue à J+14 (comme syncExtraMarkets ci-dessus) — demande
   // explicite du 01/11/2026.
   const cutoff = new Date();
@@ -864,7 +885,7 @@ export async function syncPropMarkets() {
       const remaining = parseInt(res.headers["x-requests-remaining"] ?? "-1", 10);
       if (remaining >= 0) updateCredits(remaining);
 
-      await upsertPropMarkets(event.id, event.homeTeam, event.awayTeam, res.data?.bookmakers ?? []);
+      await upsertPropMarkets(event.id, event.homeTeam, event.awayTeam, res.data?.bookmakers ?? [], marginPct);
       await prisma.event.update({ where: { id: event.id }, data: { propMarketsVersion: PROP_MARKETS_VERSION } });
       synced++;
     } catch (err: any) {
@@ -903,7 +924,7 @@ const PROP_MARKET_TYPE_BY_KEY: Record<string, string> = {
 const PROP_TOTALS_MAX_LINES  = 6;
 const PROP_SPREADS_MAX_LINES = 6;
 
-async function upsertPropMarkets(eventId: string, homeTeam: string, awayTeam: string, bookmakers: any[]) {
+async function upsertPropMarkets(eventId: string, homeTeam: string, awayTeam: string, bookmakers: any[], marginPct = 0) {
   const priorityKeys = ["bet365", "unibet", "betway", "onexbet", "pinnacle"];
   const orderedBookmakers = [
     ...priorityKeys.map((k) => bookmakers.find((b: any) => b.key === k)).filter(Boolean),
@@ -995,11 +1016,12 @@ async function upsertPropMarkets(eventId: string, homeTeam: string, awayTeam: st
           label = outcome.name === homeTeam ? "1" : outcome.name === awayTeam ? "2" : outcome.name === "Draw" ? "X" : outcome.name;
         }
 
+        const value = applyMargin(outcome.price, marginPct);
         const existing = await prisma.odd.findFirst({ where: { marketId: market.id, label } });
         if (existing) {
-          await prisma.odd.update({ where: { id: existing.id }, data: { value: outcome.price } });
+          await prisma.odd.update({ where: { id: existing.id }, data: { value } });
         } else {
-          await prisma.odd.create({ data: { marketId: market.id, label, value: outcome.price } });
+          await prisma.odd.create({ data: { marketId: market.id, label, value } });
         }
       }
     }
@@ -1023,6 +1045,7 @@ const HALF_MARKETS_VERSION = 2; // v2: totaux/handicap mi-temps n'étaient plus 
 export async function syncHalfMarkets() {
   if (!API_KEY) return;
 
+  const marginPct = await getSettingFloat(SETTING_KEYS.ODDS_MARGIN_PCT);
   // Fenêtre étendue à J+14 (comme syncExtraMarkets/syncPropMarkets) — demande
   // explicite du 01/11/2026.
   const cutoff = new Date();
@@ -1063,7 +1086,7 @@ export async function syncHalfMarkets() {
       const remaining = parseInt(res.headers["x-requests-remaining"] ?? "-1", 10);
       if (remaining >= 0) updateCredits(remaining);
 
-      await upsertHalfMarkets(event.id, event.homeTeam, event.awayTeam, res.data?.bookmakers ?? []);
+      await upsertHalfMarkets(event.id, event.homeTeam, event.awayTeam, res.data?.bookmakers ?? [], marginPct);
       await prisma.event.update({ where: { id: event.id }, data: { halfMarketsVersion: HALF_MARKETS_VERSION } });
       synced++;
     } catch (err: any) {
@@ -1098,7 +1121,7 @@ const HALF_MARKET_TYPE_BY_KEY: Record<string, string> = {
 const HALF_TOTALS_MAX_LINES  = 4;
 const HALF_SPREADS_MAX_LINES = 4;
 
-async function upsertHalfMarkets(eventId: string, homeTeam: string, awayTeam: string, bookmakers: any[]) {
+async function upsertHalfMarkets(eventId: string, homeTeam: string, awayTeam: string, bookmakers: any[], marginPct = 0) {
   const priorityKeys = ["bet365", "unibet", "betway", "onexbet", "pinnacle"];
   const orderedBookmakers = [
     ...priorityKeys.map((k) => bookmakers.find((b: any) => b.key === k)).filter(Boolean),
@@ -1169,11 +1192,12 @@ async function upsertHalfMarkets(eventId: string, homeTeam: string, awayTeam: st
             : "12";
         }
 
+        const value = applyMargin(outcome.price, marginPct);
         const existing = await prisma.odd.findFirst({ where: { marketId: market.id, label } });
         if (existing) {
-          await prisma.odd.update({ where: { id: existing.id }, data: { value: outcome.price } });
+          await prisma.odd.update({ where: { id: existing.id }, data: { value } });
         } else {
-          await prisma.odd.create({ data: { marketId: market.id, label, value: outcome.price } });
+          await prisma.odd.create({ data: { marketId: market.id, label, value } });
         }
       }
     }
@@ -1197,6 +1221,7 @@ const BASKETBALL_HALF_MARKETS_VERSION = 1;
 export async function syncBasketballHalfMarkets() {
   if (!API_KEY) return;
 
+  const marginPct = await getSettingFloat(SETTING_KEYS.ODDS_MARGIN_PCT);
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() + 14);
 
@@ -1235,7 +1260,7 @@ export async function syncBasketballHalfMarkets() {
       const remaining = parseInt(res.headers["x-requests-remaining"] ?? "-1", 10);
       if (remaining >= 0) updateCredits(remaining);
 
-      await upsertHalfMarkets(event.id, event.homeTeam, event.awayTeam, res.data?.bookmakers ?? []);
+      await upsertHalfMarkets(event.id, event.homeTeam, event.awayTeam, res.data?.bookmakers ?? [], marginPct);
       await prisma.event.update({ where: { id: event.id }, data: { basketballHalfMarketsVersion: BASKETBALL_HALF_MARKETS_VERSION } });
       synced++;
     } catch (err: any) {
@@ -1265,6 +1290,7 @@ const TENNIS_SET_MARKETS_VERSION = 1;
 export async function syncTennisSetMarkets() {
   if (!API_KEY) return;
 
+  const marginPct = await getSettingFloat(SETTING_KEYS.ODDS_MARGIN_PCT);
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() + 14);
 
@@ -1303,7 +1329,7 @@ export async function syncTennisSetMarkets() {
       const remaining = parseInt(res.headers["x-requests-remaining"] ?? "-1", 10);
       if (remaining >= 0) updateCredits(remaining);
 
-      await upsertTennisSetMarkets(event.id, event.homeTeam, event.awayTeam, res.data?.bookmakers ?? []);
+      await upsertTennisSetMarkets(event.id, event.homeTeam, event.awayTeam, res.data?.bookmakers ?? [], marginPct);
       await prisma.event.update({ where: { id: event.id }, data: { tennisSetMarketsVersion: TENNIS_SET_MARKETS_VERSION } });
       synced++;
     } catch (err: any) {
@@ -1321,7 +1347,7 @@ export async function syncTennisSetMarkets() {
   if (synced > 0) console.log(`🎾 Vainqueur du 1er set : ${synced} match(s) synchronisés`);
 }
 
-async function upsertTennisSetMarkets(eventId: string, homeTeam: string, awayTeam: string, bookmakers: any[]) {
+async function upsertTennisSetMarkets(eventId: string, homeTeam: string, awayTeam: string, bookmakers: any[], marginPct = 0) {
   const priorityKeys = ["bet365", "unibet", "betway", "onexbet", "pinnacle"];
   const orderedBookmakers = [
     ...priorityKeys.map((k) => bookmakers.find((b: any) => b.key === k)).filter(Boolean),
@@ -1339,11 +1365,12 @@ async function upsertTennisSetMarkets(eventId: string, homeTeam: string, awayTea
 
     for (const outcome of apiMarket.outcomes) {
       const label = outcome.name === homeTeam ? "1" : outcome.name === awayTeam ? "2" : outcome.name;
+      const value = applyMargin(outcome.price, marginPct);
       const existing = await prisma.odd.findFirst({ where: { marketId: market.id, label } });
       if (existing) {
-        await prisma.odd.update({ where: { id: existing.id }, data: { value: outcome.price } });
+        await prisma.odd.update({ where: { id: existing.id }, data: { value } });
       } else {
-        await prisma.odd.create({ data: { marketId: market.id, label, value: outcome.price } });
+        await prisma.odd.create({ data: { marketId: market.id, label, value } });
       }
     }
     break; // un seul bookmaker pour ce marché à source unique
