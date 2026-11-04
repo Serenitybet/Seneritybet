@@ -359,6 +359,18 @@ adminSportsRouter.patch("/markets/:id",
   requireRole("TRADER", "ADMIN", "SUPER_ADMIN"),
   asyncHandler(async (req: Request, res: Response) => {
     const { isSuspended, isActive, isPublished, name } = req.body;
+    // Empêche de publier un marché sans aucune cote — devenu possible depuis
+    // les marchés "manuels" pré-créés vides sur chaque match (demande
+    // explicite du 04/11/2026, voir odds.service.ts ensureManualMarketStubs) :
+    // sans ce garde-fou, un clic trop rapide sur "Publier" avant d'avoir
+    // rempli les cotes afficherait un marché vide sur le site/TPE.
+    if (isPublished === true) {
+      const oddsCount = await prisma.odd.count({ where: { marketId: req.params.id } });
+      if (oddsCount === 0) {
+        res.status(400).json({ success: false, error: "Impossible de publier un marché sans aucune cote — ajoutez d'abord les cotes." });
+        return;
+      }
+    }
     await prisma.market.update({
       where: { id: req.params.id },
       data: {

@@ -61,6 +61,24 @@ const MARKET_LABELS: Record<string, string> = {
   BOTH_TEAMS_SCORE_FIRST_HALF: "⚽ Les 2 équipes marquent (1ère mi-temps)",
   CORNERS_1X2:                 "🚩 Plus de corners (1X2)",
   FIRST_SET_WINNER:            "🎾 Vainqueur du 1er set",
+  // Marchés "manuels" pré-créés vides sur chaque match (demande explicite du
+  // 04/11/2026) — voir packages/api/.../odds.service.ts MANUAL_MARKET_STUBS.
+  // N'apparaissent ici (visibles/pariables) qu'une fois remplis et publiés
+  // par un trader ; invisibles tant qu'ils restent vides/brouillon, comme
+  // tout marché créé manuellement.
+  FIRST_HALF_TEAM_TOTALS:  "📐 Totaux par équipe (1ère mi-temps)",
+  SECOND_HALF_TEAM_TOTALS: "📐 Totaux par équipe (2nde mi-temps)",
+  FIRST_HALF_ODD_EVEN:     "🔢 Total pair/impair (1ère mi-temps)",
+  SECOND_HALF_ODD_EVEN:    "🔢 Total pair/impair (2nde mi-temps)",
+  FIRST_HALF_PENALTY:      "🥅 Penalty accordé (1ère mi-temps)",
+  SECOND_HALF_PENALTY:     "🥅 Penalty accordé (2nde mi-temps)",
+  HIGHEST_SCORING_HALF:    "⏱ Mi-temps avec le plus de buts",
+  DOUBLE_CHANCE_BTTS:      "🎯 Double chance + BTTS",
+  RESULT_BTTS:             "🏆 Résultat + BTTS",
+  RESULT_TOTAL:            "🏆 Résultat + Total",
+  DOUBLE_CHANCE_TOTAL:     "🎯 Double chance + Total",
+  BTTS_BOTH_HALVES:        "⚽ BTTS dans les 2 mi-temps",
+  WIN_BOTH_HALVES:         "🏆 Vainqueur des 2 mi-temps",
 };
 
 // Ordre d'affichage des onglets — les marchés les plus pariés en premier.
@@ -85,6 +103,12 @@ const MARKET_TAB_ORDER = [
   "CORNERS_TOTAL", "CORNERS_HANDICAP", "CORNERS_1X2", "CARDS_TOTAL", "CARDS_HANDICAP",
   "SHOTS_ON_TARGET_TOTAL", "FOULS_TOTAL",
   "FIRST_GOAL_SCORER", "HALF_TIME_RESULT",
+  "FIRST_HALF_TEAM_TOTALS", "SECOND_HALF_TEAM_TOTALS",
+  "FIRST_HALF_ODD_EVEN", "SECOND_HALF_ODD_EVEN",
+  "FIRST_HALF_PENALTY", "SECOND_HALF_PENALTY",
+  "HIGHEST_SCORING_HALF",
+  "DOUBLE_CHANCE_BTTS", "RESULT_BTTS", "RESULT_TOTAL", "DOUBLE_CHANCE_TOTAL",
+  "BTTS_BOTH_HALVES", "WIN_BOTH_HALVES",
 ];
 
 // Fusionne un marché principal (ligne unique) avec son marché de lignes

@@ -129,6 +129,27 @@ enum MarketType {
   BOTH_TEAMS_SCORE_FIRST_HALF
   CORNERS_1X2
   FIRST_SET_WINNER
+  // Marchés "manuels" — demande explicite du 04/11/2026 : pré-créés VIDES
+  // (sans aucune cote) sur chaque match de football dès sa synchronisation,
+  // pour que le trader n'ait plus qu'à remplir les cotes trouvées ailleurs
+  // (voir odds.service.ts ensureManualMarketStubs) puis publier — au lieu
+  // de devoir créer le marché lui-même à chaque fois. Aucun n'est fourni
+  // par TheOddsAPI ni réglable automatiquement, réglage manuel comme les
+  // autres marchés "stats" (voir stats-settlement.ts STATS_MARKET_TYPES,
+  // à étendre si ces marchés doivent un jour s'y régler).
+  FIRST_HALF_TEAM_TOTALS
+  SECOND_HALF_TEAM_TOTALS
+  FIRST_HALF_ODD_EVEN
+  SECOND_HALF_ODD_EVEN
+  FIRST_HALF_PENALTY
+  SECOND_HALF_PENALTY
+  HIGHEST_SCORING_HALF
+  DOUBLE_CHANCE_BTTS
+  RESULT_BTTS
+  RESULT_TOTAL
+  DOUBLE_CHANCE_TOTAL
+  BTTS_BOTH_HALVES
+  WIN_BOTH_HALVES
 }
 
 enum BetType {
@@ -383,6 +404,15 @@ model Event {
   // Vainqueur du 1er set (tennis uniquement) — voir odds.service.ts
   // syncTennisSetMarkets.
   tennisSetMarketsVersion Int @default(0)
+
+  // Marchés "manuels" pré-créés vides sur ce match (voir odds.service.ts
+  // ensureManualMarketStubs) — demande explicite du 04/11/2026. Booléen
+  // simple (pas de version) : contrairement aux autres lots, la liste des
+  // marchés manuels ne change pas souvent et un changement futur peut être
+  // géré en remettant ce flag à false en masse plutôt qu'en incrémentant
+  // une version à chaque match. Évite de refaire 14 `findFirst` par match à
+  // chaque cycle de sync une fois les marchés déjà créés.
+  manualMarketStubsCreated Boolean @default(false)
 
   // Nombre de tentatives de règlement automatique via API-Football (mi-temps,
   // corners, cartons — voir api-football.service.ts) pour cet évènement.

@@ -463,7 +463,55 @@ async function upsertEvent(competitionId: string, game: any, sportSlug = "footba
     } catch (err) {
       console.warn(`⚠️  Génération cotes Niveau 1 — échec pour ${event.homeTeam} vs ${event.awayTeam} :`, err);
     }
+    if (!event.manualMarketStubsCreated) {
+      try {
+        await ensureManualMarketStubs(event.id);
+      } catch (err) {
+        console.warn(`⚠️  Marchés manuels vides — échec pour ${event.homeTeam} vs ${event.awayTeam} :`, err);
+      }
+    }
   }
+}
+
+// ─── Marchés "manuels" pré-créés vides — demande explicite du 04/11/2026 ───────
+//
+// Aucun de ces marchés n'est fourni par TheOddsAPI ni réglable
+// automatiquement. Plutôt que d'attendre qu'un trader les crée lui-même sur
+// chaque match (type par type), ils sont créés VIDES (sans aucune cote) dès
+// la synchronisation du match, pour qu'il n'ait plus qu'à y ajouter les
+// cotes trouvées ailleurs (bouton "Ajouter une cote", déjà en place côté
+// backoffice) puis publier — le marché reste en brouillon (isPublished
+// false, invisible site/TPE) tant qu'il est vide, comme tout marché créé
+// manuellement.
+const MANUAL_MARKET_STUBS: { type: string; name: string }[] = [
+  { type: "FIRST_HALF_TEAM_TOTALS",  name: "Totaux par équipe — 1ère mi-temps" },
+  { type: "SECOND_HALF_TEAM_TOTALS", name: "Totaux par équipe — 2nde mi-temps" },
+  { type: "FIRST_HALF_ODD_EVEN",     name: "Total buts pair/impair — 1ère mi-temps" },
+  { type: "SECOND_HALF_ODD_EVEN",    name: "Total buts pair/impair — 2nde mi-temps" },
+  { type: "FIRST_HALF_PENALTY",      name: "Penalty accordé — 1ère mi-temps" },
+  { type: "SECOND_HALF_PENALTY",     name: "Penalty accordé — 2nde mi-temps" },
+  { type: "HIGHEST_SCORING_HALF",    name: "Mi-temps avec le plus de buts" },
+  { type: "DOUBLE_CHANCE_BTTS",      name: "Double chance et les deux équipes marquent" },
+  { type: "RESULT_BTTS",             name: "Résultat et les deux équipes marquent" },
+  { type: "RESULT_TOTAL",            name: "Résultat et total de buts (2.5)" },
+  { type: "DOUBLE_CHANCE_TOTAL",     name: "Double chance et total de buts (2.5)" },
+  { type: "BTTS_BOTH_HALVES",        name: "Les deux équipes marquent dans chaque mi-temps" },
+  { type: "WIN_BOTH_HALVES",         name: "Équipe gagnante des deux mi-temps" },
+  // BOTH_HALVES_SCORE ("Équipe marque à chaque mi-temps") existe déjà comme
+  // type de marché (créable manuellement) mais n'était jusqu'ici jamais
+  // pré-créé sur les matchs — ajouté à la liste pour la même raison que les
+  // nouveaux ci-dessus.
+  { type: "BOTH_HALVES_SCORE",       name: "Équipe marque à chaque mi-temps" },
+];
+
+async function ensureManualMarketStubs(eventId: string) {
+  for (const stub of MANUAL_MARKET_STUBS) {
+    const existing = await prisma.market.findFirst({ where: { eventId, type: stub.type as any } });
+    if (!existing) {
+      await prisma.market.create({ data: { eventId, name: stub.name, type: stub.type as any, isPublished: false } });
+    }
+  }
+  await prisma.event.update({ where: { id: eventId }, data: { manualMarketStubsCreated: true } });
 }
 
 const LEVEL1_MARGIN = 0.07; // marge bookmaker ~7%, cohérente avec les cotes réelles observées

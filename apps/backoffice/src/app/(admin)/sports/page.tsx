@@ -40,6 +40,27 @@ const MARKET_TYPES: { value: string; label: string; defaultOdds: { label: string
   { value: "BOTH_HALVES_SCORE",       label: "Marque dans les 2 mi-temps", defaultOdds: [{ label: "Domicile Oui", value: "2.60" }, { label: "Domicile Non", value: "1.45" }, { label: "Extérieur Oui", value: "3.40" }, { label: "Extérieur Non", value: "1.25" }] },
   { value: "SHOTS_ON_TARGET_TOTAL",   label: "Plus/Moins tirs cadrés",     defaultOdds: [{ label: "Plus 8.5", value: "1.90" }, { label: "Moins 8.5", value: "1.90" }] },
   { value: "FOULS_TOTAL",             label: "Plus/Moins fautes",          defaultOdds: [{ label: "Plus 22.5", value: "1.90" }, { label: "Moins 22.5", value: "1.90" }] },
+  // Marchés "manuels" pré-créés vides sur chaque match — demande explicite
+  // du 04/11/2026 (voir packages/api/.../odds.service.ts
+  // MANUAL_MARKET_STUBS). Cette entrée n'est normalement utile qu'en
+  // secours (le marché existe déjà, vide, sur chaque match) : "Ajouter un
+  // marché" ne sert ici qu'à retrouver les étiquettes attendues
+  // (defaultOdds), affichées en indice sous "Ajouter une cote" — le trader
+  // n'est jamais obligé de les suivre à la lettre, mais ça garde une
+  // convention cohérente d'un match à l'autre.
+  { value: "FIRST_HALF_TEAM_TOTALS",  label: "Totaux par équipe (1ère MT)", defaultOdds: [{ label: "Domicile Plus 0.5", value: "1.80" }, { label: "Domicile Moins 0.5", value: "1.90" }, { label: "Extérieur Plus 0.5", value: "1.90" }, { label: "Extérieur Moins 0.5", value: "1.80" }] },
+  { value: "SECOND_HALF_TEAM_TOTALS", label: "Totaux par équipe (2nde MT)", defaultOdds: [{ label: "Domicile Plus 0.5", value: "1.75" }, { label: "Domicile Moins 0.5", value: "1.95" }, { label: "Extérieur Plus 0.5", value: "1.95" }, { label: "Extérieur Moins 0.5", value: "1.75" }] },
+  { value: "FIRST_HALF_ODD_EVEN",     label: "Total pair/impair (1ère MT)", defaultOdds: [{ label: "Pair", value: "1.90" }, { label: "Impair", value: "1.90" }] },
+  { value: "SECOND_HALF_ODD_EVEN",    label: "Total pair/impair (2nde MT)", defaultOdds: [{ label: "Pair", value: "1.90" }, { label: "Impair", value: "1.90" }] },
+  { value: "FIRST_HALF_PENALTY",      label: "Penalty accordé (1ère MT)",   defaultOdds: [{ label: "Oui", value: "6.00" }, { label: "Non", value: "1.12" }] },
+  { value: "SECOND_HALF_PENALTY",     label: "Penalty accordé (2nde MT)",   defaultOdds: [{ label: "Oui", value: "6.00" }, { label: "Non", value: "1.12" }] },
+  { value: "HIGHEST_SCORING_HALF",    label: "Mi-temps avec le plus de buts", defaultOdds: [{ label: "1ère mi-temps", value: "2.40" }, { label: "2nde mi-temps", value: "2.00" }, { label: "Égalité", value: "3.20" }] },
+  { value: "DOUBLE_CHANCE_BTTS",      label: "Double chance + BTTS",        defaultOdds: [{ label: "1X & Oui", value: "2.60" }, { label: "1X & Non", value: "2.20" }, { label: "12 & Oui", value: "1.70" }, { label: "12 & Non", value: "3.00" }, { label: "2X & Oui", value: "3.80" }, { label: "2X & Non", value: "3.40" }] },
+  { value: "RESULT_BTTS",             label: "Résultat + BTTS",             defaultOdds: [{ label: "1 & Oui", value: "3.60" }, { label: "1 & Non", value: "3.20" }, { label: "X & Oui", value: "6.50" }, { label: "X & Non", value: "4.80" }, { label: "2 & Oui", value: "5.50" }, { label: "2 & Non", value: "7.50" }] },
+  { value: "RESULT_TOTAL",            label: "Résultat + Total 2.5",        defaultOdds: [{ label: "1 & Plus 2.5", value: "3.80" }, { label: "1 & Moins 2.5", value: "3.40" }, { label: "X & Plus 2.5", value: "6.00" }, { label: "X & Moins 2.5", value: "4.50" }, { label: "2 & Plus 2.5", value: "5.80" }, { label: "2 & Moins 2.5", value: "7.00" }] },
+  { value: "DOUBLE_CHANCE_TOTAL",     label: "Double chance + Total 2.5",   defaultOdds: [{ label: "1X & Plus 2.5", value: "2.50" }, { label: "1X & Moins 2.5", value: "2.10" }, { label: "12 & Plus 2.5", value: "1.65" }, { label: "12 & Moins 2.5", value: "2.80" }, { label: "2X & Plus 2.5", value: "3.60" }, { label: "2X & Moins 2.5", value: "3.20" }] },
+  { value: "BTTS_BOTH_HALVES",        label: "BTTS dans les 2 mi-temps",    defaultOdds: [{ label: "Oui", value: "8.00" }, { label: "Non", value: "1.07" }] },
+  { value: "WIN_BOTH_HALVES",         label: "Vainqueur des 2 mi-temps",    defaultOdds: [{ label: "Domicile", value: "3.00" }, { label: "Extérieur", value: "4.50" }, { label: "Aucune", value: "1.90" }] },
   // Marchés TheOddsAPI supplémentaires activés le 01/11/2026 (demande
   // explicite : utiliser toutes les options proposées par TheOddsAPI pour
   // foot/basket/tennis) — normalement synchronisés automatiquement, cette
@@ -266,10 +287,18 @@ export default function SportsPage() {
   // et au TPE — demande explicite du 01/11/2026 (vérifier d'abord un
   // nouveau marché en backoffice, ne le déployer qu'une fois validé).
   async function togglePublish(market: Market) {
-    await fetch(`${API}/admin/sports/markets/${market.id}`, {
+    const r = await fetch(`${API}/admin/sports/markets/${market.id}`, {
       method: "PATCH", headers: authHeaders(),
       body: JSON.stringify({ isPublished: !market.isPublished }),
     });
+    // Vérifie la réponse — jusqu'ici ignorée, donc un échec (ex. publication
+    // d'un marché sans cote, désormais refusée côté serveur — demande
+    // explicite du 04/11/2026) affichait quand même "Publié ✓" à tort.
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      toast.error(d.error ?? "Erreur");
+      return;
+    }
     toast.success(market.isPublished ? "Marché repassé en brouillon" : "Marché publié ✓ — visible sur le site et au TPE");
     if (selectedEvent) await openPanel(selectedEvent);
   }
@@ -703,6 +732,18 @@ export default function SportsPage() {
                               onDelete={() => deleteOdd(odd.id)} />
                           ))}
                         </div>
+
+                        {/* Marché vide (pré-créé automatiquement) — indice des
+                            étiquettes habituellement utilisées pour ce type de
+                            marché, pour garder une convention cohérente d'un
+                            match à l'autre (demande explicite du 04/11/2026).
+                            Purement indicatif, le trader reste libre du texte
+                            exact de chaque étiquette. */}
+                        {market.odds.length === 0 && (
+                          <p className="text-[10px] text-t-faint mb-1.5">
+                            💡 Étiquettes suggérées : {(MARKET_TYPES.find(m => m.value === market.type)?.defaultOdds ?? []).map(o => o.label).join(" · ") || "libre"}
+                          </p>
+                        )}
 
                         {/* Ajouter une cote */}
                         {newOdd.marketId === market.id ? (
