@@ -79,8 +79,14 @@ export default function TpeTicketsPage() {
   // Filtre par région — demande explicite du 04/11/2026.
   const [regionId, setRegionId] = useState("");
   const [dangerousOnly, setDangerousOnly] = useState(false);
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  // Par défaut sur "Aujourd'hui" à l'ouverture de la page — demande
+  // explicite du 04/11/2026 (jusqu'ici aucun filtre de date par défaut,
+  // donc TOUS les tickets jamais émis s'affichaient/comptaient dans le
+  // résumé tant que l'admin ne cliquait pas "Aujourd'hui" lui-même).
+  // Reste librement modifiable ensuite, contrairement au "Au" du rapport
+  // consolidé ci-dessus qui lui est verrouillé.
+  const [from, setFrom] = useState(todayStr());
+  const [to, setTo] = useState(todayStr());
   const [groupByTpe, setGroupByTpe] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   // Rapport consolidé — demande explicite du 31/10/2026 : exporter les
