@@ -424,6 +424,36 @@ adminSportsRouter.post("/markets/:id/odds",
   }),
 );
 
+// POST /api/admin/sports/markets/:id/odds/batch — ajouter plusieurs cotes
+// d'un coup — demande explicite du 04/11/2026 : remplir un marché "manuel"
+// pré-créé vide (voir ensureManualMarketStubs, odds.service.ts) une cote à
+// la fois était trop lent pour des marchés à 6-8 issues. Tout ou rien (une
+// seule transaction) — un marché à moitié rempli en cas d'erreur en cours
+// de route serait trompeur (semble prêt à publier mais incomplet).
+adminSportsRouter.post("/markets/:id/odds/batch",
+  requireRole("TRADER", "ADMIN", "SUPER_ADMIN"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { odds } = req.body;
+    if (!Array.isArray(odds) || odds.length === 0) {
+      res.status(400).json({ success: false, error: "Au moins une cote requise" }); return;
+    }
+    for (const o of odds) {
+      if (!o?.label || o.value === undefined || isNaN(Number(o.value))) {
+        res.status(400).json({ success: false, error: `Label et valeur requis pour "${o?.label ?? "?"}"` }); return;
+      }
+      if (Number(o.value) < 1.01) {
+        res.status(400).json({ success: false, error: `Cote minimale 1.01 pour "${o.label}"` }); return;
+      }
+    }
+    const created = await prisma.$transaction(
+      odds.map((o: { label: string; value: number }) =>
+        prisma.odd.create({ data: { marketId: req.params.id, label: o.label, value: Number(o.value) } }),
+      ),
+    );
+    res.status(201).json({ success: true, data: created });
+  }),
+);
+
 // PATCH /api/admin/sports/odds/:id — modifier une cote
 adminSportsRouter.patch("/odds/:id",
   requireRole("TRADER", "ADMIN", "SUPER_ADMIN"),
