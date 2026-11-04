@@ -151,6 +151,11 @@ export default function SportsPage() {
   const [newMarket, setNewMarket]    = useState({ type: "MATCH_WINNER", name: "", odds: [] as { label: string; value: string }[] });
   const [addingMarket, setAddMarket] = useState(false);
   const [newOdd, setNewOdd]          = useState({ marketId: "", label: "", value: "" });
+  // Remplissage en masse d'un marché vide (pré-créé automatiquement) — clé
+  // "marketId__label" -> valeur saisie — demande explicite du 04/11/2026 :
+  // ajouter une cote à la fois était trop lent pour des marchés à 6-8
+  // issues (ex. "Résultat + BTTS").
+  const [bulkValues, setBulkValues]  = useState<Record<string, string>>({});
 
   // Réglage en masse des marchés stats (mi-temps, corners, cartons, tirs, fautes)
   const [statsForm, setStatsForm] = useState({
@@ -342,6 +347,30 @@ export default function SportsPage() {
     if (!r.ok) { toast.error(d.error ?? "Erreur"); return; }
     toast.success("✓ Cote ajoutée");
     setNewOdd({ marketId: "", label: "", value: "" });
+    if (selectedEvent) await openPanel(selectedEvent);
+  }
+
+  // ── Remplir un marché vide d'un coup (toutes les issues attendues) ────────────
+
+  async function saveBulkOdds(market: Market, template: { label: string; value: string }[]) {
+    const odds = template
+      .map(t => ({ label: t.label, raw: bulkValues[`${market.id}__${t.label}`] }))
+      .filter(o => o.raw !== undefined && o.raw.trim() !== "")
+      .map(o => ({ label: o.label, value: parseFloat(o.raw) }));
+    if (odds.length === 0) { toast.error("Remplis au moins une cote"); return; }
+    if (odds.some(o => isNaN(o.value))) { toast.error("Valeur de cote invalide"); return; }
+    const r = await fetch(`${API}/admin/sports/markets/${market.id}/odds/batch`, {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify({ odds }),
+    });
+    const d = await r.json();
+    if (!r.ok) { toast.error(d.error ?? "Erreur"); return; }
+    toast.success(`✓ ${odds.length} cote(s) ajoutée(s)`);
+    setBulkValues(p => {
+      const next = { ...p };
+      for (const t of template) delete next[`${market.id}__${t.label}`];
+      return next;
+    });
     if (selectedEvent) await openPanel(selectedEvent);
   }
 
@@ -750,19 +779,51 @@ export default function SportsPage() {
                           ))}
                         </div>
 
-                        {/* Marché vide (pré-créé automatiquement) — indice des
-                            étiquettes habituellement utilisées pour ce type de
-                            marché, pour garder une convention cohérente d'un
-                            match à l'autre (demande explicite du 04/11/2026).
-                            Purement indicatif, le trader reste libre du texte
-                            exact de chaque étiquette. */}
-                        {market.odds.length === 0 && (
-                          <p className="text-[10px] text-t-faint mb-1.5">
-                            💡 Étiquettes suggérées : {(MARKET_TYPES.find(m => m.value === market.type)?.defaultOdds ?? []).map(o => o.label).join(" · ") || "libre"}
-                          </p>
-                        )}
+                        {/* Marché vide (pré-créé automatiquement) — toutes les
+                            issues attendues pour ce type de marché affichées
+                            d'un coup, à remplir puis enregistrer en une seule
+                            fois (demande explicite du 04/11/2026 : ajouter les
+                            cotes une par une était trop lent pour un marché à
+                            6-8 issues comme "Résultat + BTTS"). Le trader reste
+                            libre de ne pas tout remplir, ou de corriger
+                            l'étiquette via "+ Ajouter une cote" ensuite. */}
+                        {market.odds.length === 0 && (() => {
+                          const template = MARKET_TYPES.find(m => m.value === market.type)?.defaultOdds ?? [];
+                          if (template.length === 0) {
+                            return (
+                              <p className="text-[10px] text-t-faint mb-1.5">
+                                💡 Pas d'étiquettes prédéfinies pour ce type de marché — ajoute les cotes librement ci-dessous.
+                              </p>
+                            );
+                          }
+                          return (
+                            <div className="space-y-1 mb-2">
+                              <p className="text-[10px] text-t-faint mb-1">
+                                💡 Remplis les cotes trouvées ailleurs, puis enregistre tout en une fois :
+                              </p>
+                              {template.map(t => (
+                                <div key={t.label} className="flex items-center gap-1.5">
+                                  <span className="flex-1 text-[11px] text-t-muted truncate">{t.label}</span>
+                                  <input
+                                    className="bo-input w-20 text-xs py-1 font-mono"
+                                    placeholder={t.value}
+                                    type="number" step="0.01"
+                                    value={bulkValues[`${market.id}__${t.label}`] ?? ""}
+                                    onChange={e => setBulkValues(p => ({ ...p, [`${market.id}__${t.label}`]: e.target.value }))}
+                                  />
+                                </div>
+                              ))}
+                              <button onClick={() => saveBulkOdds(market, template)}
+                                className="bo-btn-primary text-xs py-1 w-full mt-1">
+                                ✓ Enregistrer tout
+                              </button>
+                            </div>
+                          );
+                        })()}
 
-                        {/* Ajouter une cote */}
+                        {/* Ajouter une cote (une par une — correction d'une
+                            étiquette, ajout ponctuel sur un marché déjà rempli,
+                            ou marché sans modèle d'étiquettes prédéfini). */}
                         {newOdd.marketId === market.id ? (
                           <div className="flex gap-1.5 mt-1">
                             <input className="bo-input flex-1 text-xs py-1" placeholder="Label (ex: 1-1)"
