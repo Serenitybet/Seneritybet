@@ -25,8 +25,11 @@ adminTicketsRouter.get("/", asyncHandler(async (req: Request, res: Response) => 
   const from      = req.query.from as string | undefined; // YYYY-MM-DD, début de journée
   const to        = req.query.to   as string | undefined; // YYYY-MM-DD, fin de journée incluse
 
-  const where = {
-    ...(status ? { status: status as any } : {}),
+  // Filtres communs hors statut — séparés du statut pour pouvoir composer
+  // les agrégats ci-dessous (misé/gagné/payé) sans que le statut déjà
+  // sélectionné par l'admin n'interfère avec celui, différent, que chaque
+  // agrégat doit lui-même appliquer (voir statusFilterFor).
+  const baseWhere = {
     ...(tpeId ? { tpeId } : {}),
     ...(regionId ? { tpe: { regionId } } : {}),
     ...(dangerous ? { requiresApproval: true, approvedAt: null } : {}),
@@ -37,8 +40,29 @@ adminTicketsRouter.get("/", asyncHandler(async (req: Request, res: Response) => 
       },
     } : {}),
   };
+  const where = { ...baseWhere, ...(status ? { status: status as any } : {}) };
 
-  const [total, tickets] = await Promise.all([
+  // "gagné"/"payé" ont chacun leur propre notion de statut — si l'admin a
+  // déjà filtré sur un statut précis (ex. "Perdant"), ce filtre doit rester
+  // prioritaire plutôt que d'être écrasé par celui de l'agrégat : un statut
+  // incompatible (ex. LOST pour "gagné") donne alors 0, pas le total non
+  // filtré. undefined = combinaison impossible, l'agrégat est sauté.
+  function statusFilterFor(desired: string[]): string | { in: string[] } | undefined {
+    if (!status) return { in: desired };
+    return desired.includes(status) ? status : undefined;
+  }
+  const WON_STATUSES = ["WON", "PAID", "CASHED_OUT_PENDING"];
+  const wonStatusFilter  = statusFilterFor(WON_STATUSES);
+  const paidStatusFilter = statusFilterFor(["PAID"]);
+
+  // Totaux calculés par agrégation SQL sur TOUT l'ensemble filtré, indépendamment
+  // de la pagination (skip/take) — signalé en prod le 04/11/2026 : les totaux
+  // affichés au backoffice étaient jusqu'ici sommés côté client à partir de la
+  // seule page de résultats reçue (limit=100 par défaut), donnant des totaux
+  // tronqués et INCOHÉRENTS dès qu'un filtre large (ex. toute une région)
+  // dépassait 100 tickets — une région pouvait afficher un total inférieur à
+  // la somme de 3 de ses propres TPE pris individuellement.
+  const [total, tickets, stakeAgg, wonAgg, paidAgg] = await Promise.all([
     prisma.ticket.count({ where }),
     prisma.ticket.findMany({
       where,
@@ -51,6 +75,13 @@ adminTicketsRouter.get("/", asyncHandler(async (req: Request, res: Response) => 
       skip: (page - 1) * limit,
       take: limit,
     }),
+    prisma.ticket.aggregate({ where, _sum: { stake: true } }),
+    wonStatusFilter !== undefined
+      ? prisma.ticket.aggregate({ where: { ...baseWhere, status: wonStatusFilter as any }, _sum: { potentialWin: true } })
+      : Promise.resolve({ _sum: { potentialWin: null as bigint | null } }),
+    paidStatusFilter !== undefined
+      ? prisma.ticket.aggregate({ where: { ...baseWhere, status: paidStatusFilter as any }, _sum: { potentialWin: true } })
+      : Promise.resolve({ _sum: { potentialWin: null as bigint | null } }),
   ]);
 
   res.json({
@@ -58,6 +89,11 @@ adminTicketsRouter.get("/", asyncHandler(async (req: Request, res: Response) => 
     data: {
       tickets: tickets.map(serializeTicket),
       total, page, limit, totalPages: Math.ceil(total / limit),
+      summary: {
+        stakeXAF: Number(stakeAgg._sum.stake ?? BigInt(0)) / 100,
+        wonXAF:   Number(wonAgg._sum.potentialWin ?? BigInt(0)) / 100,
+        paidXAF:  Number(paidAgg._sum.potentialWin ?? BigInt(0)) / 100,
+      },
     },
   });
 }));

@@ -71,6 +71,14 @@ export default function TpeTicketsPage() {
   const canSettle = admin?.role && ["TRADER", "ADMIN", "SUPER_ADMIN"].includes(admin.role);
   const canApprove = admin?.role && ["ADMIN", "SUPER_ADMIN", "FINANCE"].includes(admin.role);
   const [tickets, setTickets] = useState<Ticket[]>([]);
+  // Nombre réel de tickets correspondant aux filtres, et totaux (misé/
+  // gagné/payé) — tous deux calculés côté serveur sur l'ENSEMBLE filtré,
+  // indépendamment de la pagination de la liste détaillée ci-dessous (voir
+  // GET /admin/tickets) — demande explicite du 04/11/2026, suite à des
+  // totaux faux constatés en prod quand un filtre large dépassait 100
+  // tickets (sommés jusqu'ici côté client à partir de la seule page reçue).
+  const [totalCount, setTotalCount] = useState(0);
+  const [summary, setSummary] = useState({ stakeXAF: 0, wonXAF: 0, paidXAF: 0 });
   const [tpes, setTpes] = useState<Tpe[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
   const [loading, setLoading] = useState(true);
@@ -167,6 +175,13 @@ export default function TpeTicketsPage() {
       if (dangerousOnly) params.set("dangerous", "true");
       if (from) params.set("from", from);
       if (to) params.set("to", to);
+      // Limite par défaut de l'API (100) trop basse pour la liste détaillée
+      // dès qu'un filtre large (ex. toute une région) dépasse ce seuil —
+      // signalé en prod le 04/11/2026. Les totaux (misé/gagné/payé) ne
+      // dépendent eux plus de cette limite (calculés côté serveur sur tout
+      // l'ensemble filtré, voir summary ci-dessous) ; ceci ne concerne donc
+      // plus que la liste elle-même.
+      params.set("limit", "2000");
       const [ticketsRes, tpesRes, regionsRes] = await Promise.all([
         fetch(`${API}/admin/tickets?${params}`, { headers: authHeaders() }),
         fetch(`${API}/admin/tpe`, { headers: authHeaders() }),
@@ -175,7 +190,11 @@ export default function TpeTicketsPage() {
       const td = await ticketsRes.json();
       const pd = await tpesRes.json();
       const rd = await regionsRes.json();
-      if (td.data) setTickets(td.data.tickets);
+      if (td.data) {
+        setTickets(td.data.tickets);
+        setTotalCount(td.data.total ?? td.data.tickets.length);
+        if (td.data.summary) setSummary(td.data.summary);
+      }
       if (pd.data) setTpes(pd.data);
       if (rd.data) setRegions(rd.data);
     } catch { toast.error("Erreur de chargement"); }
@@ -297,20 +316,6 @@ export default function TpeTicketsPage() {
     }
     return [...map.entries()];
   }, [tickets, groupByTpe]);
-
-  // Résumé en un coup d'œil des tickets actuellement affichés (mêmes
-  // filtres que la liste et l'export Excel ci-dessous) — demande explicite
-  // du 04/11/2026 : voir les totaux sans avoir à les calculer à la main à
-  // partir de la liste détaillée.
-  const summary = useMemo(() => {
-    let stakeXAF = 0, wonXAF = 0, paidXAF = 0;
-    for (const t of tickets) {
-      stakeXAF += t.stakeXAF;
-      if (t.status === "WON" || t.status === "PAID" || t.status === "CASHED_OUT_PENDING") wonXAF += t.potentialWinXAF;
-      if (t.status === "PAID") paidXAF += t.potentialWinXAF;
-    }
-    return { stakeXAF, wonXAF, paidXAF };
-  }, [tickets]);
 
   function isDangerous(t: Ticket) {
     return t.status === "WON" && t.requiresApproval && !t.approvedAt;
@@ -442,7 +447,9 @@ export default function TpeTicketsPage() {
       <div className="bo-filter-bar flex-wrap">
         <div>
           <h1 className="text-lg font-bold text-t-primary">🎫 Tickets TPE</h1>
-          <p className="text-[11px] text-t-faint mt-0.5">{tickets.length} ticket(s)</p>
+          <p className="text-[11px] text-t-faint mt-0.5">
+            {totalCount} ticket(s){tickets.length < totalCount ? ` (${tickets.length} affichés)` : ""}
+          </p>
         </div>
         <select className="bo-select" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">Tous les statuts</option>
@@ -494,8 +501,9 @@ export default function TpeTicketsPage() {
       </div>
 
       {/* Résumé des tickets actuellement affichés — mêmes filtres que la
-          liste ci-dessous, aucun calcul à faire à la main. */}
-      {!loading && tickets.length > 0 && (
+          liste ci-dessous, calculé côté serveur sur tout l'ensemble filtré
+          (pas seulement la page reçue), aucun calcul à faire à la main. */}
+      {!loading && totalCount > 0 && (
         <div className="grid grid-cols-3 gap-4">
           <div className="kpi-card">
             <div className="kpi-label"><span>💵</span>Total misé</div>
