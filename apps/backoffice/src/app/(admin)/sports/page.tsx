@@ -59,7 +59,10 @@ const MARKET_TYPES: { value: string; label: string; defaultOdds: { label: string
   { value: "RESULT_BTTS",             label: "Résultat + BTTS",             defaultOdds: [{ label: "1 & Oui", value: "3.60" }, { label: "1 & Non", value: "3.20" }, { label: "X & Oui", value: "6.50" }, { label: "X & Non", value: "4.80" }, { label: "2 & Oui", value: "5.50" }, { label: "2 & Non", value: "7.50" }] },
   { value: "RESULT_TOTAL",            label: "Résultat + Total 2.5",        defaultOdds: [{ label: "1 & Plus 2.5", value: "3.80" }, { label: "1 & Moins 2.5", value: "3.40" }, { label: "X & Plus 2.5", value: "6.00" }, { label: "X & Moins 2.5", value: "4.50" }, { label: "2 & Plus 2.5", value: "5.80" }, { label: "2 & Moins 2.5", value: "7.00" }] },
   { value: "DOUBLE_CHANCE_TOTAL",     label: "Double chance + Total 2.5",   defaultOdds: [{ label: "1X & Plus 2.5", value: "2.50" }, { label: "1X & Moins 2.5", value: "2.10" }, { label: "12 & Plus 2.5", value: "1.65" }, { label: "12 & Moins 2.5", value: "2.80" }, { label: "2X & Plus 2.5", value: "3.60" }, { label: "2X & Moins 2.5", value: "3.20" }] },
-  { value: "BTTS_BOTH_HALVES",        label: "BTTS dans les 2 mi-temps",    defaultOdds: [{ label: "Oui", value: "8.00" }, { label: "Non", value: "1.07" }] },
+  // 4 issues (BTTS 1ère mi-temps croisé avec BTTS 2nde mi-temps), pas un
+  // simple Oui/Non global — corrigé le 04/11/2026 d'après un exemple
+  // concurrent (Oui/Oui, Oui/Non, Non/Oui, Non/Non).
+  { value: "BTTS_BOTH_HALVES",        label: "BTTS dans les 2 mi-temps",    defaultOdds: [{ label: "Oui / Oui", value: "22.00" }, { label: "Oui / Non", value: "5.60" }, { label: "Non / Oui", value: "3.95" }, { label: "Non / Non", value: "1.30" }] },
   { value: "WIN_BOTH_HALVES",         label: "Vainqueur des 2 mi-temps",    defaultOdds: [{ label: "Domicile", value: "3.00" }, { label: "Extérieur", value: "4.50" }, { label: "Aucune", value: "1.90" }] },
   // Marchés TheOddsAPI supplémentaires activés le 01/11/2026 (demande
   // explicite : utiliser toutes les options proposées par TheOddsAPI pour
