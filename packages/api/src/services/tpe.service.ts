@@ -420,22 +420,29 @@ export async function getTpeSummaryReport(from: Date, to: Date) {
     paidByTpe.set(tpeId, cur);
   }
 
-  return tpes.map((tpe) => {
-    const issued = issuedByTpe.get(tpe.id) ?? { count: 0, total: BigInt(0) };
-    const paid = paidByTpe.get(tpe.id) ?? { count: 0, total: BigInt(0) };
-    return {
-      tpeId: tpe.id,
-      tpeCode: tpe.code,
-      tpeName: tpe.name,
-      regionName: tpe.region?.name ?? null,
-      status: tpe.status,
-      issuedCount: issued.count,
-      issuedTotalXAF: Number(issued.total) / 100,
-      paidCount: paid.count,
-      paidTotalXAF: Number(paid.total) / 100,
-      netXAF: Number(issued.total - paid.total) / 100,
-    };
-  });
+  // Un TPE sans aucune vente ni aucun paiement sur la période n'a pas
+  // "travaillé" ce jour-là — exclu du rapport plutôt que d'y figurer avec
+  // une ligne entièrement à zéro (signalé en prod le 04/11/2026 : le
+  // rapport listait tous les TPE enregistrés, actifs ou non, sur la
+  // période).
+  return tpes
+    .map((tpe) => {
+      const issued = issuedByTpe.get(tpe.id) ?? { count: 0, total: BigInt(0) };
+      const paid = paidByTpe.get(tpe.id) ?? { count: 0, total: BigInt(0) };
+      return {
+        tpeId: tpe.id,
+        tpeCode: tpe.code,
+        tpeName: tpe.name,
+        regionName: tpe.region?.name ?? null,
+        status: tpe.status,
+        issuedCount: issued.count,
+        issuedTotalXAF: Number(issued.total) / 100,
+        paidCount: paid.count,
+        paidTotalXAF: Number(paid.total) / 100,
+        netXAF: Number(issued.total - paid.total) / 100,
+      };
+    })
+    .filter((row: { issuedCount: number; paidCount: number }) => row.issuedCount > 0 || row.paidCount > 0);
 }
 
 export async function getTicketByCode(code: string) {
