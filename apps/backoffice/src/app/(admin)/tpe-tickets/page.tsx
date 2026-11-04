@@ -279,6 +279,20 @@ export default function TpeTicketsPage() {
     return [...map.entries()];
   }, [tickets, groupByTpe]);
 
+  // Résumé en un coup d'œil des tickets actuellement affichés (mêmes
+  // filtres que la liste et l'export Excel ci-dessous) — demande explicite
+  // du 04/11/2026 : voir les totaux sans avoir à les calculer à la main à
+  // partir de la liste détaillée.
+  const summary = useMemo(() => {
+    let stakeXAF = 0, wonXAF = 0, paidXAF = 0;
+    for (const t of tickets) {
+      stakeXAF += t.stakeXAF;
+      if (t.status === "WON" || t.status === "PAID" || t.status === "CASHED_OUT_PENDING") wonXAF += t.potentialWinXAF;
+      if (t.status === "PAID") paidXAF += t.potentialWinXAF;
+    }
+    return { stakeXAF, wonXAF, paidXAF };
+  }, [tickets]);
+
   function isDangerous(t: Ticket) {
     return t.status === "WON" && t.requiresApproval && !t.approvedAt;
   }
@@ -449,6 +463,25 @@ export default function TpeTicketsPage() {
           Grouper par TPE
         </label>
       </div>
+
+      {/* Résumé des tickets actuellement affichés — mêmes filtres que la
+          liste ci-dessous, aucun calcul à faire à la main. */}
+      {!loading && tickets.length > 0 && (
+        <div className="grid grid-cols-3 gap-4">
+          <div className="kpi-card">
+            <div className="kpi-label"><span>💵</span>Total misé</div>
+            <div className="kpi-value text-blue-400">{fmtXAF(summary.stakeXAF)}</div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-label"><span>🏆</span>Total gagné</div>
+            <div className="kpi-value text-gold">{fmtXAF(summary.wonXAF)}</div>
+          </div>
+          <div className="kpi-card">
+            <div className="kpi-label"><span>✅</span>Total payé</div>
+            <div className="kpi-value text-green-400">{fmtXAF(summary.paidXAF)}</div>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="bo-card p-12 text-center text-t-faint">Chargement…</div>
