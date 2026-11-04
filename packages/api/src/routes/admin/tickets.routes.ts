@@ -14,6 +14,13 @@ adminTicketsRouter.get("/", asyncHandler(async (req: Request, res: Response) => 
   const limit     = parseInt((req.query.limit as string) ?? "100", 10);
   const status    = req.query.status as string | undefined;
   const tpeId     = req.query.tpeId as string | undefined;
+  // Filtre par région — demande explicite du 04/11/2026 : retrouver les
+  // tickets de tous les TPE d'une région sans avoir à les sélectionner un
+  // par un (ils peuvent être nombreux par région). Compatible avec tpeId
+  // (les deux peuvent être combinés, même si l'UI n'en propose qu'un à la
+  // fois) : filtre sur la relation Tpe -> Region plutôt que sur un champ
+  // direct de Ticket (qui n'a pas de regionId propre).
+  const regionId  = req.query.regionId as string | undefined;
   const dangerous = req.query.dangerous === "true";
   const from      = req.query.from as string | undefined; // YYYY-MM-DD, début de journée
   const to        = req.query.to   as string | undefined; // YYYY-MM-DD, fin de journée incluse
@@ -21,6 +28,7 @@ adminTicketsRouter.get("/", asyncHandler(async (req: Request, res: Response) => 
   const where = {
     ...(status ? { status: status as any } : {}),
     ...(tpeId ? { tpeId } : {}),
+    ...(regionId ? { tpe: { regionId } } : {}),
     ...(dangerous ? { requiresApproval: true, approvedAt: null } : {}),
     ...((from || to) ? {
       createdAt: {

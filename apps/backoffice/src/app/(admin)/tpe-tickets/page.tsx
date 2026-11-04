@@ -36,7 +36,8 @@ interface Ticket {
 const RESULT_LABEL: Record<string, string> = { WON: "Gagné", LOST: "Perdu", VOID: "Annulé" };
 const RESULT_BADGE: Record<string, string> = { WON: "bo-badge-green", LOST: "bo-badge-red", VOID: "bo-badge-gray" };
 
-interface Tpe { id: string; code: string; name: string | null }
+interface Tpe { id: string; code: string; name: string | null; regionId: string | null }
+interface Region { id: string; name: string }
 
 interface TpeSummaryRow {
   tpeId: string;
@@ -71,9 +72,12 @@ export default function TpeTicketsPage() {
   const canApprove = admin?.role && ["ADMIN", "SUPER_ADMIN", "FINANCE"].includes(admin.role);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [tpes, setTpes] = useState<Tpe[]>([]);
+  const [regions, setRegions] = useState<Region[]>([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
   const [tpeId, setTpeId] = useState("");
+  // Filtre par région — demande explicite du 04/11/2026.
+  const [regionId, setRegionId] = useState("");
   const [dangerousOnly, setDangerousOnly] = useState(false);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -148,22 +152,26 @@ export default function TpeTicketsPage() {
       const params = new URLSearchParams();
       if (status) params.set("status", status);
       if (tpeId) params.set("tpeId", tpeId);
+      if (regionId) params.set("regionId", regionId);
       if (dangerousOnly) params.set("dangerous", "true");
       if (from) params.set("from", from);
       if (to) params.set("to", to);
-      const [ticketsRes, tpesRes] = await Promise.all([
+      const [ticketsRes, tpesRes, regionsRes] = await Promise.all([
         fetch(`${API}/admin/tickets?${params}`, { headers: authHeaders() }),
         fetch(`${API}/admin/tpe`, { headers: authHeaders() }),
+        fetch(`${API}/admin/regions`, { headers: authHeaders() }),
       ]);
       const td = await ticketsRes.json();
       const pd = await tpesRes.json();
+      const rd = await regionsRes.json();
       if (td.data) setTickets(td.data.tickets);
       if (pd.data) setTpes(pd.data);
+      if (rd.data) setRegions(rd.data);
     } catch { toast.error("Erreur de chargement"); }
     finally { setLoading(false); }
   }
 
-  useEffect(() => { load(); }, [status, tpeId, dangerousOnly, from, to]);
+  useEffect(() => { load(); }, [status, tpeId, regionId, dangerousOnly, from, to]);
 
   // Export Excel — demande explicite du 31/10/2026 : exporte exactement les
   // tickets actuellement affichés (mêmes filtres TPE/statut/période que ceux
@@ -433,9 +441,18 @@ export default function TpeTicketsPage() {
           <option value="PAID">Payé</option>
           <option value="CANCELLED">Annulé</option>
         </select>
+        <select
+          className="bo-select"
+          value={regionId}
+          onChange={(e) => { setRegionId(e.target.value); setTpeId(""); }}
+        >
+          <option value="">Toutes les régions</option>
+          {regions.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+        </select>
         <select className="bo-select" value={tpeId} onChange={(e) => setTpeId(e.target.value)}>
           <option value="">Tous les TPE</option>
-          {tpes.map((t) => <option key={t.id} value={t.id}>{t.name ?? t.code}</option>)}
+          {/* Limité aux TPE de la région sélectionnée, le cas échéant — demande explicite du 04/11/2026 */}
+          {tpes.filter((t) => !regionId || t.regionId === regionId).map((t) => <option key={t.id} value={t.id}>{t.name ?? t.code}</option>)}
         </select>
 
         <div className="flex items-center gap-1.5">
