@@ -87,10 +87,15 @@ export default function TpeTicketsPage() {
   // données de TOUS les TPE en une seule fois (ventes, tickets, paiements
   // par TPE), indépendamment des filtres ci-dessus qui ne portent eux que
   // sur la liste détaillée des tickets d'un TPE à la fois.
+  // "Au" toujours la date du jour — demande explicite du 04/11/2026 (le champ
+  // restait figé sur la date du jour où la page avait été ouverte si
+  // l'onglet restait ouvert sans rechargement, ex. depuis la veille).
+  // Recalculé à CHAQUE rendu (pas un state figé à l'ouverture) et non
+  // modifiable, pour ne jamais pouvoir désynchroniser d'aujourd'hui.
   const todayStr0 = new Date().toISOString().slice(0, 10);
   const weekAgoStr = (() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); })();
   const [summaryFrom, setSummaryFrom] = useState(weekAgoStr);
-  const [summaryTo, setSummaryTo] = useState(todayStr0);
+  const summaryTo = todayStr0;
   const [summaryLoading, setSummaryLoading] = useState(false);
 
   function token() { return localStorage.getItem("bo_token"); }
@@ -416,7 +421,8 @@ export default function TpeTicketsPage() {
           </div>
           <div>
             <label className="block text-[10px] uppercase tracking-widest text-t-faint mb-1.5">Au</label>
-            <input type="date" className="bo-input w-40" value={summaryTo} onChange={(e) => setSummaryTo(e.target.value)} />
+            {/* Toujours la date du jour, non modifiable — voir le commentaire sur summaryTo plus haut. */}
+            <input type="date" className="bo-input w-40 opacity-70 cursor-not-allowed" value={summaryTo} disabled title="Toujours la date du jour" />
           </div>
           <button className="bo-btn-primary" disabled={summaryLoading} onClick={exportSummary}>
             {summaryLoading ? "Génération…" : "⬇️ Exporter le rapport (tous les TPE)"}
