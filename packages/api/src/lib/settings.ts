@@ -21,6 +21,14 @@ export const SETTING_KEYS = {
   // petit — proche du minimum — moins on tolère de sélections restantes).
   CASHOUT_MAX_PENDING_LEGS: "CASHOUT_MAX_PENDING_LEGS",
   CASHOUT_MIN_TOTAL_LEGS: "CASHOUT_MIN_TOTAL_LEGS",
+  // Marge globale appliquée à TOUTES les cotes synchronisées depuis
+  // TheOddsAPI (équivalent du RTP sur les jeux virtuels, mais appliqué au
+  // prix plutôt qu'au résultat, qui lui reste réel/universel — voir
+  // odds.service.ts applyMargin) — demande explicite du 04/11/2026 : les
+  // cotes Serenitybet étaient plus généreuses que la concurrence (marge
+  // trop faible). Décimal (ex. "2.5" = 2,5%), voir getSettingFloat. 0 =
+  // désactivé (cotes telles que reçues, comportement historique).
+  ODDS_MARGIN_PCT: "ODDS_MARGIN_PCT",
 } as const;
 
 const DEFAULTS: Record<string, string> = {
@@ -30,6 +38,7 @@ const DEFAULTS: Record<string, string> = {
   [SETTING_KEYS.CASHOUT_MAX_ODD_PENDING]: "1.80",
   [SETTING_KEYS.CASHOUT_MAX_PENDING_LEGS]: "2",
   [SETTING_KEYS.CASHOUT_MIN_TOTAL_LEGS]: "5",
+  [SETTING_KEYS.ODDS_MARGIN_PCT]: "2",
 };
 
 export async function getSetting(key: string): Promise<string> {

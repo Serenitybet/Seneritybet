@@ -11,6 +11,7 @@ export default function RiskPage() {
 
   const [approvalThreshold, setApprovalThreshold] = useState("");
   const [maxWin, setMaxWin]                       = useState("");
+  const [oddsMargin, setOddsMargin]               = useState("");
   const [cashoutMargin, setCashoutMargin]         = useState("");
   const [cashoutMaxOdd, setCashoutMaxOdd]         = useState("");
   const [cashoutMaxLegs, setCashoutMaxLegs]       = useState("");
@@ -21,13 +22,15 @@ export default function RiskPage() {
   async function load() {
     setLoading(true);
     try {
-      const [t, m, c] = await Promise.all([
+      const [t, m, o, c] = await Promise.all([
         fetch(`${API}/admin/settings/tpe-payout-threshold`, { headers: { Authorization: `Bearer ${token()}` } }).then(r => r.json()),
         fetch(`${API}/admin/settings/tpe-max-win`, { headers: { Authorization: `Bearer ${token()}` } }).then(r => r.json()),
+        fetch(`${API}/admin/settings/odds-margin`, { headers: { Authorization: `Bearer ${token()}` } }).then(r => r.json()),
         fetch(`${API}/admin/settings/cashout`, { headers: { Authorization: `Bearer ${token()}` } }).then(r => r.json()),
       ]);
       if (t.data) setApprovalThreshold(String(t.data.thresholdXAF));
       if (m.data) setMaxWin(String(m.data.maxWinXAF));
+      if (o.data) setOddsMargin(String(o.data.marginPct));
       if (c.data) {
         setCashoutMargin(String(c.data.marginPct));
         setCashoutMaxOdd(String(c.data.maxOddPending));
@@ -76,6 +79,24 @@ export default function RiskPage() {
     finally { setSaving(false); }
   }
 
+  async function saveOddsMargin(e: React.FormEvent) {
+    e.preventDefault();
+    if (oddsMargin === "" || isNaN(Number(oddsMargin)) || Number(oddsMargin) < 0 || Number(oddsMargin) > 20) {
+      toast.error("Marge invalide (0 à 20)"); return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/admin/settings/odds-margin`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token()}` },
+        body: JSON.stringify({ marginPct: Number(oddsMargin) }),
+      });
+      if (!res.ok) { toast.error("Erreur"); return; }
+      toast.success(Number(oddsMargin) === 0 ? "Marge sur les cotes désactivée ✓" : "Marge sur les cotes mise à jour ✓");
+    } catch { toast.error("Erreur réseau"); }
+    finally { setSaving(false); }
+  }
+
   async function saveCashout(e: React.FormEvent) {
     e.preventDefault();
     if (cashoutMargin === "" || isNaN(Number(cashoutMargin)) || Number(cashoutMargin) < 0 || Number(cashoutMargin) > 100) {
@@ -118,6 +139,38 @@ export default function RiskPage() {
           Limite les gros gains sur les tickets physiques pour protéger la trésorerie et éviter les litiges avec les parieurs.
         </p>
       </div>
+
+      <form onSubmit={saveOddsMargin} className="bo-card p-5 space-y-4">
+        <div>
+          <h2 className="font-bold text-[13px] text-t-primary flex items-center gap-2">
+            <span>📉</span> Marge sur les cotes
+          </h2>
+          <p className="text-[11px] text-t-faint mt-1 leading-relaxed">
+            Réduit toutes les cotes synchronisées d'un même pourcentage avant affichage — l'équivalent du RTP sur les
+            jeux virtuels, mais appliqué au prix plutôt qu'au résultat (qui reste réel, impossible à contrôler). Ex. à
+            2% : une cote à 2.00 devient 1.96. N'affecte que les nouvelles cotes synchronisées après l'enregistrement,
+            pas les tickets déjà pris.
+          </p>
+        </div>
+        <div className="flex items-end gap-3">
+          <div className="flex-1">
+            <label className="text-[10px] text-t-faint block mb-1">Marge (%)</label>
+            <input
+              type="number" min="0" max="20" step="0.5"
+              className="bo-input w-full text-right font-mono"
+              value={oddsMargin}
+              onChange={e => setOddsMargin(e.target.value)}
+              placeholder="0 = désactivée"
+            />
+          </div>
+          <button type="submit" disabled={saving} className="bo-btn-primary">
+            {saving ? "…" : "💾 Enregistrer"}
+          </button>
+        </div>
+        {Number(oddsMargin) === 0 && (
+          <p className="text-[10px] text-gold">⚠️ Marge désactivée — les cotes sont affichées telles que reçues de TheOddsAPI.</p>
+        )}
+      </form>
 
       <form onSubmit={saveMaxWin} className="bo-card p-5 space-y-4">
         <div>
