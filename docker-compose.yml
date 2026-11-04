@@ -32,14 +32,18 @@ services:
       timeout: 5s
       retries: 5
 
+  # Outil de développement local uniquement — jamais destiné à tourner sur un
+  # serveur de production (accès direct à toute la base). Lié à 127.0.0.1 et
+  # identifiants fournis via .env, pour ne jamais republier par erreur un
+  # compte admin par défaut sur Internet (cf. audit de sécurité du 04/11/2026).
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: serenitybet_pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@serenitybet.td
-      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?Définissez PGADMIN_DEFAULT_EMAIL dans .env}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?Définissez PGADMIN_DEFAULT_PASSWORD dans .env}
     ports:
-      - "5050:80"
+      - "127.0.0.1:5050:80"
     depends_on:
       - postgres
 
