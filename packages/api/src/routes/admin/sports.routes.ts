@@ -255,9 +255,11 @@ adminSportsRouter.post("/events/:id/settle-stats",
     let updatedItems = 0;
     const touchedTicketIds = new Set<string>();
     for (const market of markets) {
-      // "BOTH_HALVES_SCORE" a besoin du score mi-temps mais ne contient pas
-      // "HALF" tel quel ("HALVES" ≠ "HALF") — vérifié explicitement.
-      const isHalfMarket = market.type.includes("HALF") || market.type === "BOTH_HALVES_SCORE";
+      // "BOTH_HALVES_SCORE"/"BTTS_BOTH_HALVES"/"WIN_BOTH_HALVES" ont besoin du
+      // score mi-temps mais ne contiennent pas "HALF" tel quel ("HALVES" ≠
+      // "HALF") — vérifiés explicitement.
+      const isHalfMarket = market.type.includes("HALF") ||
+        ["BOTH_HALVES_SCORE", "BTTS_BOTH_HALVES", "WIN_BOTH_HALVES"].includes(market.type);
       const isCornersOrCards = market.type.startsWith("CORNERS") || market.type.startsWith("CARDS");
       const isShotsOrFouls = market.type === "SHOTS_ON_TARGET_TOTAL" || market.type === "FOULS_TOTAL";
       if (isHalfMarket && htHome === undefined) continue; // pas de données saisies — laissé pour plus tard
