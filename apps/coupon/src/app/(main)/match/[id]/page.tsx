@@ -78,7 +78,7 @@ const MARKET_LABELS: Record<string, string> = {
   RESULT_TOTAL:            "🏆 Résultat + Total",
   DOUBLE_CHANCE_TOTAL:     "🎯 Double chance + Total",
   BTTS_BOTH_HALVES:        "⚽ BTTS dans les 2 mi-temps",
-  WIN_BOTH_HALVES:         "🏆 Vainqueur des 2 mi-temps",
+  WIN_BOTH_HALVES:         "🏆 Une équipe gagne les 2 mi-temps",
 };
 
 // Ordre d'affichage des onglets — les marchés les plus pariés en premier.

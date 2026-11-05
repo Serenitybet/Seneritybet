@@ -63,7 +63,9 @@ const MARKET_TYPES: { value: string; label: string; defaultOdds: { label: string
   // simple Oui/Non global — corrigé le 04/11/2026 d'après un exemple
   // concurrent (Oui/Oui, Oui/Non, Non/Oui, Non/Non).
   { value: "BTTS_BOTH_HALVES",        label: "BTTS dans les 2 mi-temps",    defaultOdds: [{ label: "Oui / Oui", value: "22.00" }, { label: "Oui / Non", value: "5.60" }, { label: "Non / Oui", value: "3.95" }, { label: "Non / Non", value: "1.30" }] },
-  { value: "WIN_BOTH_HALVES",         label: "Vainqueur des 2 mi-temps",    defaultOdds: [{ label: "Domicile", value: "3.00" }, { label: "Extérieur", value: "4.50" }, { label: "Aucune", value: "1.90" }] },
+  // Oui/Non — "une équipe remporte-t-elle les 2 mi-temps ?" (pas "laquelle")
+  // corrigé le 05/11/2026, c'était à tort un marché Domicile/Extérieur/Aucune.
+  { value: "WIN_BOTH_HALVES",         label: "Une équipe gagne les 2 mi-temps",    defaultOdds: [{ label: "Oui", value: "1.80" }, { label: "Non", value: "1.90" }] },
   // Marchés TheOddsAPI supplémentaires activés le 01/11/2026 (demande
   // explicite : utiliser toutes les options proposées par TheOddsAPI pour
   // foot/basket/tennis) — normalement synchronisés automatiquement, cette
