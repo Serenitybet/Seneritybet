@@ -2,7 +2,7 @@ import axios from "axios";
 import { prisma } from "../lib/prisma";
 import { updateCredits } from "../lib/credits.state";
 import { settleTicket } from "./tpe.service";
-import { fitLambdas, buildScoreGrid, devig, deriveLevel1Markets } from "../lib/goal-model";
+import { fitLambdas, buildScoreGrid, devig, deriveLevel1Markets, splitHalfLambdas, deriveLevel2Markets } from "../lib/goal-model";
 import { getSettingFloat, SETTING_KEYS } from "../lib/settings";
 
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
@@ -483,20 +483,19 @@ async function upsertEvent(competitionId: string, game: any, sportSlug = "footba
 // backoffice) puis publier — le marché reste en brouillon (isPublished
 // false, invisible site/TPE) tant qu'il est vide, comme tout marché créé
 // manuellement.
+//
+// FIRST_HALF_PENALTY/SECOND_HALF_PENALTY restent manuels : un penalty accordé
+// n'est pas un évènement dérivable du nombre de buts attendu, aucune formule
+// ni flux TheOddsAPI ne le couvre. Les 11 autres marchés qui étaient ici
+// (DOUBLE_CHANCE_BTTS, RESULT_BTTS, RESULT_TOTAL, DOUBLE_CHANCE_TOTAL,
+// FIRST_HALF_TEAM_TOTALS, SECOND_HALF_TEAM_TOTALS, FIRST_HALF_ODD_EVEN,
+// SECOND_HALF_ODD_EVEN, HIGHEST_SCORING_HALF, BTTS_BOTH_HALVES,
+// WIN_BOTH_HALVES) sont désormais générés et publiés automatiquement par
+// generateLevel2Markets (voir plus bas) — retirés d'ici le 05/11/2026 pour
+// ne plus être (re)créés vides en attente de saisie manuelle.
 const MANUAL_MARKET_STUBS: { type: string; name: string }[] = [
-  { type: "FIRST_HALF_TEAM_TOTALS",  name: "Totaux par équipe — 1ère mi-temps" },
-  { type: "SECOND_HALF_TEAM_TOTALS", name: "Totaux par équipe — 2nde mi-temps" },
-  { type: "FIRST_HALF_ODD_EVEN",     name: "Total buts pair/impair — 1ère mi-temps" },
-  { type: "SECOND_HALF_ODD_EVEN",    name: "Total buts pair/impair — 2nde mi-temps" },
   { type: "FIRST_HALF_PENALTY",      name: "Penalty accordé — 1ère mi-temps" },
   { type: "SECOND_HALF_PENALTY",     name: "Penalty accordé — 2nde mi-temps" },
-  { type: "HIGHEST_SCORING_HALF",    name: "Mi-temps avec le plus de buts" },
-  { type: "DOUBLE_CHANCE_BTTS",      name: "Double chance et les deux équipes marquent" },
-  { type: "RESULT_BTTS",             name: "Résultat et les deux équipes marquent" },
-  { type: "RESULT_TOTAL",            name: "Résultat et total de buts (2.5)" },
-  { type: "DOUBLE_CHANCE_TOTAL",     name: "Double chance et total de buts (2.5)" },
-  { type: "BTTS_BOTH_HALVES",        name: "Les deux équipes marquent dans chaque mi-temps" },
-  { type: "WIN_BOTH_HALVES",         name: "Équipe gagnante des deux mi-temps" },
   // BOTH_HALVES_SCORE ("Équipe marque à chaque mi-temps") existe déjà comme
   // type de marché (créable manuellement) mais n'était jusqu'ici jamais
   // pré-créé sur les matchs — ajouté à la liste pour la même raison que les
@@ -522,13 +521,64 @@ const LEVEL1_MARKET_NAMES: Record<string, string> = {
   WINNING_MARGIN: "Marge de victoire",
   TEAM_GOALS:     "Buts par équipe (exact)",
 };
+const LEVEL2_MARKET_NAMES: Record<string, string> = {
+  DOUBLE_CHANCE_BTTS:      "Double chance et les deux équipes marquent",
+  RESULT_BTTS:             "Résultat et les deux équipes marquent",
+  RESULT_TOTAL:            "Résultat et total de buts (2.5)",
+  DOUBLE_CHANCE_TOTAL:     "Double chance et total de buts (2.5)",
+  FIRST_HALF_TEAM_TOTALS:  "Totaux par équipe — 1ère mi-temps",
+  SECOND_HALF_TEAM_TOTALS: "Totaux par équipe — 2nde mi-temps",
+  FIRST_HALF_ODD_EVEN:     "Total buts pair/impair — 1ère mi-temps",
+  SECOND_HALF_ODD_EVEN:    "Total buts pair/impair — 2nde mi-temps",
+  HIGHEST_SCORING_HALF:    "Mi-temps avec le plus de buts",
+  BTTS_BOTH_HALVES:        "Les deux équipes marquent dans chaque mi-temps",
+  WIN_BOTH_HALVES:         "Équipe gagnante des deux mi-temps",
+};
+
+/**
+ * Crée/actualise les marchés d'un groupe "dérivé" (Niveau 1 ou Niveau 2) à
+ * partir des cotes calculées par le modèle de buts. Republie aussi, en
+ * passant, un marché qui existait déjà en brouillon vide (ex. un des 11
+ * marchés manuels repris automatiquement le 05/11/2026) — sans ça il
+ * resterait invisible malgré ses nouvelles cotes.
+ */
+async function upsertDerivedMarkets(eventId: string, derivedMarkets: Record<string, { label: string; value: number }[]>, names: Record<string, string>) {
+  for (const [marketType, odds] of Object.entries(derivedMarkets)) {
+    let market = await prisma.market.findFirst({ where: { eventId, type: marketType as any }, include: { odds: true } });
+    if (!market) {
+      market = await prisma.market.create({ data: { eventId, type: marketType as any, name: names[marketType] }, include: { odds: true } });
+    } else if (!market.isPublished) {
+      await prisma.market.update({ where: { id: market.id }, data: { isPublished: true } });
+    }
+    const currentLabels = new Set(odds.map((o) => o.label));
+    for (const { label, value } of odds) {
+      const existingOdd = market.odds.find((o) => o.label === label);
+      if (existingOdd) {
+        await prisma.odd.update({ where: { id: existingOdd.id }, data: { value, isActive: true } });
+      } else {
+        await prisma.odd.create({ data: { marketId: market.id, label, value } });
+      }
+    }
+    // Désactive les anciennes cotes dont le libellé ne correspond plus au
+    // format actuel (ex. le format de WIN_TO_NIL est passé de "1"/"2"/"Non"
+    // à "<équipe> Oui"/"<équipe> Non") — sans ça elles resteraient affichées
+    // en orphelines, jamais mises à jour. Désactivation plutôt que
+    // suppression : préserve l'intégrité référentielle si un ticket y fait
+    // déjà référence.
+    const stale = market.odds.filter((o) => o.isActive && !currentLabels.has(o.label));
+    for (const o of stale) {
+      await prisma.odd.update({ where: { id: o.id }, data: { isActive: false } });
+    }
+  }
+}
 
 /**
  * Déduit (λ_domicile, λ_extérieur) des vraies cotes MATCH_WINNER + OVER_UNDER
  * déjà en base pour cet évènement, puis génère/actualise les 5 marchés
- * "Niveau 1" — voir lib/goal-model.ts pour le détail du modèle. Ne fait rien
- * si l'une des deux cotes de base manque encore (ex. bookmaker n'ayant pas
- * publié de ligne Plus/Moins pour ce match).
+ * "Niveau 1" ainsi que les 11 marchés "Niveau 2" (combinés + par mi-temps) —
+ * voir lib/goal-model.ts pour le détail du modèle. Ne fait rien si l'une des
+ * deux cotes de base manque encore (ex. bookmaker n'ayant pas publié de
+ * ligne Plus/Moins pour ce match).
  */
 async function generateLevel1Markets(eventId: string, homeTeam: string, awayTeam: string) {
   const winnerMarket = await prisma.market.findFirst({ where: { eventId, type: "MATCH_WINNER" }, include: { odds: true } });
@@ -556,33 +606,12 @@ async function generateLevel1Markets(eventId: string, homeTeam: string, awayTeam
 
   const { lambdaHome, lambdaAway } = fitLambdas(p1, pX, p2, overLine, pOver);
   const grid = buildScoreGrid(lambdaHome, lambdaAway);
-  const derivedMarkets = deriveLevel1Markets(grid, homeTeam, awayTeam, LEVEL1_MARGIN);
+  await upsertDerivedMarkets(eventId, deriveLevel1Markets(grid, homeTeam, awayTeam, LEVEL1_MARGIN), LEVEL1_MARKET_NAMES);
 
-  for (const [marketType, odds] of Object.entries(derivedMarkets)) {
-    let market = await prisma.market.findFirst({ where: { eventId, type: marketType as any }, include: { odds: true } });
-    if (!market) {
-      market = await prisma.market.create({ data: { eventId, type: marketType as any, name: LEVEL1_MARKET_NAMES[marketType] }, include: { odds: true } });
-    }
-    const currentLabels = new Set(odds.map((o) => o.label));
-    for (const { label, value } of odds) {
-      const existingOdd = market.odds.find((o) => o.label === label);
-      if (existingOdd) {
-        await prisma.odd.update({ where: { id: existingOdd.id }, data: { value, isActive: true } });
-      } else {
-        await prisma.odd.create({ data: { marketId: market.id, label, value } });
-      }
-    }
-    // Désactive les anciennes cotes dont le libellé ne correspond plus au
-    // format actuel (ex. le format de WIN_TO_NIL est passé de "1"/"2"/"Non"
-    // à "<équipe> Oui"/"<équipe> Non") — sans ça elles resteraient affichées
-    // en orphelines, jamais mises à jour. Désactivation plutôt que
-    // suppression : préserve l'intégrité référentielle si un ticket y fait
-    // déjà référence.
-    const stale = market.odds.filter((o) => o.isActive && !currentLabels.has(o.label));
-    for (const o of stale) {
-      await prisma.odd.update({ where: { id: o.id }, data: { isActive: false } });
-    }
-  }
+  const { lambdaHomeH1, lambdaAwayH1, lambdaHomeH2, lambdaAwayH2 } = splitHalfLambdas(lambdaHome, lambdaAway);
+  const gridH1 = buildScoreGrid(lambdaHomeH1, lambdaAwayH1);
+  const gridH2 = buildScoreGrid(lambdaHomeH2, lambdaAwayH2);
+  await upsertDerivedMarkets(eventId, deriveLevel2Markets(grid, gridH1, gridH2, homeTeam, awayTeam, LEVEL1_MARGIN), LEVEL2_MARKET_NAMES);
 }
 
 // ─── Marchés additionnels (BTTS, double chance) — tous les championnats ───────
