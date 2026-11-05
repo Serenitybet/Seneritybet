@@ -1772,6 +1772,43 @@ function computeItemResult(
       const bucket = score >= 3 ? "3+" : String(score);
       return bucketLabel === bucket ? "WON" : "LOST";
     }
+    // ─── Marchés combinés "Niveau 2" calculables à partir du seul score
+    // final — voir deriveLevel2Markets (goal-model.ts). Combiné = gagné
+    // seulement si les deux jambes le sont, comme tout pari combiné
+    // classique (pas de VOID : un total de 2.5 pile est impossible avec des
+    // scores entiers).
+    case "DOUBLE_CHANCE_BTTS": {
+      const m = label.match(/^(1X|12|X2) & (Oui|Non)$/);
+      if (!m) return null;
+      const [, dc, btts] = m;
+      const dcWon = dc === "1X" ? homeScore >= awayScore : dc === "X2" ? awayScore >= homeScore : homeScore !== awayScore;
+      const bttsWon = (btts === "Oui") === (homeScore > 0 && awayScore > 0);
+      return dcWon && bttsWon ? "WON" : "LOST";
+    }
+    case "RESULT_BTTS": {
+      const m = label.match(/^(1|X|2) & (Oui|Non)$/);
+      if (!m) return null;
+      const [, res, btts] = m;
+      const resWon = res === "1" ? homeScore > awayScore : res === "2" ? awayScore > homeScore : homeScore === awayScore;
+      const bttsWon = (btts === "Oui") === (homeScore > 0 && awayScore > 0);
+      return resWon && bttsWon ? "WON" : "LOST";
+    }
+    case "RESULT_TOTAL": {
+      const m = label.match(/^(1|X|2) & (Plus|Moins) 2\.5$/);
+      if (!m) return null;
+      const [, res, dir] = m;
+      const resWon = res === "1" ? homeScore > awayScore : res === "2" ? awayScore > homeScore : homeScore === awayScore;
+      const totalWon = (dir === "Plus") === (homeScore + awayScore > 2.5);
+      return resWon && totalWon ? "WON" : "LOST";
+    }
+    case "DOUBLE_CHANCE_TOTAL": {
+      const m = label.match(/^(1X|12|X2) & (Plus|Moins) 2\.5$/);
+      if (!m) return null;
+      const [, dc, dir] = m;
+      const dcWon = dc === "1X" ? homeScore >= awayScore : dc === "X2" ? awayScore >= homeScore : homeScore !== awayScore;
+      const totalWon = (dir === "Plus") === (homeScore + awayScore > 2.5);
+      return dcWon && totalWon ? "WON" : "LOST";
+    }
     default:
       return null; // FIRST_GOAL_SCORER, HALF_TIME_RESULT : non proposés à la vente, pas de calcul
   }

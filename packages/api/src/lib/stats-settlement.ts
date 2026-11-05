@@ -19,6 +19,13 @@ export const STATS_MARKET_TYPES = [
   "CORNERS_TOTAL", "CORNERS_HANDICAP", "CARDS_TOTAL", "CARDS_HANDICAP",
   "HALF_TIME_CORRECT_SCORE", "HALF_TIME_FULL_TIME", "BOTH_HALVES_SCORE",
   "SHOTS_ON_TARGET_TOTAL", "FOULS_TOTAL",
+  // Marchés "Niveau 2" par mi-temps (voir deriveLevel2Markets, goal-model.ts)
+  // — ajoutés le 05/11/2026 pour qu'ils se règlent automatiquement dès que
+  // le score mi-temps est connu (API-Football ou saisie manuelle), comme le
+  // reste des marchés mi-temps ci-dessus.
+  "FIRST_HALF_TEAM_TOTALS", "SECOND_HALF_TEAM_TOTALS",
+  "FIRST_HALF_ODD_EVEN", "SECOND_HALF_ODD_EVEN",
+  "HIGHEST_SCORING_HALF", "BTTS_BOTH_HALVES", "WIN_BOTH_HALVES",
 ] as const;
 
 export function totalsResult(label: string, total: number): "WON" | "LOST" | "VOID" | null {
@@ -104,6 +111,42 @@ export function computeStatsItemResult(
     }
     case "SHOTS_ON_TARGET_TOTAL":     return shots ? totalsResult(label, shots.home + shots.away) : null;
     case "FOULS_TOTAL":               return fouls ? totalsResult(label, fouls.home + fouls.away) : null;
+    // ─── Marchés "Niveau 2" par mi-temps — voir deriveLevel2Markets ───────────
+    case "FIRST_HALF_TEAM_TOTALS":
+    case "SECOND_HALF_TEAM_TOTALS": {
+      const m = label.match(/^(.+) (Plus|Moins) ([\d.]+)$/);
+      if (!m) return null;
+      const [, team, dir, pointStr] = m;
+      const line = parseFloat(pointStr);
+      const isFirst = marketType === "FIRST_HALF_TEAM_TOTALS";
+      const teamScore = team === homeTeam ? (isFirst ? htHome : shHome) : team === awayTeam ? (isFirst ? htAway : shAway) : null;
+      if (teamScore === null) return null;
+      if (teamScore === line) return "VOID";
+      return (dir === "Plus") === (teamScore > line) ? "WON" : "LOST";
+    }
+    case "FIRST_HALF_ODD_EVEN":
+    case "SECOND_HALF_ODD_EVEN": {
+      if (label !== "Pair" && label !== "Impair") return null;
+      const total = marketType === "FIRST_HALF_ODD_EVEN" ? htHome + htAway : shHome + shAway;
+      return (label === "Pair") === (total % 2 === 0) ? "WON" : "LOST";
+    }
+    case "HIGHEST_SCORING_HALF": {
+      const h1Total = htHome + htAway;
+      const h2Total = shHome + shAway;
+      const computed = h1Total > h2Total ? "1ère mi-temps" : h2Total > h1Total ? "2nde mi-temps" : "Égalité";
+      return label === computed ? "WON" : "LOST";
+    }
+    case "BTTS_BOTH_HALVES": {
+      const bttsH1 = htHome > 0 && htAway > 0;
+      const bttsH2 = shHome > 0 && shAway > 0;
+      const computed = `${bttsH1 ? "Oui" : "Non"} / ${bttsH2 ? "Oui" : "Non"}`;
+      return label === computed ? "WON" : "LOST";
+    }
+    case "WIN_BOTH_HALVES": {
+      if (label !== "Oui" && label !== "Non") return null;
+      const sameTeamBothHalves = (htHome > htAway && shHome > shAway) || (htAway > htHome && shAway > shHome);
+      return (label === "Oui") === sameTeamBothHalves ? "WON" : "LOST";
+    }
     default: return null;
   }
 }
