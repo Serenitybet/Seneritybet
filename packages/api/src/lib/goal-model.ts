@@ -186,3 +186,151 @@ export function deriveLevel1Markets(
 
   return { ODD_EVEN_TOTAL, CLEAN_SHEET, WIN_TO_NIL, WINNING_MARGIN, TEAM_GOALS };
 }
+
+// ─── "Niveau 2" — marchés combinés et par mi-temps ────────────────────────────
+//
+// Les 4 premiers (DOUBLE_CHANCE_BTTS, RESULT_BTTS, RESULT_TOTAL,
+// DOUBLE_CHANCE_TOTAL) sont de simples croisements du résultat/total plein
+// match avec le BTTS — aucune donnée supplémentaire requise, juste la même
+// grille h×a que pour le Niveau 1.
+//
+// Les 7 suivants nécessitent de connaître la répartition des buts PAR
+// MI-TEMPS, que la grille plein match ne donne pas. Plutôt que de calibrer
+// un second modèle à partir de cotes mi-temps (pas toujours disponibles,
+// et nécessiteraient d'attendre un cycle de sync différent — voir
+// syncPropMarkets), on scinde λ_domicile/λ_extérieur selon une part fixe
+// de buts marqués en 1ère mi-temps (~45%, statistique largement documentée
+// dans le football) : simplification du même ordre que l'indépendance h/a
+// déjà assumée plus haut — à surveiller plutôt qu'à sur-ingénierer dès le
+// départ, et les deux mi-temps restent supposées indépendantes entre elles.
+const FIRST_HALF_GOAL_SHARE = 0.45;
+
+export function splitHalfLambdas(lambdaHome: number, lambdaAway: number) {
+  return {
+    lambdaHomeH1: lambdaHome * FIRST_HALF_GOAL_SHARE,
+    lambdaAwayH1: lambdaAway * FIRST_HALF_GOAL_SHARE,
+    lambdaHomeH2: lambdaHome * (1 - FIRST_HALF_GOAL_SHARE),
+    lambdaAwayH2: lambdaAway * (1 - FIRST_HALF_GOAL_SHARE),
+  };
+}
+
+/** P(total de buts = k) pour k = 0..2×MAX_GOALS, par anti-diagonale de la grille. */
+function totalGoalsMarginal(grid: ScoreGrid): number[] {
+  const maxK = (grid.length - 1) * 2;
+  const dist = Array.from({ length: maxK + 1 }, () => 0);
+  for (let h = 0; h < grid.length; h++) {
+    for (let a = 0; a < grid[h].length; a++) dist[h + a] += grid[h][a];
+  }
+  return dist;
+}
+
+export function deriveLevel2Markets(
+  grid: ScoreGrid, gridH1: ScoreGrid, gridH2: ScoreGrid,
+  homeTeam: string, awayTeam: string, marginPct: number,
+): Record<string, DerivedOdd[]> {
+  const toOdd = (p: number) => probabilityToOdd(p, marginPct);
+  const OVER_LINE = 2.5; // ligne standard — cohérent avec le libellé des marchés ("Total 2.5")
+  const btts = (h: number, a: number) => h >= 1 && a >= 1;
+
+  const DOUBLE_CHANCE_BTTS: DerivedOdd[] = [
+    { label: "1X & Oui", value: toOdd(gridSum(grid, (h, a) => h >= a && btts(h, a))) },
+    { label: "1X & Non", value: toOdd(gridSum(grid, (h, a) => h >= a && !btts(h, a))) },
+    { label: "12 & Oui", value: toOdd(gridSum(grid, (h, a) => h !== a && btts(h, a))) },
+    { label: "12 & Non", value: toOdd(gridSum(grid, (h, a) => h !== a && !btts(h, a))) },
+    { label: "X2 & Oui", value: toOdd(gridSum(grid, (h, a) => h <= a && btts(h, a))) },
+    { label: "X2 & Non", value: toOdd(gridSum(grid, (h, a) => h <= a && !btts(h, a))) },
+  ];
+
+  const RESULT_BTTS: DerivedOdd[] = [
+    { label: "1 & Oui", value: toOdd(gridSum(grid, (h, a) => h > a && btts(h, a))) },
+    { label: "1 & Non", value: toOdd(gridSum(grid, (h, a) => h > a && !btts(h, a))) },
+    { label: "X & Oui", value: toOdd(gridSum(grid, (h, a) => h === a && btts(h, a))) },
+    { label: "X & Non", value: toOdd(gridSum(grid, (h, a) => h === a && !btts(h, a))) },
+    { label: "2 & Oui", value: toOdd(gridSum(grid, (h, a) => h < a && btts(h, a))) },
+    { label: "2 & Non", value: toOdd(gridSum(grid, (h, a) => h < a && !btts(h, a))) },
+  ];
+
+  const RESULT_TOTAL: DerivedOdd[] = [
+    { label: "1 & Plus 2.5",  value: toOdd(gridSum(grid, (h, a) => h > a && h + a > OVER_LINE)) },
+    { label: "1 & Moins 2.5", value: toOdd(gridSum(grid, (h, a) => h > a && h + a < OVER_LINE)) },
+    { label: "X & Plus 2.5",  value: toOdd(gridSum(grid, (h, a) => h === a && h + a > OVER_LINE)) },
+    { label: "X & Moins 2.5", value: toOdd(gridSum(grid, (h, a) => h === a && h + a < OVER_LINE)) },
+    { label: "2 & Plus 2.5",  value: toOdd(gridSum(grid, (h, a) => h < a && h + a > OVER_LINE)) },
+    { label: "2 & Moins 2.5", value: toOdd(gridSum(grid, (h, a) => h < a && h + a < OVER_LINE)) },
+  ];
+
+  const DOUBLE_CHANCE_TOTAL: DerivedOdd[] = [
+    { label: "1X & Plus 2.5",  value: toOdd(gridSum(grid, (h, a) => h >= a && h + a > OVER_LINE)) },
+    { label: "1X & Moins 2.5", value: toOdd(gridSum(grid, (h, a) => h >= a && h + a < OVER_LINE)) },
+    { label: "12 & Plus 2.5",  value: toOdd(gridSum(grid, (h, a) => h !== a && h + a > OVER_LINE)) },
+    { label: "12 & Moins 2.5", value: toOdd(gridSum(grid, (h, a) => h !== a && h + a < OVER_LINE)) },
+    { label: "X2 & Plus 2.5",  value: toOdd(gridSum(grid, (h, a) => h <= a && h + a > OVER_LINE)) },
+    { label: "X2 & Moins 2.5", value: toOdd(gridSum(grid, (h, a) => h <= a && h + a < OVER_LINE)) },
+  ];
+
+  const halfTeamTotals = (halfGrid: ScoreGrid, team: string): DerivedOdd[] => {
+    const homeMarginal = (k: number) => halfGrid[k].reduce((a, b) => a + b, 0);
+    const awayMarginal = (k: number) => halfGrid.reduce((a, row) => a + row[k], 0);
+    const marginal = team === homeTeam ? homeMarginal : awayMarginal;
+    const pScores = 1 - marginal(0);
+    return [
+      { label: `${team} Plus 0.5`,  value: toOdd(pScores) },
+      { label: `${team} Moins 0.5`, value: toOdd(1 - pScores) },
+    ];
+  };
+  const FIRST_HALF_TEAM_TOTALS: DerivedOdd[]  = [...halfTeamTotals(gridH1, homeTeam), ...halfTeamTotals(gridH1, awayTeam)];
+  const SECOND_HALF_TEAM_TOTALS: DerivedOdd[] = [...halfTeamTotals(gridH2, homeTeam), ...halfTeamTotals(gridH2, awayTeam)];
+
+  const halfOddEven = (halfGrid: ScoreGrid): DerivedOdd[] => {
+    const pEven = gridSum(halfGrid, (h, a) => (h + a) % 2 === 0);
+    return [{ label: "Pair", value: toOdd(pEven) }, { label: "Impair", value: toOdd(1 - pEven) }];
+  };
+  const FIRST_HALF_ODD_EVEN: DerivedOdd[]  = halfOddEven(gridH1);
+  const SECOND_HALF_ODD_EVEN: DerivedOdd[] = halfOddEven(gridH2);
+
+  // Mi-temps indépendantes (même simplification que ci-dessus) : la
+  // distribution du total de buts de chaque mi-temps se combine en croisant
+  // simplement les deux distributions 1D plutôt qu'une grille jointe 2D.
+  const distH1 = totalGoalsMarginal(gridH1);
+  const distH2 = totalGoalsMarginal(gridH2);
+  let pH1Higher = 0, pH2Higher = 0, pHalvesEqual = 0;
+  for (let t1 = 0; t1 < distH1.length; t1++) {
+    for (let t2 = 0; t2 < distH2.length; t2++) {
+      const p = distH1[t1] * distH2[t2];
+      if (t1 > t2) pH1Higher += p;
+      else if (t2 > t1) pH2Higher += p;
+      else pHalvesEqual += p;
+    }
+  }
+  const HIGHEST_SCORING_HALF: DerivedOdd[] = [
+    { label: "1ère mi-temps", value: toOdd(pH1Higher) },
+    { label: "2nde mi-temps", value: toOdd(pH2Higher) },
+    { label: "Égalité",       value: toOdd(pHalvesEqual) },
+  ];
+
+  const pBttsH1 = gridSum(gridH1, btts);
+  const pBttsH2 = gridSum(gridH2, btts);
+  const BTTS_BOTH_HALVES: DerivedOdd[] = [
+    { label: "Oui / Oui", value: toOdd(pBttsH1 * pBttsH2) },
+    { label: "Oui / Non", value: toOdd(pBttsH1 * (1 - pBttsH2)) },
+    { label: "Non / Oui", value: toOdd((1 - pBttsH1) * pBttsH2) },
+    { label: "Non / Non", value: toOdd((1 - pBttsH1) * (1 - pBttsH2)) },
+  ];
+
+  const pHomeWinsH1 = gridSum(gridH1, (h, a) => h > a);
+  const pAwayWinsH1 = gridSum(gridH1, (h, a) => h < a);
+  const pHomeWinsH2 = gridSum(gridH2, (h, a) => h > a);
+  const pAwayWinsH2 = gridSum(gridH2, (h, a) => h < a);
+  const pSameTeamBothHalves = pHomeWinsH1 * pHomeWinsH2 + pAwayWinsH1 * pAwayWinsH2;
+  const WIN_BOTH_HALVES: DerivedOdd[] = [
+    { label: "Oui", value: toOdd(pSameTeamBothHalves) },
+    { label: "Non", value: toOdd(1 - pSameTeamBothHalves) },
+  ];
+
+  return {
+    DOUBLE_CHANCE_BTTS, RESULT_BTTS, RESULT_TOTAL, DOUBLE_CHANCE_TOTAL,
+    FIRST_HALF_TEAM_TOTALS, SECOND_HALF_TEAM_TOTALS,
+    FIRST_HALF_ODD_EVEN, SECOND_HALF_ODD_EVEN,
+    HIGHEST_SCORING_HALF, BTTS_BOTH_HALVES, WIN_BOTH_HALVES,
+  };
+}
