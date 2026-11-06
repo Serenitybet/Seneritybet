@@ -169,6 +169,7 @@ export default function SportsPage() {
     shotsHome: "", shotsAway: "", foulsHome: "", foulsAway: "",
   });
   const [settlingStats, setSettlingStats] = useState(false);
+  const [postponing, setPostponing] = useState(false);
 
   const up = (f: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((p) => ({ ...p, [f]: e.target.value }));
@@ -421,6 +422,28 @@ export default function SportsPage() {
       await openPanel(selectedEvent);
     } catch { toast.error("Erreur réseau"); }
     finally { setSettlingStats(false); }
+  }
+
+  // ── Marquer un match reporté/annulé ───────────────────────────────────────────
+  // Retire ses marchés de la vente et rembourse (VOID) toutes les sélections de
+  // ticket encore en attente — même traitement pour un simple report (le match
+  // aura lieu à une autre date) que pour une annulation définitive.
+
+  async function postponeEvent(status: "POSTPONED" | "CANCELLED") {
+    if (!selectedEvent) return;
+    const label = status === "POSTPONED" ? "reporté" : "annulé";
+    if (!confirm(`Marquer ce match comme ${label} ? Les marchés seront retirés de la vente et toutes les sélections en attente sur ce match seront remboursées (tickets concernés soldés immédiatement).`)) return;
+    setPostponing(true);
+    try {
+      const r = await fetch(`${API}/admin/sports/events/${selectedEvent.id}/postpone`, {
+        method: "POST", headers: authHeaders(), body: JSON.stringify({ status }),
+      });
+      const d = await r.json();
+      if (!r.ok) { toast.error(d.error ?? "Erreur"); return; }
+      toast.success(`✓ Match marqué ${label} — ${d.data.voidedItems} sélection(s) remboursée(s), ${d.data.settledTickets} ticket(s) soldé(s)`);
+      await openPanel(selectedEvent);
+    } catch { toast.error("Erreur réseau"); }
+    finally { setPostponing(false); }
   }
 
   // ── Changer type marché → pré-remplir cotes ───────────────────────────────────
@@ -727,6 +750,31 @@ export default function SportsPage() {
                     className="bo-btn-primary w-full text-sm disabled:opacity-50">
                     {settlingStats ? "Règlement…" : "⚡ Régler les tickets concernés"}
                   </button>
+                </div>
+              </div>
+
+              {/* ── Match reporté / annulé ── */}
+              <div className="bo-card border-dashed border-red-500/30">
+                <div className="bo-card-header">
+                  <span className="bo-card-title text-sm">⚠️ Match reporté ou annulé</span>
+                </div>
+                <div className="bo-card-body space-y-2">
+                  <p className="text-[11px] text-t-faint -mt-1">
+                    Retire les marchés de la vente et rembourse immédiatement toutes les sélections
+                    en attente sur ce match — même traitement qu'il soit simplement reporté à une
+                    autre date (il faudra alors le recréer manuellement si une nouvelle synchro ne
+                    le fait pas automatiquement) ou définitivement annulé.
+                  </p>
+                  <div className="flex gap-2">
+                    <button onClick={() => postponeEvent("POSTPONED")} disabled={postponing}
+                      className="bo-btn-secondary flex-1 text-xs disabled:opacity-50">
+                      {postponing ? "…" : "Reporté"}
+                    </button>
+                    <button onClick={() => postponeEvent("CANCELLED")} disabled={postponing}
+                      className="bo-btn-secondary flex-1 text-xs disabled:opacity-50">
+                      {postponing ? "…" : "Annulé"}
+                    </button>
+                  </div>
                 </div>
               </div>
 
