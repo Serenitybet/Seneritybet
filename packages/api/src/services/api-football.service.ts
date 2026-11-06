@@ -150,9 +150,11 @@ function extractMatchStats(
  * couvert, panne ponctuelle...) restait sinon bloqué "en attente" pour
  * toujours (pas de second passage possible côté TheOddsAPI une fois la
  * fenêtre dépassée). On ne filtre donc plus sur un statut Event déjà
- * "FINISHED" (c'est justement ce qui coince dans ce cas) ni sur les seuls
- * marchés statistiques — on part de n'importe quel marché encore en
- * attente et on relaie le résultat qu'on trouve au bon moteur de calcul.
+ * "FINISHED" (c'est justement ce qui coince dans ce cas, voir le filtre
+ * temporel ci-dessous qui exclut les matchs pas encore joués à la place)
+ * ni sur les seuls marchés statistiques — on part de n'importe quel
+ * marché encore en attente et on relaie le résultat qu'on trouve au bon
+ * moteur de calcul.
  *
  * Ne touche jamais aux paris en ligne (Bet/BetItem) : le règlement de ces
  * marchés y est déjà entièrement manuel (comme pour les marchés "simples"
@@ -166,10 +168,24 @@ export async function syncApiFootballSettlement() {
   const events = await prisma.event.findMany({
     where: {
       status: { notIn: ["CANCELLED", "POSTPONED"] },
-      // Au-delà de quelques jours, les stats détaillées ne sont plus
-      // consultables sur le forfait gratuit (fenêtre glissante observée) —
-      // pas la peine de continuer à chercher.
-      startTime: { gte: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
+      startTime: {
+        // Au-delà de quelques jours, les stats détaillées ne sont plus
+        // consultables sur le forfait gratuit (fenêtre glissante observée) —
+        // pas la peine de continuer à chercher.
+        gte: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+        // BUG corrigé le 06/11/2026 (quelques heures après déploiement) :
+        // en retirant le filtre status:"FINISHED" ci-dessus pour rattraper
+        // les matchs que TheOddsAPI ne marque jamais FINISHED, ça faisait
+        // aussi remonter TOUS les matchs FUTURS ayant un ticket vendu
+        // dessus (leurs sélections sont forcément "en attente", c'est
+        // normal, le match n'est juste pas encore joué) — qui, triés par
+        // date décroissante, monopolisaient les 40 créneaux de chaque
+        // cycle et empêchaient les vrais matchs bloqués (plus anciens)
+        // d'être jamais atteints. Un match ne peut pas être fini avant
+        // d'avoir commencé depuis au moins sa durée + marge (prolongations,
+        // retard d'arbitrage) — 3h de marge, large.
+        lte: new Date(Date.now() - 3 * 60 * 60 * 1000),
+      },
       apiFootballAttempts: { lt: MAX_ATTEMPTS },
       markets: {
         some: { odds: { some: { ticketItems: { some: { result: null } } } } },
