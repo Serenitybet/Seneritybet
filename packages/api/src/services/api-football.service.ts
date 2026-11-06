@@ -2,7 +2,8 @@ import axios from "axios";
 import { prisma } from "../lib/prisma";
 import { canMakeApiFootballRequest, recordApiFootballRequest } from "../lib/api-football.state";
 import { settleTicket } from "./tpe.service";
-import { STATS_MARKET_TYPES, computeStatsItemResult } from "../lib/stats-settlement";
+import { computeStatsItemResult } from "../lib/stats-settlement";
+import { computeItemResult } from "./odds.service";
 
 const API_FOOTBALL_BASE = "https://v3.football.api-sports.io";
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY;
@@ -138,9 +139,20 @@ function extractMatchStats(
 
 
 /**
- * Règle automatiquement les tickets physiques (TicketItem) dont la sélection
- * porte sur un marché que TheOddsAPI ne peut pas calculer depuis le score
- * final seul (mi-temps, corners, cartons) — voir STATS_MARKET_TYPES.
+ * Règle automatiquement les tickets physiques (TicketItem) via une 2nde
+ * source de score indépendante (API-Football) : à la fois les marchés que
+ * TheOddsAPI ne peut pas calculer depuis le score final seul (mi-temps,
+ * corners, cartons — computeStatsItemResult) ET, depuis le 06/11/2026, les
+ * marchés "classiques" (computeItemResult) en rattrapage de TheOddsAPI —
+ * dont la fenêtre de l'endpoint /scores est plafonnée à 3 jours par
+ * l'API elle-même (daysFrom, non modifiable) : un match que TheOddsAPI n'a
+ * jamais marqué "completed" dans cette fenêtre (championnat mineur mal
+ * couvert, panne ponctuelle...) restait sinon bloqué "en attente" pour
+ * toujours (pas de second passage possible côté TheOddsAPI une fois la
+ * fenêtre dépassée). On ne filtre donc plus sur un statut Event déjà
+ * "FINISHED" (c'est justement ce qui coince dans ce cas) ni sur les seuls
+ * marchés statistiques — on part de n'importe quel marché encore en
+ * attente et on relaie le résultat qu'on trouve au bon moteur de calcul.
  *
  * Ne touche jamais aux paris en ligne (Bet/BetItem) : le règlement de ces
  * marchés y est déjà entièrement manuel (comme pour les marchés "simples"
@@ -153,24 +165,18 @@ export async function syncApiFootballSettlement() {
 
   const events = await prisma.event.findMany({
     where: {
-      status: "FINISHED",
+      status: { notIn: ["CANCELLED", "POSTPONED"] },
       // Au-delà de quelques jours, les stats détaillées ne sont plus
       // consultables sur le forfait gratuit (fenêtre glissante observée) —
       // pas la peine de continuer à chercher.
       startTime: { gte: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
       apiFootballAttempts: { lt: MAX_ATTEMPTS },
       markets: {
-        some: {
-          type: { in: STATS_MARKET_TYPES as unknown as string[] },
-          odds: { some: { ticketItems: { some: { result: null } } } },
-        },
+        some: { odds: { some: { ticketItems: { some: { result: null } } } } },
       },
     },
     include: {
-      markets: {
-        where: { type: { in: STATS_MARKET_TYPES as unknown as string[] } },
-        include: { odds: { include: { ticketItems: true } } },
-      },
+      markets: { include: { odds: { include: { ticketItems: true } } } },
     },
     orderBy: { startTime: "desc" },
     take: MAX_EVENTS_PER_RUN,
@@ -189,13 +195,31 @@ export async function syncApiFootballSettlement() {
         continue;
       }
 
-      const htHome = fixture.score?.halftime?.home;
-      const htAway = fixture.score?.halftime?.away;
+      const htHomeRaw = fixture.score?.halftime?.home;
+      const htAwayRaw = fixture.score?.halftime?.away;
       const ftHome = fixture.score?.fulltime?.home;
       const ftAway = fixture.score?.fulltime?.away;
-      if (htHome == null || htAway == null || ftHome == null || ftAway == null) {
-        console.warn(`⚠️  API-Football — score mi-temps indisponible pour ${event.homeTeam} vs ${event.awayTeam}`);
+      // Seul le score final est indispensable (marchés classiques) ; le
+      // score mi-temps reste optionnel (marchés mi-temps ignorés si absent,
+      // sans bloquer le reste — avant le 06/11/2026 son absence annulait
+      // tout le traitement du match, y compris les marchés classiques).
+      if (ftHome == null || ftAway == null) {
+        console.warn(`⚠️  API-Football — score final indisponible pour ${event.homeTeam} vs ${event.awayTeam}`);
         continue;
+      }
+      const ht = (htHomeRaw != null && htAwayRaw != null) ? { home: htHomeRaw, away: htAwayRaw } : null;
+      if (!ht) {
+        console.warn(`⚠️  API-Football — score mi-temps indisponible pour ${event.homeTeam} vs ${event.awayTeam} (marchés mi-temps ignorés)`);
+      }
+
+      // Rattrape le statut/score de l'Event si TheOddsAPI ne l'a jamais
+      // marqué FINISHED (voir le commentaire en tête de fonction) — même
+      // déduplication que syncScoresAndSettle (odds.service.ts).
+      if (event.status !== "FINISHED" || event.homeScore !== ftHome || event.awayScore !== ftAway) {
+        await prisma.event.update({
+          where: { id: event.id },
+          data: { status: "FINISHED", homeScore: ftHome, awayScore: ftAway, result: `${ftHome}-${ftAway}` },
+        });
       }
 
       const hasPending = (m: { type: string; odds: { ticketItems: { result: string | null }[] }[] }) =>
@@ -219,10 +243,16 @@ export async function syncApiFootballSettlement() {
       const touchedTicketIds = new Set<string>();
       for (const market of event.markets) {
         for (const odd of market.odds) {
-          const result = computeStatsItemResult(
-            market.type, odd.label, event.homeTeam, event.awayTeam,
-            htHome, htAway, ftHome, ftAway, corners, cards, shots, fouls,
-          );
+          // Marchés classiques (score final) d'abord, puis marchés
+          // statistiques (mi-temps/corners/cartons) si le premier ne
+          // reconnaît pas ce type — les deux listes sont disjointes, l'ordre
+          // n'a pas d'importance, chacun renvoie null sur un type qu'il ne
+          // sait pas calculer plutôt que de planter.
+          const result = computeItemResult(market.type, odd.label, event.homeTeam, event.awayTeam, ftHome, ftAway)
+            ?? (ht ? computeStatsItemResult(
+                 market.type, odd.label, event.homeTeam, event.awayTeam,
+                 ht.home, ht.away, ftHome, ftAway, corners, cards, shots, fouls,
+               ) : null);
           if (!result) continue;
           for (const item of odd.ticketItems) {
             if (item.result !== null) continue;
@@ -258,6 +288,6 @@ export async function syncApiFootballSettlement() {
   }
 
   if (matchedCount > 0 || settledTicketsCount > 0) {
-    console.log(`📊 API-Football : ${matchedCount} match(s) rapprochés, ${settledTicketsCount} ticket(s) réglé(s) (mi-temps/corners/cartons)`);
+    console.log(`📊 API-Football : ${matchedCount} match(s) rapprochés, ${settledTicketsCount} ticket(s) réglé(s) (classiques + mi-temps/corners/cartons)`);
   }
 }

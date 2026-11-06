@@ -1674,7 +1674,14 @@ export async function settleEventTickets(
 }
 
 /** Calcule le résultat d'une sélection à partir du score final — null si le marché/libellé n'est pas reconnu (saisie manuelle requise). */
-function computeItemResult(
+/**
+ * Exportée pour être réutilisée par api-football.service.ts — rattrapage
+ * des marchés classiques (score final) pour un match que TheOddsAPI n'a
+ * jamais marqué "completed" dans sa fenêtre de 3 jours (daysFrom, plafond
+ * de l'API — voir syncScoresAndSettle), via la 2nde source de score
+ * indépendante déjà en place pour les marchés statistiques.
+ */
+export function computeItemResult(
   marketType: string, label: string, homeTeam: string, awayTeam: string, homeScore: number, awayScore: number,
 ): "WON" | "LOST" | "VOID" | null {
   switch (marketType) {
