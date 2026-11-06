@@ -162,6 +162,49 @@ adminSportsRouter.patch("/events/:id/result",
   }),
 );
 
+// POST /api/admin/sports/events/:id/postpone — marque un match reporté ou
+// annulé : retire ses marchés de la vente (isPublished: false, comme tout
+// marché non encore prêt) et rembourse (VOID) toutes les sélections de
+// ticket encore en attente dessus. Même traitement qu'il s'agisse d'un
+// simple report (le match aura lieu à une autre date, comme CD Pamplona —
+// SD Eibar, Copa del Rey, reporté le 06/11/2026) ou d'une annulation
+// définitive : décision explicite — on ne fait pas attendre le ticket
+// jusqu'au nouveau coup d'envoi, on rembourse tout de suite. Réutilise
+// settleTicket, qui traite déjà nativement une sélection VOID comme une
+// cote neutre (voir son commentaire "match reporté/annulé").
+adminSportsRouter.post("/events/:id/postpone",
+  requireRole("TRADER", "ADMIN", "SUPER_ADMIN"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const status = req.body?.status === "CANCELLED" ? "CANCELLED" : "POSTPONED";
+    const event = await prisma.event.findUnique({ where: { id: req.params.id } });
+    if (!event) { res.status(404).json({ success: false, error: "Match introuvable" }); return; }
+
+    await prisma.event.update({ where: { id: event.id }, data: { status } });
+    await prisma.market.updateMany({ where: { eventId: event.id }, data: { isPublished: false } });
+
+    const items = await prisma.ticketItem.findMany({
+      where: { result: null, market: { eventId: event.id } },
+    });
+    const touchedTicketIds = new Set<string>();
+    for (const item of items) {
+      await prisma.ticketItem.update({ where: { id: item.id }, data: { result: "VOID" } });
+      touchedTicketIds.add(item.ticketId);
+    }
+
+    let settledTickets = 0;
+    for (const ticketId of touchedTicketIds) {
+      const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, include: { items: true } });
+      const ready = ticket && (ticket.items.every((i: { result: string | null }) => i.result !== null) || ticket.items.some((i: { result: string | null }) => i.result === "LOST"));
+      if (ticket && ticket.status === "PENDING" && ready) {
+        await settleTicket(ticketId);
+        settledTickets++;
+      }
+    }
+
+    res.json({ success: true, data: { voidedItems: items.length, settledTickets } });
+  }),
+);
+
 // POST /api/admin/sports/events/:id/settle-stats — règle en masse les
 // marchés "statistiques" (mi-temps, corners, cartons) à partir de données
 // saisies UNE SEULE FOIS par le trader, au lieu d'une validation sélection
