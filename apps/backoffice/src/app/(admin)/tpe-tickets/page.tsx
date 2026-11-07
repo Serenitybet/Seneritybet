@@ -83,6 +83,11 @@ export default function TpeTicketsPage() {
   const [regions, setRegions] = useState<Region[]>([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
+  // Recherche par code de ticket — appliquée seulement sur Entrée/clic (pas à
+  // chaque frappe, contrairement aux autres filtres) : coller un code et
+  // valider, pas une liste qui se recharge à chaque lettre tapée.
+  const [codeInput, setCodeInput] = useState("");
+  const [codeSearch, setCodeSearch] = useState("");
   const [tpeId, setTpeId] = useState("");
   // Filtre par région — demande explicite du 04/11/2026.
   const [regionId, setRegionId] = useState("");
@@ -170,6 +175,7 @@ export default function TpeTicketsPage() {
     try {
       const params = new URLSearchParams();
       if (status) params.set("status", status);
+      if (codeSearch) params.set("code", codeSearch);
       if (tpeId) params.set("tpeId", tpeId);
       if (regionId) params.set("regionId", regionId);
       if (dangerousOnly) params.set("dangerous", "true");
@@ -201,7 +207,7 @@ export default function TpeTicketsPage() {
     finally { setLoading(false); }
   }
 
-  useEffect(() => { load(); }, [status, tpeId, regionId, dangerousOnly, from, to]);
+  useEffect(() => { load(); }, [status, codeSearch, tpeId, regionId, dangerousOnly, from, to]);
 
   // Export Excel — demande explicite du 31/10/2026 : exporte exactement les
   // tickets actuellement affichés (mêmes filtres TPE/statut/période que ceux
@@ -449,7 +455,30 @@ export default function TpeTicketsPage() {
           <h1 className="text-lg font-bold text-t-primary">🎫 Tickets TPE</h1>
           <p className="text-[11px] text-t-faint mt-0.5">
             {totalCount} ticket(s){tickets.length < totalCount ? ` (${tickets.length} affichés)` : ""}
+            {codeSearch ? " — recherche par code (période ignorée)" : ""}
           </p>
+        </div>
+        <div className="flex items-center gap-1">
+          <input
+            className="bo-input w-36"
+            placeholder="Rechercher par code…"
+            value={codeInput}
+            onChange={(e) => setCodeInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") setCodeSearch(codeInput.trim()); }}
+          />
+          {codeSearch ? (
+            <button
+              className="bo-btn-secondary text-xs px-2"
+              onClick={() => { setCodeInput(""); setCodeSearch(""); }}
+              title="Effacer la recherche"
+            >✕</button>
+          ) : (
+            <button
+              className="bo-btn-secondary text-xs px-2"
+              onClick={() => setCodeSearch(codeInput.trim())}
+              title="Rechercher"
+            >🔍</button>
+          )}
         </div>
         <select className="bo-select" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">Tous les statuts</option>

@@ -24,6 +24,13 @@ adminTicketsRouter.get("/", asyncHandler(async (req: Request, res: Response) => 
   const dangerous = req.query.dangerous === "true";
   const from      = req.query.from as string | undefined; // YYYY-MM-DD, début de journée
   const to        = req.query.to   as string | undefined; // YYYY-MM-DD, fin de journée incluse
+  // Recherche directe par code de ticket — demande explicite du 07/11/2026 :
+  // jusqu'ici impossible de retrouver un ticket précis sans connaître sa
+  // date et parcourir la liste. Prioritaire sur le filtre de date (l'admin
+  // a le code, pas forcément le jour exact) ; reste combinable avec
+  // tpeId/regionId/statut si besoin. "contains" insensible à la casse :
+  // tolère un code tapé sans tirets ou partiellement.
+  const code      = (req.query.code as string | undefined)?.trim();
 
   // Filtres communs hors statut — séparés du statut pour pouvoir composer
   // les agrégats ci-dessous (misé/gagné/payé) sans que le statut déjà
@@ -33,7 +40,7 @@ adminTicketsRouter.get("/", asyncHandler(async (req: Request, res: Response) => 
     ...(tpeId ? { tpeId } : {}),
     ...(regionId ? { tpe: { regionId } } : {}),
     ...(dangerous ? { requiresApproval: true, approvedAt: null } : {}),
-    ...((from || to) ? {
+    ...(code ? { code: { contains: code, mode: "insensitive" as const } } : (from || to) ? {
       createdAt: {
         ...(from ? { gte: new Date(`${from}T00:00:00`) } : {}),
         ...(to   ? { lte: new Date(`${to}T23:59:59.999`) } : {}),
