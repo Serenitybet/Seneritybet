@@ -26,6 +26,14 @@ export const STATS_MARKET_TYPES = [
   "FIRST_HALF_TEAM_TOTALS", "SECOND_HALF_TEAM_TOTALS",
   "FIRST_HALF_ODD_EVEN", "SECOND_HALF_ODD_EVEN",
   "HIGHEST_SCORING_HALF", "BTTS_BOTH_HALVES", "WIN_BOTH_HALVES",
+  // BOTH_TEAMS_SCORE_FIRST_HALF (btts_h1) et CORNERS_1X2 (corners_1x2) sont
+  // créés par upsertPropMarkets (odds.service.ts) depuis TheOddsAPI mais
+  // n'avaient jamais été branchés à AUCUN moteur de règlement — ni ici ni
+  // dans computeItemResult, ni même la saisie manuelle du backoffice (qui
+  // passe aussi par STATS_MARKET_TYPES). Ticket bloqué en attente signalé
+  // en prod le 07/11/2026, repéré en cherchant pourquoi un marché pourtant
+  // vendu ne se réglait jamais, sur aucun match. Ajoutés le 07/11/2026.
+  "BOTH_TEAMS_SCORE_FIRST_HALF", "CORNERS_1X2",
 ] as const;
 
 export function totalsResult(label: string, total: number): "WON" | "LOST" | "VOID" | null {
@@ -88,6 +96,13 @@ export function computeStatsItemResult(
     case "SECOND_HALF_HANDICAP":      return handicapResult(label, shHome, shAway);
     case "CORNERS_TOTAL":             return corners ? totalsResult(label, corners.home + corners.away) : null;
     case "CORNERS_HANDICAP":          return corners ? handicapResult(label, corners.home, corners.away) : null;
+    case "CORNERS_1X2":
+      return corners ? (label === sideResult(corners.home, corners.away) ? "WON" : "LOST") : null;
+    case "BOTH_TEAMS_SCORE_FIRST_HALF": {
+      if (label !== "Oui" && label !== "Non") return null;
+      const bothScored = htHome > 0 && htAway > 0;
+      return (label === "Oui") === bothScored ? "WON" : "LOST";
+    }
     case "CARDS_TOTAL":               return cards ? totalsResult(label, cards.home + cards.away) : null;
     case "CARDS_HANDICAP":            return cards ? handicapResult(label, cards.home, cards.away) : null;
     // Pas de bouton "Autre" sur ce marché (volontaire) : le résultat ne serait
