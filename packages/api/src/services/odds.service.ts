@@ -4,9 +4,8 @@ import { updateCredits } from "../lib/credits.state";
 import { settleTicket } from "./tpe.service";
 import {
   fitLambdas, buildScoreGrid, devig, deriveLevel1Markets, splitHalfLambdas, deriveLevel2Markets,
-  deriveMissingTotalLines, deriveMissingHandicapLines, deriveMissingTeamTotalLines,
-  STANDARD_TOTAL_LINES, HALF_TOTAL_LINES, STANDARD_HANDICAP_LINES, HALF_HANDICAP_LINES,
-  STANDARD_TEAM_TOTAL_LINES, HALF_TEAM_TOTAL_LINES,
+  deriveMissingTotalLines, deriveMissingTeamTotalLines,
+  STANDARD_TOTAL_LINES, HALF_TOTAL_LINES, STANDARD_TEAM_TOTAL_LINES, HALF_TEAM_TOTAL_LINES,
 } from "../lib/goal-model";
 import { getSettingFloat, SETTING_KEYS } from "../lib/settings";
 
@@ -618,17 +617,14 @@ async function generateLevel1Markets(eventId: string, homeTeam: string, awayTeam
   const gridH2 = buildScoreGrid(lambdaHomeH2, lambdaAwayH2);
   await upsertDerivedMarkets(eventId, deriveLevel2Markets(grid, gridH1, gridH2, homeTeam, awayTeam, LEVEL1_MARGIN), LEVEL2_MARKET_NAMES);
 
-  // Complète Plus/Moins, handicap et totaux par équipe manquants — plein
-  // match ET par mi-temps (demande explicite du 12/11/2026, suite du
-  // correctif Plus/Moins du 12/11 : mêmes trous possibles sur le handicap
-  // et les totaux par équipe, plein match et par mi-temps).
+  // Complète Plus/Moins et totaux par équipe manquants — plein match ET
+  // par mi-temps (demande explicite du 12/11/2026, suite du correctif
+  // Plus/Moins du 12/11 : même trou possible sur les totaux par équipe,
+  // plein match et par mi-temps). Uniquement les nombres de buts — pas le
+  // handicap (hors scope, retiré le 12/11/2026 après clarification).
   await fillTotalsGap(eventId, ["OVER_UNDER", "ALTERNATE_TOTALS"], "ALTERNATE_TOTALS", "Plus/Moins (autres lignes)", grid, STANDARD_TOTAL_LINES);
   await fillTotalsGap(eventId, ["FIRST_HALF_TOTALS"],  "FIRST_HALF_TOTALS",  "Plus/Moins 1ère mi-temps", gridH1, HALF_TOTAL_LINES);
   await fillTotalsGap(eventId, ["SECOND_HALF_TOTALS"], "SECOND_HALF_TOTALS", "Plus/Moins 2nde mi-temps", gridH2, HALF_TOTAL_LINES);
-
-  await fillHandicapGap(eventId, ["HANDICAP", "ALTERNATE_SPREADS"], "ALTERNATE_SPREADS", "Handicap (autres lignes)", grid, STANDARD_HANDICAP_LINES);
-  await fillHandicapGap(eventId, ["FIRST_HALF_HANDICAP"],  "FIRST_HALF_HANDICAP",  "Handicap 1ère mi-temps", gridH1, HALF_HANDICAP_LINES);
-  await fillHandicapGap(eventId, ["SECOND_HALF_HANDICAP"], "SECOND_HALF_HANDICAP", "Handicap 2nde mi-temps", gridH2, HALF_HANDICAP_LINES);
 
   await fillTeamTotalsGap(eventId, "TEAM_TOTALS", "Totaux par équipe", grid, homeTeam, awayTeam, STANDARD_TEAM_TOTAL_LINES);
   await fillTeamTotalsGap(eventId, "FIRST_HALF_TEAM_TOTALS",  "Totaux par équipe — 1ère mi-temps", gridH1, homeTeam, awayTeam, HALF_TEAM_TOTAL_LINES);
@@ -659,29 +655,6 @@ async function fillTotalsGap(
   }
 
   const missing = deriveMissingTotalLines(grid, existingLines, LEVEL1_MARGIN, lines);
-  if (missing.length === 0) return;
-
-  const target = markets.find((m: { type: string }) => m.type === writeType)
-    ?? await prisma.market.create({ data: { eventId, type: writeType as any, name: writeName }, include: { odds: true } });
-  for (const { label, value } of missing) {
-    if (target.odds.find((o: { label: string }) => o.label === label)) continue;
-    await prisma.odd.create({ data: { marketId: target.id, label, value } });
-  }
-}
-
-/** Même principe que fillTotalsGap, pour le handicap asiatique ("1 (+X)" / "2 (-X)"). */
-async function fillHandicapGap(
-  eventId: string, checkTypes: string[], writeType: string, writeName: string,
-  grid: ReturnType<typeof buildScoreGrid>, lines: number[],
-) {
-  const markets = await prisma.market.findMany({ where: { eventId, type: { in: checkTypes as any } }, include: { odds: true } });
-  const existingLines: number[] = [];
-  for (const m of markets) for (const odd of m.odds) {
-    const match = odd.label.match(/^[12]\s*\(([+-]?[\d.]+)\)$/);
-    if (match) existingLines.push(Math.abs(parseFloat(match[1])));
-  }
-
-  const missing = deriveMissingHandicapLines(grid, existingLines, LEVEL1_MARGIN, lines);
   if (missing.length === 0) return;
 
   const target = markets.find((m: { type: string }) => m.type === writeType)

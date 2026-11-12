@@ -345,13 +345,12 @@ export function deriveLevel2Markets(
 // parieur. Mêmes lignes que celles déjà gardées pour alternate_totals
 // (voir ALTERNATE_TOTALS_MAX_LINES, odds.service.ts).
 // Lignes "standard" par contexte — demande explicite du 12/11/2026 pour
-// étendre le même principe à la mi-temps (Plus/Moins, handicap) et aux
-// totaux par équipe (plein match + mi-temps). Plage réduite pour les
-// mi-temps (un seul but suffit déjà à dépasser 1.5 en 45 minutes).
+// étendre le même principe à la mi-temps et aux totaux par équipe (plein
+// match + mi-temps), uniquement sur les nombres de buts (pas le handicap,
+// hors scope). Plage réduite pour les mi-temps (un seul but suffit déjà à
+// dépasser 1.5 en 45 minutes).
 export const STANDARD_TOTAL_LINES      = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5];
 export const HALF_TOTAL_LINES          = [0.5, 1.5, 2.5];
-export const STANDARD_HANDICAP_LINES   = [0.5, 1, 1.5, 2, 2.5];
-export const HALF_HANDICAP_LINES       = [0.5, 1, 1.5];
 export const STANDARD_TEAM_TOTAL_LINES = [0.5, 1.5, 2.5];
 export const HALF_TEAM_TOTAL_LINES     = [0.5, 1.5];
 
@@ -373,32 +372,6 @@ export function deriveMissingTotalLines(
     const pOver = gridSum(grid, (h, a) => h + a > line);
     odds.push({ label: `Plus ${line}`, value: toOdd(pOver) });
     odds.push({ label: `Moins ${line}`, value: toOdd(1 - pOver) });
-  }
-  return odds;
-}
-
-/**
- * Même principe pour le handicap asiatique ("victoires" avec écart) —
- * label au même format que ALTERNATE_SPREADS/FIRST_HALF_HANDICAP :
- * "1 (+X)" / "2 (-X)".
- */
-export function deriveMissingHandicapLines(
-  grid: ScoreGrid, existingLines: number[], marginPct: number, lines: number[] = STANDARD_HANDICAP_LINES,
-): DerivedOdd[] {
-  const toOdd = (p: number) => probabilityToOdd(p, marginPct);
-  const odds: DerivedOdd[] = [];
-  for (const line of lines) {
-    if (existingLines.includes(line)) continue;
-    // Ligne entière (1, 2...) : push possible (home+line === away, remboursé
-    // en réalité) — à exclure des DEUX côtés, pas seulement absent du côté
-    // "1". "1 - pHomeCovers" compterait à tort le push comme une victoire
-    // du côté 2, ce qui le sous-évalue (cote trop basse). Sans objet sur
-    // une ligne à la demie (push impossible, pPush toujours nul).
-    const pHomeCovers = gridSum(grid, (h, a) => h + line > a);
-    const pPush        = gridSum(grid, (h, a) => h + line === a);
-    const pAwayCovers  = 1 - pHomeCovers - pPush;
-    odds.push({ label: `1 (+${line})`, value: toOdd(pHomeCovers) });
-    odds.push({ label: `2 (-${line})`, value: toOdd(pAwayCovers) });
   }
   return odds;
 }
