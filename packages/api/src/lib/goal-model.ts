@@ -334,3 +334,34 @@ export function deriveLevel2Markets(
     HIGHEST_SCORING_HALF, BTTS_BOTH_HALVES, WIN_BOTH_HALVES,
   };
 }
+
+// ─── Complément des lignes Plus/Moins manquantes ──────────────────────────────
+//
+// Signalé par l'utilisateur le 12/11/2026 : TheOddsAPI ne fournit pas
+// toujours la gamme standard de lignes (0.5 à 5.5) pour chaque match —
+// certains n'ont que 2.5/3.5, par exemple. Ça concentre les combinés sur
+// "Plus 2.5" (ligne à forte fréquence de réussite dans le foot moderne,
+// donc risquée en accumulation) sans alternative plus fine pour le
+// parieur. Mêmes lignes que celles déjà gardées pour alternate_totals
+// (voir ALTERNATE_TOTALS_MAX_LINES, odds.service.ts).
+const STANDARD_TOTAL_LINES = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5];
+
+/**
+ * Calcule Plus/Moins pour chaque ligne standard ABSENTE de existingLines —
+ * à écrire dans le marché ALTERNATE_TOTALS, qui laissera la vraie cote de
+ * TheOddsAPI reprendre la main dès qu'elle devient disponible pour cette
+ * ligne (upsertExtraMarkets fait un update si la cote existe déjà).
+ */
+export function deriveMissingTotalLines(
+  grid: ScoreGrid, existingLines: number[], marginPct: number,
+): DerivedOdd[] {
+  const toOdd = (p: number) => probabilityToOdd(p, marginPct);
+  const odds: DerivedOdd[] = [];
+  for (const line of STANDARD_TOTAL_LINES) {
+    if (existingLines.includes(line)) continue;
+    const pOver = gridSum(grid, (h, a) => h + a > line);
+    odds.push({ label: `Plus ${line}`, value: toOdd(pOver) });
+    odds.push({ label: `Moins ${line}`, value: toOdd(1 - pOver) });
+  }
+  return odds;
+}

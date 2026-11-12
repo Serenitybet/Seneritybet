@@ -2,7 +2,7 @@ import axios from "axios";
 import { prisma } from "../lib/prisma";
 import { updateCredits } from "../lib/credits.state";
 import { settleTicket } from "./tpe.service";
-import { fitLambdas, buildScoreGrid, devig, deriveLevel1Markets, splitHalfLambdas, deriveLevel2Markets } from "../lib/goal-model";
+import { fitLambdas, buildScoreGrid, devig, deriveLevel1Markets, splitHalfLambdas, deriveLevel2Markets, deriveMissingTotalLines } from "../lib/goal-model";
 import { getSettingFloat, SETTING_KEYS } from "../lib/settings";
 
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
@@ -612,6 +612,37 @@ async function generateLevel1Markets(eventId: string, homeTeam: string, awayTeam
   const gridH1 = buildScoreGrid(lambdaHomeH1, lambdaAwayH1);
   const gridH2 = buildScoreGrid(lambdaHomeH2, lambdaAwayH2);
   await upsertDerivedMarkets(eventId, deriveLevel2Markets(grid, gridH1, gridH2, homeTeam, awayTeam, LEVEL1_MARGIN), LEVEL2_MARKET_NAMES);
+
+  await fillMissingTotalLines(eventId, totalsMarket.odds, grid);
+}
+
+/**
+ * Complète les lignes Plus/Moins standard (0.5 à 5.5) que TheOddsAPI n'a
+ * pas fournies pour ce match — voir deriveMissingTotalLines (goal-model.ts).
+ * Écrit dans ALTERNATE_TOTALS uniquement les lignes réellement absentes des
+ * deux marchés Plus/Moins existants (OVER_UNDER + ALTERNATE_TOTALS) ; ne
+ * touche jamais une ligne déjà fournie par l'API, même approximative —
+ * dès qu'upsertExtraMarkets en reçoit une vraie, elle prend le dessus au
+ * cycle suivant (mise à jour par libellé, pas de doublon).
+ */
+async function fillMissingTotalLines(eventId: string, overUnderOdds: { label: string }[], grid: ReturnType<typeof buildScoreGrid>) {
+  const alternateMarket = await prisma.market.findFirst({ where: { eventId, type: "ALTERNATE_TOTALS" }, include: { odds: true } });
+  const existingLines: number[] = [];
+  for (const odd of [...overUnderOdds, ...(alternateMarket?.odds ?? [])]) {
+    const m = odd.label.match(/^(?:Plus|Moins)\s+([\d.]+)$/);
+    if (m) existingLines.push(parseFloat(m[1]));
+  }
+
+  const missing = deriveMissingTotalLines(grid, existingLines, LEVEL1_MARGIN);
+  if (missing.length === 0) return;
+
+  const market = alternateMarket
+    ?? await prisma.market.create({ data: { eventId, type: "ALTERNATE_TOTALS" as any, name: "Plus/Moins (autres lignes)" }, include: { odds: true } });
+  for (const { label, value } of missing) {
+    const existingOdd = market.odds.find((o: { label: string }) => o.label === label);
+    if (existingOdd) continue; // déjà là (créé par un cycle précédent ou par l'API) — jamais écrasé ici
+    await prisma.odd.create({ data: { marketId: market.id, label, value } });
+  }
 }
 
 // ─── Marchés additionnels (BTTS, double chance) — tous les championnats ───────
