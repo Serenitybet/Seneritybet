@@ -2,7 +2,11 @@ import axios from "axios";
 import { prisma } from "../lib/prisma";
 import { updateCredits } from "../lib/credits.state";
 import { settleTicket } from "./tpe.service";
-import { fitLambdas, buildScoreGrid, devig, deriveLevel1Markets, splitHalfLambdas, deriveLevel2Markets, deriveMissingTotalLines } from "../lib/goal-model";
+import {
+  fitLambdas, buildScoreGrid, devig, deriveLevel1Markets, splitHalfLambdas, deriveLevel2Markets,
+  deriveMissingTotalLines, deriveMissingTeamTotalLines,
+  STANDARD_TOTAL_LINES, HALF_TOTAL_LINES, STANDARD_TEAM_TOTAL_LINES, HALF_TEAM_TOTAL_LINES,
+} from "../lib/goal-model";
 import { getSettingFloat, SETTING_KEYS } from "../lib/settings";
 
 const ODDS_API_BASE = "https://api.the-odds-api.com/v4";
@@ -613,35 +617,78 @@ async function generateLevel1Markets(eventId: string, homeTeam: string, awayTeam
   const gridH2 = buildScoreGrid(lambdaHomeH2, lambdaAwayH2);
   await upsertDerivedMarkets(eventId, deriveLevel2Markets(grid, gridH1, gridH2, homeTeam, awayTeam, LEVEL1_MARGIN), LEVEL2_MARKET_NAMES);
 
-  await fillMissingTotalLines(eventId, totalsMarket.odds, grid);
+  // Complète Plus/Moins et totaux par équipe manquants — plein match ET
+  // par mi-temps (demande explicite du 12/11/2026, suite du correctif
+  // Plus/Moins du 12/11 : même trou possible sur les totaux par équipe,
+  // plein match et par mi-temps). Uniquement les nombres de buts — pas le
+  // handicap (hors scope, retiré le 12/11/2026 après clarification).
+  await fillTotalsGap(eventId, ["OVER_UNDER", "ALTERNATE_TOTALS"], "ALTERNATE_TOTALS", "Plus/Moins (autres lignes)", grid, STANDARD_TOTAL_LINES);
+  await fillTotalsGap(eventId, ["FIRST_HALF_TOTALS"],  "FIRST_HALF_TOTALS",  "Plus/Moins 1ère mi-temps", gridH1, HALF_TOTAL_LINES);
+  await fillTotalsGap(eventId, ["SECOND_HALF_TOTALS"], "SECOND_HALF_TOTALS", "Plus/Moins 2nde mi-temps", gridH2, HALF_TOTAL_LINES);
+
+  await fillTeamTotalsGap(eventId, "TEAM_TOTALS", "Totaux par équipe", grid, homeTeam, awayTeam, STANDARD_TEAM_TOTAL_LINES);
+  await fillTeamTotalsGap(eventId, "FIRST_HALF_TEAM_TOTALS",  "Totaux par équipe — 1ère mi-temps", gridH1, homeTeam, awayTeam, HALF_TEAM_TOTAL_LINES);
+  await fillTeamTotalsGap(eventId, "SECOND_HALF_TEAM_TOTALS", "Totaux par équipe — 2nde mi-temps", gridH2, homeTeam, awayTeam, HALF_TEAM_TOTAL_LINES);
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
- * Complète les lignes Plus/Moins standard (0.5 à 5.5) que TheOddsAPI n'a
- * pas fournies pour ce match — voir deriveMissingTotalLines (goal-model.ts).
- * Écrit dans ALTERNATE_TOTALS uniquement les lignes réellement absentes des
- * deux marchés Plus/Moins existants (OVER_UNDER + ALTERNATE_TOTALS) ; ne
- * touche jamais une ligne déjà fournie par l'API, même approximative —
- * dès qu'upsertExtraMarkets en reçoit une vraie, elle prend le dessus au
- * cycle suivant (mise à jour par libellé, pas de doublon).
+ * Complète les lignes Plus/Moins manquantes dans `writeType` — en comptant
+ * comme "déjà couvertes" toutes les lignes trouvées dans `checkTypes` (le
+ * marché principal + ses alternatives, le cas échéant). Ne touche jamais
+ * une ligne déjà fournie par l'API, même approximative — dès que le sync
+ * correspondant en reçoit une vraie pour cette ligne, elle prend le dessus
+ * au cycle suivant (mise à jour par libellé, pas de doublon).
  */
-async function fillMissingTotalLines(eventId: string, overUnderOdds: { label: string }[], grid: ReturnType<typeof buildScoreGrid>) {
-  const alternateMarket = await prisma.market.findFirst({ where: { eventId, type: "ALTERNATE_TOTALS" }, include: { odds: true } });
+async function fillTotalsGap(
+  eventId: string, checkTypes: string[], writeType: string, writeName: string,
+  grid: ReturnType<typeof buildScoreGrid>, lines: number[],
+) {
+  const markets = await prisma.market.findMany({ where: { eventId, type: { in: checkTypes as any } }, include: { odds: true } });
   const existingLines: number[] = [];
-  for (const odd of [...overUnderOdds, ...(alternateMarket?.odds ?? [])]) {
-    const m = odd.label.match(/^(?:Plus|Moins)\s+([\d.]+)$/);
-    if (m) existingLines.push(parseFloat(m[1]));
+  for (const m of markets) for (const odd of m.odds) {
+    const match = odd.label.match(/^(?:Plus|Moins)\s+([\d.]+)$/);
+    if (match) existingLines.push(parseFloat(match[1]));
   }
 
-  const missing = deriveMissingTotalLines(grid, existingLines, LEVEL1_MARGIN);
+  const missing = deriveMissingTotalLines(grid, existingLines, LEVEL1_MARGIN, lines);
   if (missing.length === 0) return;
 
-  const market = alternateMarket
-    ?? await prisma.market.create({ data: { eventId, type: "ALTERNATE_TOTALS" as any, name: "Plus/Moins (autres lignes)" }, include: { odds: true } });
+  const target = markets.find((m: { type: string }) => m.type === writeType)
+    ?? await prisma.market.create({ data: { eventId, type: writeType as any, name: writeName }, include: { odds: true } });
   for (const { label, value } of missing) {
-    const existingOdd = market.odds.find((o: { label: string }) => o.label === label);
-    if (existingOdd) continue; // déjà là (créé par un cycle précédent ou par l'API) — jamais écrasé ici
-    await prisma.odd.create({ data: { marketId: market.id, label, value } });
+    if (target.odds.find((o: { label: string }) => o.label === label)) continue;
+    await prisma.odd.create({ data: { marketId: target.id, label, value } });
+  }
+}
+
+/** Même principe pour les totaux par équipe ("<équipe> Plus/Moins X"), une équipe à la fois. */
+async function fillTeamTotalsGap(
+  eventId: string, marketType: string, marketName: string,
+  grid: ReturnType<typeof buildScoreGrid>, homeTeam: string, awayTeam: string, lines: number[],
+) {
+  const market = await prisma.market.findFirst({ where: { eventId, type: marketType as any }, include: { odds: true } });
+  const linesFor = (team: string): number[] => {
+    const re = new RegExp(`^${escapeRegExp(team)} (?:Plus|Moins) ([\\d.]+)$`);
+    const found: number[] = [];
+    for (const o of market?.odds ?? []) { const m = o.label.match(re); if (m) found.push(parseFloat(m[1])); }
+    return found;
+  };
+
+  const missing = [
+    ...deriveMissingTeamTotalLines(grid, homeTeam, true,  linesFor(homeTeam), LEVEL1_MARGIN, lines),
+    ...deriveMissingTeamTotalLines(grid, awayTeam, false, linesFor(awayTeam), LEVEL1_MARGIN, lines),
+  ];
+  if (missing.length === 0) return;
+
+  const target = market
+    ?? await prisma.market.create({ data: { eventId, type: marketType as any, name: marketName }, include: { odds: true } });
+  for (const { label, value } of missing) {
+    if (target.odds.find((o: { label: string }) => o.label === label)) continue;
+    await prisma.odd.create({ data: { marketId: target.id, label, value } });
   }
 }
 

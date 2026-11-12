@@ -344,24 +344,58 @@ export function deriveLevel2Markets(
 // donc risquée en accumulation) sans alternative plus fine pour le
 // parieur. Mêmes lignes que celles déjà gardées pour alternate_totals
 // (voir ALTERNATE_TOTALS_MAX_LINES, odds.service.ts).
-const STANDARD_TOTAL_LINES = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5];
+// Lignes "standard" par contexte — demande explicite du 12/11/2026 pour
+// étendre le même principe à la mi-temps et aux totaux par équipe (plein
+// match + mi-temps), uniquement sur les nombres de buts (pas le handicap,
+// hors scope). Plage réduite pour les mi-temps (un seul but suffit déjà à
+// dépasser 1.5 en 45 minutes).
+export const STANDARD_TOTAL_LINES      = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5];
+export const HALF_TOTAL_LINES          = [0.5, 1.5, 2.5];
+export const STANDARD_TEAM_TOTAL_LINES = [0.5, 1.5, 2.5];
+export const HALF_TEAM_TOTAL_LINES     = [0.5, 1.5];
 
 /**
- * Calcule Plus/Moins pour chaque ligne standard ABSENTE de existingLines —
- * à écrire dans le marché ALTERNATE_TOTALS, qui laissera la vraie cote de
- * TheOddsAPI reprendre la main dès qu'elle devient disponible pour cette
- * ligne (upsertExtraMarkets fait un update si la cote existe déjà).
+ * Calcule Plus/Moins pour chaque ligne de `lines` ABSENTE de existingLines —
+ * à écrire dans le marché correspondant (ALTERNATE_TOTALS pour le plein
+ * match, directement FIRST_HALF_TOTALS/SECOND_HALF_TOTALS pour la
+ * mi-temps), qui laissera la vraie cote de TheOddsAPI reprendre la main
+ * dès qu'elle devient disponible pour cette ligne (upsert correspondant
+ * fait un update si la cote existe déjà).
  */
 export function deriveMissingTotalLines(
-  grid: ScoreGrid, existingLines: number[], marginPct: number,
+  grid: ScoreGrid, existingLines: number[], marginPct: number, lines: number[] = STANDARD_TOTAL_LINES,
 ): DerivedOdd[] {
   const toOdd = (p: number) => probabilityToOdd(p, marginPct);
   const odds: DerivedOdd[] = [];
-  for (const line of STANDARD_TOTAL_LINES) {
+  for (const line of lines) {
     if (existingLines.includes(line)) continue;
     const pOver = gridSum(grid, (h, a) => h + a > line);
     odds.push({ label: `Plus ${line}`, value: toOdd(pOver) });
     odds.push({ label: `Moins ${line}`, value: toOdd(1 - pOver) });
+  }
+  return odds;
+}
+
+/**
+ * Même principe pour les totaux par équipe ("nombres de buts individuels")
+ * — une seule équipe à la fois (appeler une fois par équipe), label au
+ * même format que TEAM_TOTALS : "<équipe> Plus X" / "<équipe> Moins X".
+ */
+export function deriveMissingTeamTotalLines(
+  grid: ScoreGrid, team: string, isHome: boolean, existingLines: number[], marginPct: number,
+  lines: number[] = STANDARD_TEAM_TOTAL_LINES,
+): DerivedOdd[] {
+  const toOdd = (p: number) => probabilityToOdd(p, marginPct);
+  const marginal = (k: number) => isHome
+    ? grid[k].reduce((a, b) => a + b, 0)
+    : grid.reduce((a, row) => a + row[k], 0);
+  const odds: DerivedOdd[] = [];
+  for (const line of lines) {
+    if (existingLines.includes(line)) continue;
+    let pOver = 0;
+    for (let k = 0; k < grid.length; k++) if (k > line) pOver += marginal(k);
+    odds.push({ label: `${team} Plus ${line}`, value: toOdd(pOver) });
+    odds.push({ label: `${team} Moins ${line}`, value: toOdd(1 - pOver) });
   }
   return odds;
 }
