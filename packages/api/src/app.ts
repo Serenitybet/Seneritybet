@@ -107,6 +107,10 @@ app.get("/health", (_req, res) => {
 app.use("/api/auth/login",    authLimiter);
 app.use("/api/auth/register", registerLimiter);
 app.use("/api/auth",    authRouter);
+// /api/partners/login vérifie un mot de passe (bcrypt) comme /api/auth/login
+// mais n'avait que la limite générale (300 req/15 min) — même protection
+// anti-brute-force ajoutée ici (audit de sécurité du 17/11/2026).
+app.use("/api/partners/login", authLimiter);
 app.use("/api/sports",  sportsRouter);
 app.use("/api/web-coupons", webCouponRouter);
 app.use("/api/banners", bannersRouter);
