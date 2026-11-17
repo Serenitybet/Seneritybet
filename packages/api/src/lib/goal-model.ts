@@ -352,7 +352,10 @@ export function deriveLevel2Markets(
 export const STANDARD_TOTAL_LINES      = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5];
 export const HALF_TOTAL_LINES          = [0.5, 1.5, 2.5];
 export const STANDARD_TEAM_TOTAL_LINES = [0.5, 1.5, 2.5];
-export const HALF_TEAM_TOTAL_LINES     = [0.5, 1.5];
+// Étendu de [0.5, 1.5] à [0.5, 1.5, 2.5] le 17/11/2026 (demande explicite) :
+// un but de plus par équipe suffit à rendre 2.5 pertinent même sur 45
+// minutes (doublé, triplé) — alignée sur STANDARD_TEAM_TOTAL_LINES.
+export const HALF_TEAM_TOTAL_LINES     = [0.5, 1.5, 2.5];
 
 /**
  * Calcule Plus/Moins pour chaque ligne de `lines` ABSENTE de existingLines —

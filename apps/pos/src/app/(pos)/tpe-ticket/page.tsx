@@ -101,6 +101,18 @@ export default function TpeTicketPage() {
   // d'onglet de date.
   const [eventsByDay, setEventsByDay] = useState<Record<string, Event[]>>({});
   const [loadingEvents, setLoadingEvents] = useState(true);
+  // "now" rafraîchi toutes les 30s pour retirer en direct les matchs dont le
+  // coup d'envoi vient de passer — demande explicite du 17/11/2026 : la
+  // liste d'un jour est mise en cache ci-dessus et n'est jamais re-téléchargée
+  // tant que l'onglet reste ouvert, donc un match pouvait rester affiché
+  // (et sélectionnable à l'écran, même si son pari était de toute façon
+  // rejeté côté serveur) bien après son début. Filtre purement client, sans
+  // appel réseau supplémentaire.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
   const [selections, setSelections] = useState<Selection[]>([]);
   const [stakeXAF, setStakeXAF] = useState("");
   const [placing, setPlacing] = useState(false);
@@ -193,7 +205,9 @@ export default function TpeTicketPage() {
     return { offset: i, key: dayKey(d), label: DAY_LABELS[i] };
   });
   const currentDayKey = days[dayOffset]?.key;
-  const events = (currentDayKey && eventsByDay[currentDayKey]) || [];
+  const events = ((currentDayKey && eventsByDay[currentDayKey]) || []).filter(
+    (e) => new Date(e.startTime).getTime() > nowTick,
+  );
 
   useEffect(() => {
     if (!currentDayKey || eventsByDay[currentDayKey]) return; // déjà en cache
@@ -501,7 +515,7 @@ export default function TpeTicketPage() {
             <div style={{ marginBottom: 4 }}>
               <p><strong>Code:</strong> {ticket.code}</p>
               <p><strong>TPE:</strong> {ticket.tpe?.name ?? ticket.tpe?.code ?? "—"}</p>
-              <p><strong>Imprimé le:</strong> {new Date(ticket.createdAt).toLocaleDateString("fr-FR")}</p>
+              <p><strong>Imprimé le:</strong> {new Date(ticket.createdAt).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
               {ticket.payoutCode && !codePrinted && (
                 <p style={{ fontSize: 13 }}><strong>Code de sécurité:</strong> {ticket.payoutCode}</p>
               )}
