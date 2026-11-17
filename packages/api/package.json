@@ -14,7 +14,7 @@
   "dependencies": {
     "@serenitybet/db": "workspace:*",
     "@serenitybet/shared": "workspace:*",
-    "axios": "^1.7.9",
+    "axios": "^1.21.1",
     "bcryptjs": "^2.4.3",
     "bullmq": "^5.29.2",
     "cookie-parser": "^1.4.7",
