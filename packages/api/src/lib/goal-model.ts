@@ -229,7 +229,6 @@ export function deriveLevel2Markets(
   homeTeam: string, awayTeam: string, marginPct: number,
 ): Record<string, DerivedOdd[]> {
   const toOdd = (p: number) => probabilityToOdd(p, marginPct);
-  const OVER_LINE = 2.5; // ligne standard — cohérent avec le libellé des marchés ("Total 2.5")
   const btts = (h: number, a: number) => h >= 1 && a >= 1;
 
   const DOUBLE_CHANCE_BTTS: DerivedOdd[] = [
@@ -250,23 +249,32 @@ export function deriveLevel2Markets(
     { label: "2 & Non", value: toOdd(gridSum(grid, (h, a) => h < a && !btts(h, a))) },
   ];
 
-  const RESULT_TOTAL: DerivedOdd[] = [
-    { label: "1 & Plus 2.5",  value: toOdd(gridSum(grid, (h, a) => h > a && h + a > OVER_LINE)) },
-    { label: "1 & Moins 2.5", value: toOdd(gridSum(grid, (h, a) => h > a && h + a < OVER_LINE)) },
-    { label: "X & Plus 2.5",  value: toOdd(gridSum(grid, (h, a) => h === a && h + a > OVER_LINE)) },
-    { label: "X & Moins 2.5", value: toOdd(gridSum(grid, (h, a) => h === a && h + a < OVER_LINE)) },
-    { label: "2 & Plus 2.5",  value: toOdd(gridSum(grid, (h, a) => h < a && h + a > OVER_LINE)) },
-    { label: "2 & Moins 2.5", value: toOdd(gridSum(grid, (h, a) => h < a && h + a < OVER_LINE)) },
-  ];
+  // Plusieurs lignes désormais générées (initialement figé à 2.5 seul) —
+  // demande explicite du 17/11/2026, même principe que les Plus/Moins
+  // simples (STANDARD_TOTAL_LINES, définie plus bas dans ce fichier — sûr
+  // de la référencer ici malgré l'ordre d'écriture : le corps de cette
+  // fonction ne s'exécute qu'après l'évaluation complète du module). Lignes
+  // entières volontairement exclues (1, 2, 3...) : elles introduiraient un
+  // push/remboursement possible (total de buts pile dessus), non géré par
+  // le règlement de ces marchés combinés (computeItemResult, odds.service.ts
+  // — pas de VOID, seulement WON/LOST).
+  const RESULT_TOTAL: DerivedOdd[] = STANDARD_TOTAL_LINES.flatMap((line) => [
+    { label: `1 & Plus ${line}`,  value: toOdd(gridSum(grid, (h, a) => h > a && h + a > line)) },
+    { label: `1 & Moins ${line}`, value: toOdd(gridSum(grid, (h, a) => h > a && h + a < line)) },
+    { label: `X & Plus ${line}`,  value: toOdd(gridSum(grid, (h, a) => h === a && h + a > line)) },
+    { label: `X & Moins ${line}`, value: toOdd(gridSum(grid, (h, a) => h === a && h + a < line)) },
+    { label: `2 & Plus ${line}`,  value: toOdd(gridSum(grid, (h, a) => h < a && h + a > line)) },
+    { label: `2 & Moins ${line}`, value: toOdd(gridSum(grid, (h, a) => h < a && h + a < line)) },
+  ]);
 
-  const DOUBLE_CHANCE_TOTAL: DerivedOdd[] = [
-    { label: "1X & Plus 2.5",  value: toOdd(gridSum(grid, (h, a) => h >= a && h + a > OVER_LINE)) },
-    { label: "1X & Moins 2.5", value: toOdd(gridSum(grid, (h, a) => h >= a && h + a < OVER_LINE)) },
-    { label: "12 & Plus 2.5",  value: toOdd(gridSum(grid, (h, a) => h !== a && h + a > OVER_LINE)) },
-    { label: "12 & Moins 2.5", value: toOdd(gridSum(grid, (h, a) => h !== a && h + a < OVER_LINE)) },
-    { label: "X2 & Plus 2.5",  value: toOdd(gridSum(grid, (h, a) => h <= a && h + a > OVER_LINE)) },
-    { label: "X2 & Moins 2.5", value: toOdd(gridSum(grid, (h, a) => h <= a && h + a < OVER_LINE)) },
-  ];
+  const DOUBLE_CHANCE_TOTAL: DerivedOdd[] = STANDARD_TOTAL_LINES.flatMap((line) => [
+    { label: `1X & Plus ${line}`,  value: toOdd(gridSum(grid, (h, a) => h >= a && h + a > line)) },
+    { label: `1X & Moins ${line}`, value: toOdd(gridSum(grid, (h, a) => h >= a && h + a < line)) },
+    { label: `12 & Plus ${line}`,  value: toOdd(gridSum(grid, (h, a) => h !== a && h + a > line)) },
+    { label: `12 & Moins ${line}`, value: toOdd(gridSum(grid, (h, a) => h !== a && h + a < line)) },
+    { label: `X2 & Plus ${line}`,  value: toOdd(gridSum(grid, (h, a) => h <= a && h + a > line)) },
+    { label: `X2 & Moins ${line}`, value: toOdd(gridSum(grid, (h, a) => h <= a && h + a < line)) },
+  ]);
 
   const halfTeamTotals = (halfGrid: ScoreGrid, team: string): DerivedOdd[] => {
     const homeMarginal = (k: number) => halfGrid[k].reduce((a, b) => a + b, 0);
