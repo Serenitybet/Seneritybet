@@ -528,8 +528,8 @@ const LEVEL1_MARKET_NAMES: Record<string, string> = {
 const LEVEL2_MARKET_NAMES: Record<string, string> = {
   DOUBLE_CHANCE_BTTS:      "Double chance et les deux équipes marquent",
   RESULT_BTTS:             "Résultat et les deux équipes marquent",
-  RESULT_TOTAL:            "Résultat et total de buts (2.5)",
-  DOUBLE_CHANCE_TOTAL:     "Double chance et total de buts (2.5)",
+  RESULT_TOTAL:            "Résultat et total de buts",
+  DOUBLE_CHANCE_TOTAL:     "Double chance et total de buts",
   FIRST_HALF_TEAM_TOTALS:  "Totaux par équipe — 1ère mi-temps",
   SECOND_HALF_TEAM_TOTALS: "Totaux par équipe — 2nde mi-temps",
   FIRST_HALF_ODD_EVEN:     "Total buts pair/impair — 1ère mi-temps",
@@ -1879,19 +1879,25 @@ export function computeItemResult(
       return resWon && bttsWon ? "WON" : "LOST";
     }
     case "RESULT_TOTAL": {
-      const m = label.match(/^(1|X|2) & (Plus|Moins) 2\.5$/);
+      // Ligne généralisée (initialement figée à 2.5 uniquement) — demande
+      // explicite du 17/11/2026 : plusieurs lignes désormais générées (voir
+      // deriveLevel2Markets, goal-model.ts), donc le réglage ne peut plus
+      // supposer "2.5" en dur.
+      const m = label.match(/^(1|X|2) & (Plus|Moins) ([\d.]+)$/);
       if (!m) return null;
-      const [, res, dir] = m;
+      const [, res, dir, lineStr] = m;
+      const line = parseFloat(lineStr);
       const resWon = res === "1" ? homeScore > awayScore : res === "2" ? awayScore > homeScore : homeScore === awayScore;
-      const totalWon = (dir === "Plus") === (homeScore + awayScore > 2.5);
+      const totalWon = (dir === "Plus") === (homeScore + awayScore > line);
       return resWon && totalWon ? "WON" : "LOST";
     }
     case "DOUBLE_CHANCE_TOTAL": {
-      const m = label.match(/^(1X|12|X2) & (Plus|Moins) 2\.5$/);
+      const m = label.match(/^(1X|12|X2) & (Plus|Moins) ([\d.]+)$/);
       if (!m) return null;
-      const [, dc, dir] = m;
+      const [, dc, dir, lineStr] = m;
+      const line = parseFloat(lineStr);
       const dcWon = dc === "1X" ? homeScore >= awayScore : dc === "X2" ? awayScore >= homeScore : homeScore !== awayScore;
-      const totalWon = (dir === "Plus") === (homeScore + awayScore > 2.5);
+      const totalWon = (dir === "Plus") === (homeScore + awayScore > line);
       return dcWon && totalWon ? "WON" : "LOST";
     }
     default:
